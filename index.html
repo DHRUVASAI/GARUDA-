@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#000000">
+    <meta name="description" content="GARUDA Quantum Defense System - Real-time WiFi network security scanner">
+    <title>GARUDA Quantum Defense System</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="grid-background"></div>
+    
+    <div class="particles" id="particles"></div>
+
+    <div class="main-container">
+        <!-- HUD Header -->
+        <div class="hud-header">
+            <div class="hud-panel">
+                <div class="hud-label">System Status</div>
+                <div class="hud-value">OPERATIONAL</div>
+            </div>
+            
+            <div class="system-title">
+                <h1>◈ CrowdGuard ◈</h1>
+                <div class="system-subtitle">A Neighborhood Watch for Urban Cyber Safety</div>
+            </div>
+            
+            <div class="hud-panel">
+                <div class="hud-label">Security Level</div>
+                <div class="hud-value">ALPHA-1</div>
+            </div>
+        </div>
+
+        <!-- Main Scanner Core -->
+        <div class="scanner-core">
+            <div class="scan-control">
+                <button id="scanBtn" class="scan-button" onclick="initiateScan()">
+                    <span id="btnText">◈ INITIALIZE DEEP SCAN ◈</span>
+                </button>
+            </div>
+
+            <!-- Progress Section -->
+            <div id="progressSection" class="progress-section">
+                <div class="progress-container">
+                    <div id="progressBar" class="progress-bar"></div>
+                    <div class="progress-text" id="progressText">0%</div>
+                </div>
+                <div id="statusDisplay" class="status-display">INITIALIZING QUANTUM PROTOCOLS...</div>
+            </div>
+
+            <!-- Results Section -->
+            <div id="resultsSection" class="results-section">
+                <!-- Stats Grid -->
+                <div class="data-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">4</div>
+                        <div class="stat-label">Nodes Detected</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" style="color: #f00;">0</div>
+                        <div class="stat-label">Critical Threats</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">256</div>
+                        <div class="stat-label">Addresses Scanned</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">3.2s</div>
+                        <div class="stat-label">Scan Duration</div>
+                    </div>
+                </div>
+
+                <!-- Discovered Devices -->
+                <div class="section-header">◈ NETWORK TOPOLOGY MAP</div>
+                
+                <div class="device-grid">
+                    <!-- Gateway Node -->
+                    <div class="device-card">
+                        <div class="device-header">
+                            <span class="device-icon">◢</span>
+                            <span>192.168.1.1 - GATEWAY NODE</span>
+                        </div>
+                        <div class="device-info">
+                            <strong>STATUS:</strong> <span class="status-online">ONLINE</span><br>
+                            <strong>MAC ID:</strong> AA:BB:CC:DD:EE:FF<br>
+                            <strong>VENDOR:</strong> Router<br>
+                            <strong>OPEN PORTS:</strong> 22, 53, 80, 443<br>
+                            <strong>THREAT LEVEL:</strong> <span style="color: #0f0;">SECURE</span>
+                        </div>
+                    </div>
+
+                    <!-- This Device (Mobile/Computer) -->
+                    <div class="device-card">
+                        <div class="device-header">
+                            <span class="device-icon" style="color: #0ff;">◢</span>
+                            <span>192.168.1.X - THIS DEVICE</span>
+                        </div>
+                        <div class="device-info">
+                            <strong>STATUS:</strong> <span class="status-online">ONLINE</span><br>
+                            <strong>CONNECTED TO:</strong> <span style="color: #0ff; font-weight: 700;">Loading...</span><br>
+                            <strong>ENCRYPTION:</strong> Loading...<br>
+                            <strong>SIGNAL:</strong> N/A<br>
+                            <strong>MAC ADDRESS:</strong> N/A<br>
+                            <strong>THREAT LEVEL:</strong> <span style="color: #0ff;">SCANNING</span>
+                        </div>
+                    </div>
+
+                    <!-- Network Traffic Analysis (replaces WORKSTATION) -->
+                    <div class="device-card threat-medium">
+                        <div class="device-header">
+                            <span class="device-icon" style="color: #0ff;">◢</span>
+                            <span>NETWORK TRAFFIC ANALYSIS</span>
+                        </div>
+                        <div class="device-info">
+                            <strong>STATUS:</strong> <span class="status-online">MONITORING</span><br>
+                            <strong>BYTES SENT:</strong> Loading...<br>
+                            <strong>BYTES RECEIVED:</strong> Loading...<br>
+                            <strong>PACKETS SENT:</strong> Loading...<br>
+                            <strong>PACKETS RECEIVED:</strong> Loading...<br>
+                            <strong>ANALYSIS:</strong> <span style="color: #0ff;">ACTIVE</span>
+                        </div>
+                    </div>
+
+                    <!-- Connected Devices (replaces IoT DEVICE) -->
+                    <div class="device-card">
+                        <div class="device-header">
+                            <span class="device-icon">◢</span>
+                            <span>CONNECTED DEVICES (0)</span>
+                        </div>
+                        <div class="device-info">
+                            <strong>STATUS:</strong> <span class="status-online">DETECTED</span><br>
+                            <strong>TOTAL DEVICES:</strong> 0<br>
+                            <strong>SAMPLE DEVICES:</strong><br>
+                            Scanning...<br>
+                            <strong>SCAN STATUS:</strong> <span style="color: #0f0;">PENDING</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Threat Alerts -->
+                <div class="section-header">◈ SECURITY THREAT ANALYSIS</div>
+
+                <div class="threat-alert">
+                    <span class="threat-badge">⚠ THREAT DETECTED</span>
+                    <div class="threat-title">NETWORK SECURITY ASSESSMENT</div>
+                    <div class="threat-details">
+                        <strong>TARGET NODE:</strong> Current Network<br>
+                        <strong>VULNERABILITY CLASS:</strong> Analyzing...<br>
+                        <strong>ATTACK VECTOR:</strong> Man-in-the-Middle, Packet Sniffing<br>
+                        <strong>EXPLOITATION PROBABILITY:</strong> Calculating...<br>
+                        <strong>POTENTIAL IMPACT:</strong> Data interception, credential theft<br>
+                        <strong>RECOMMENDED ACTION:</strong> Run full scan to assess security posture.
+                    </div>
+                </div>
+
+                <!-- Recommendations -->
+                <div class="recommendations">
+                    <h3>◈ TACTICAL SECURITY RECOMMENDATIONS</h3>
+                    <ul>
+                        <li>PRIORITY ALPHA: Verify network encryption strength (WPA2/WPA3 recommended)</li>
+                        <li>PRIORITY ALPHA: Enable VPN for untrusted networks</li>
+                        <li>PRIORITY BETA: Monitor for unauthorized devices on network</li>
+                        <li>PRIORITY BETA: Implement network segmentation for IoT devices</li>
+                        <li>PRIORITY GAMMA: Regular security audits every 72 hours</li>
+                        <li>PRIORITY GAMMA: Keep all devices updated with latest security patches</li>
+                        <li>PRIORITY DELTA: Deploy firewall with intrusion detection</li>
+                        <li>PRIORITY DELTA: Enable MAC address filtering on router</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

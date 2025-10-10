@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GARUDA Backend Diagnostic</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #0f0;
+            padding: 20px;
+            line-height: 1.8;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(0, 20, 0, 0.8);
+            border: 2px solid #0f0;
+            padding: 30px;
+            border-radius: 5px;
+        }
+        h1 {
+            color: #0ff;
+            text-align: center;
+            font-size: 2em;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0, 50, 0, 0.5);
+            border-left: 4px solid #0f0;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .success {
+            background: rgba(0, 255, 0, 0.2);
+            color: #0f0;
+            border: 1px solid #0f0;
+        }
+        .error {
+            background: rgba(255, 0, 0, 0.2);
+            color: #f00;
+            border: 1px solid #f00;
+        }
+        .warning {
+            background: rgba(255, 255, 0, 0.2);
+            color: #ff0;
+            border: 1px solid #ff0;
+        }
+        button {
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.3), rgba(0, 100, 255, 0.3));
+            border: 2px solid #0ff;
+            color: #0ff;
+            padding: 12px 30px;
+            font-size: 16px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            margin: 10px 5px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.5), rgba(0, 100, 255, 0.5));
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+        code {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 2px 8px;
+            border-radius: 3px;
+            color: #ff0;
+        }
+        .json-output {
+            background: #000;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+            border: 1px solid #0f0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .loading {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border: 2px solid #0ff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>◈ GARUDA BACKEND DIAGNOSTIC ◈</h1>
+        
+        <div class="test-section">
+            <h3>📡 CONNECTION TEST</h3>
+            <button onclick="testConnection()">Test Backend Connection</button>
+            <div id="connectionStatus"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 HEALTH CHECK</h3>
+            <button onclick="testHealth()">GET /api/health</button>
+            <div id="healthStatus"></div>
+            <pre id="healthOutput" class="json-output" style="display: none;"></pre>
+        </div>
+
+        <div class="test-section">
+            <h3>📶 NETWORK SCAN</h3>
+            <button onclick="testFullScan()">POST /api/scan/full</button>
+            <div id="scanStatus"></div>
+            <pre id="scanOutput" class="json-output" style="display: none;"></pre>
+        </div>
+
+        <div class="test-section">
+            <h3>🛠️ TROUBLESHOOTING</h3>
+            <div id="troubleshootInfo">
+                <p><strong>If all tests fail:</strong></p>
+                <ol>
+                    <li>Make sure Python backend is running: <code>python garuda_backend.py</code></li>
+                    <li>Check backend terminal shows: <code>Running on http://127.0.0.1:5000</code></li>
+                    <li>Try accessing: <a href="http://127.0.0.1:5000/api/health" target="_blank" style="color: #0ff;">http://127.0.0.1:5000/api/health</a></li>
+                    <li>Check firewall isn't blocking port 5000</li>
+                    <li>Try running backend as admin/sudo if needed</li>
+                </ol>
+                
+                <p><strong>If health check works but scan fails:</strong></p>
+                <ol>
+                    <li>Make sure you're connected to a WiFi network</li>
+                    <li>Check backend terminal for error messages</li>
+                    <li>On Linux, ensure NetworkManager is installed</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>ℹ️ SYSTEM INFO</h3>
+            <div id="systemInfo">
+                <p><strong>Current URL:</strong> <code id="currentUrl"></code></p>
+                <p><strong>Protocol:</strong> <code id="protocol"></code></p>
+                <p><strong>API Base:</strong> <code id="apiBase"></code></p>
+                <p><strong>Browser:</strong> <code id="browser"></code></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:5000';
+
+        // Update system info
+        document.getElementById('currentUrl').textContent = window.location.href;
+        document.getElementById('protocol').textContent = window.location.protocol;
+        document.getElementById('apiBase').textContent = API_BASE;
+        document.getElementById('browser').textContent = navigator.userAgent;
+
+        function showLoading(elementId) {
+            document.getElementById(elementId).innerHTML = '<span class="loading"></span> Testing...';
+        }
+
+        function showSuccess(elementId, message) {
+            document.getElementById(elementId).innerHTML = 
+                `<div class="status success">✓ SUCCESS: ${message}</div>`;
+        }
+
+        function showError(elementId, message) {
+            document.getElementById(elementId).innerHTML = 
+                `<div class="status error">✗ ERROR: ${message}</div>`;
+        }
+
+        function showWarning(elementId, message) {
+            document.getElementById(elementId).innerHTML = 
+                `<div class="status warning">⚠ WARNING: ${message}</div>`;
+        }
+
+        async function testConnection() {
+            showLoading('connectionStatus');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/health`, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                if (response.ok) {
+                    showSuccess('connectionStatus', 'Backend is reachable!');
+                } else {
+                    showError('connectionStatus', `HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                showError('connectionStatus', 
+                    `Cannot connect to backend. Error: ${error.message}<br>` +
+                    `Make sure backend is running: <code>python garuda_backend.py</code>`
+                );
+            }
+        }
+
+        async function testHealth() {
+            showLoading('healthStatus');
+            const outputEl = document.getElementById('healthOutput');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/health`, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showSuccess('healthStatus', 
+                        `Backend operational! System: ${data.system}, Status: ${data.status}`
+                    );
+                    outputEl.textContent = JSON.stringify(data, null, 2);
+                    outputEl.style.display = 'block';
+                } else {
+                    showError('healthStatus', `HTTP ${response.status}`);
+                    outputEl.textContent = JSON.stringify(data, null, 2);
+                    outputEl.style.display = 'block';
+                }
+            } catch (error) {
+                showError('healthStatus', `Request failed: ${error.message}`);
+                outputEl.style.display = 'none';
+            }
+        }
+
+        async function testFullScan() {
+            showLoading('scanStatus');
+            const outputEl = document.getElementById('scanOutput');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/scan/full`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    mode: 'cors'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showSuccess('scanStatus', 
+                        `Scan complete! Found ${data.nodes_detected} nodes, ` +
+                        `${data.connected_devices?.length || 0} devices`
+                    );
+                    outputEl.textContent = JSON.stringify(data, null, 2);
+                    outputEl.style.display = 'block';
+                } else {
+                    showError('scanStatus', 
+                        `Scan failed: ${data.message || response.statusText}`
+                    );
+                    outputEl.textContent = JSON.stringify(data, null, 2);
+                    outputEl.style.display = 'block';
+                }
+            } catch (error) {
+                showError('scanStatus', 
+                    `Request failed: ${error.message}<br>` +
+                    `Make sure you're connected to WiFi`
+                );
+                outputEl.style.display = 'none';
+            }
+        }
+
+        // Auto-test on load
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('Running auto-diagnostic...');
+            testConnection();
+        });
+    </script>
+</body>
+</html>
