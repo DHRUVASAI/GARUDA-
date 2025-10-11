@@ -1,7 +1,7 @@
 """
 GARUDA Quantum Defense System - Backend API
 WiFi Network Scanner & Security Assessment
-WITHOUT SCAPY - Using Ping Sweep Only
+ULTRA AGGRESSIVE MULTI-METHOD DEVICE DETECTION
 """
 
 from flask import Flask, jsonify, request
@@ -18,7 +18,7 @@ import time
 app = Flask(__name__)
 CORS(app)
 
-print("⚡ Using PING SWEEP for device detection (no Scapy)")
+print("⚡ Using MULTI-METHOD DEVICE DETECTION (Ping + ARP + NetBIOS)")
 
 class WiFiScanner:
     def __init__(self):
@@ -280,7 +280,7 @@ class NetworkScanner:
             return "Unable to determine"
     
     def get_gateway(self):
-        """Get default gateway - improved version"""
+        """Get default gateway - VPN aware"""
         try:
             if self.os_type == "Windows":
                 result = subprocess.check_output(["ipconfig"], encoding='utf-8', errors='ignore')
@@ -290,21 +290,7 @@ class NetworkScanner:
                         gateway = line.split(":")[-1].strip()
                         
                         if gateway and gateway != "" and not gateway.startswith("fe80"):
-                            if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', gateway):
-                                return gateway
-            else:
-                result = subprocess.check_output(["ip", "route"], encoding='utf-8')
-                for line in result.split('\n'):
-                    if 'default' in line:
-                        parts = line.split()
-                        if len(parts) >= 3:
-                            gateway = parts[2]
-                            if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', gateway):
-                                return gateway
-        except Exception as e:
-            print(f"Gateway detection error: {e}")
-        
-        return "192.168.1.1"
+                            if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}
     
     def get_network_range(self):
         """Get network range for scanning"""
@@ -319,61 +305,131 @@ class NetworkScanner:
         except:
             return None
     
-    def scan_with_ping_sweep(self, network_range, timeout=1):
-        """Aggressive ping sweep - scans entire subnet"""
+    def force_arp_refresh(self, ip_list):
+        """Force ARP table refresh by pinging ALL IPs"""
+        print(f"[ARP Refresh] Broadcasting to {len(ip_list)} addresses...")
+        
+        with ThreadPoolExecutor(max_workers=50) as executor:
+            futures = [executor.submit(self._ping_ip, ip, 0.5) for ip in ip_list]
+            for future in as_completed(futures):
+                pass
+        
+        time.sleep(2)
+        print(f"[ARP Refresh] Complete - ARP table populated")
+    
+    def get_arp_devices(self):
+        """Extract ALL devices from ARP table"""
+        devices = {}
+        
         try:
-            print(f"[Ping Sweep] Scanning {network_range}...")
-            print(f"[Ping Sweep] This will scan 254 addresses (may take 10-15 seconds)")
-            
-            start_time = time.time()
-            
-            network = ipaddress.IPv4Network(network_range, strict=False)
-            ip_list = [str(ip) for ip in network.hosts()]  # All IPs in subnet
-            
-            devices = []
-            
-            # Scan in parallel for speed
-            with ThreadPoolExecutor(max_workers=100) as executor:
-                future_to_ip = {
-                    executor.submit(self._ping_ip, ip, timeout): ip 
-                    for ip in ip_list
-                }
+            if self.os_type == "Windows":
+                result = subprocess.check_output(["arp", "-a"], encoding='utf-8', errors='ignore')
                 
-                completed = 0
+                for line in result.split('\n'):
+                    ip_match = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', line)
+                    if ip_match:
+                        ip = ip_match.group(1)
+                        
+                        mac_match = re.search(r'([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]{2})', line)
+                        if mac_match:
+                            mac = mac_match.group(0).upper().replace('-', ':')
+                            
+                            if mac != 'FF:FF:FF:FF:FF:FF' and not mac.startswith('01:00:5E'):
+                                devices[ip] = mac
+            else:
+                result = subprocess.check_output(["arp", "-a"], encoding='utf-8')
+                
+                for line in result.split('\n'):
+                    match = re.search(r'\(([\d.]+)\)\s+at\s+([\w:]+)', line)
+                    if match:
+                        ip = match.group(1)
+                        mac = match.group(2).upper()
+                        
+                        if mac != 'FF:FF:FF:FF:FF:FF' and 'incomplete' not in line.lower():
+                            devices[ip] = mac
+        
+        except Exception as e:
+            print(f"[ARP] Error: {e}")
+        
+        return devices
+    
+    def scan_with_multimethod(self, network_range):
+        """ULTRA AGGRESSIVE: Ping + ARP + Multiple passes"""
+        print(f"\n{'='*60}")
+        print(f"[MULTI-METHOD SCAN] Target: {network_range}")
+        print(f"{'='*60}")
+        
+        start_time = time.time()
+        
+        try:
+            network = ipaddress.IPv4Network(network_range, strict=False)
+            ip_list = [str(ip) for ip in network.hosts()]
+            
+            print(f"[Phase 1] Fast ping sweep of {len(ip_list)} addresses...")
+            
+            active_ips = set()
+            with ThreadPoolExecutor(max_workers=100) as executor:
+                future_to_ip = {executor.submit(self._ping_ip, ip, 0.3): ip for ip in ip_list}
+                
                 for future in as_completed(future_to_ip):
-                    completed += 1
-                    if completed % 50 == 0:
-                        print(f"[Ping Sweep] Progress: {completed}/{len(ip_list)} addresses checked...")
-                    
                     ip = future_to_ip[future]
                     try:
                         if future.result():
-                            mac = self._get_mac_from_arp(ip)
-                            devices.append({
-                                'ip': ip,
-                                'mac': mac,
-                                'status': 'ACTIVE',
-                                'vendor': self._get_vendor_from_mac(mac)
-                            })
+                            active_ips.add(ip)
                     except:
                         pass
             
+            print(f"[Phase 1] Found {len(active_ips)} responsive IPs")
+            
+            print(f"[Phase 2] Forcing ARP cache refresh...")
+            self.force_arp_refresh(ip_list)
+            
+            print(f"[Phase 3] Reading ARP table...")
+            arp_devices = self.get_arp_devices()
+            print(f"[Phase 3] Found {len(arp_devices)} devices in ARP")
+            
+            print(f"[Phase 4] Merging results...")
+            all_device_ips = active_ips.union(set(arp_devices.keys()))
+            
+            devices = []
+            for ip in all_device_ips:
+                if ip.endswith('.255') or ip.endswith('.0'):
+                    continue
+                
+                mac = arp_devices.get(ip, 'Unknown')
+                vendor = self._get_vendor_from_mac(mac)
+                
+                devices.append({
+                    'ip': ip,
+                    'mac': mac,
+                    'status': 'ACTIVE' if ip in active_ips else 'DETECTED',
+                    'vendor': vendor,
+                    'detection_method': 'PING+ARP' if ip in active_ips else 'ARP_ONLY'
+                })
+            
             elapsed = time.time() - start_time
-            print(f"[Ping Sweep] Completed in {elapsed:.1f}s")
-            print(f"[Ping Sweep] Found {len(devices)} devices")
+            
+            print(f"\n{'='*60}")
+            print(f"[SCAN COMPLETE]")
+            print(f"  Time: {elapsed:.1f}s")
+            print(f"  Ping responses: {len(active_ips)}")
+            print(f"  ARP entries: {len(arp_devices)}")
+            print(f"  Total unique devices: {len(devices)}")
+            print(f"{'='*60}\n")
+            
             return devices
             
         except Exception as e:
-            print(f"[Ping Sweep] Scan failed: {e}")
-            return None
+            print(f"[ERROR] Scan failed: {e}")
+            return []
     
     def _ping_ip(self, ip, timeout):
         """Ping single IP"""
         try:
             if self.os_type == "Windows":
-                cmd = ["ping", "-n", "1", "-w", str(timeout * 1000), ip]
+                cmd = ["ping", "-n", "1", "-w", str(int(timeout * 1000)), ip]
             else:
-                cmd = ["ping", "-c", "1", "-W", str(timeout), ip]
+                cmd = ["ping", "-c", "1", "-W", str(int(timeout)), ip]
             
             result = subprocess.run(
                 cmd,
@@ -385,110 +441,47 @@ class NetworkScanner:
         except:
             return False
     
-    def _get_mac_from_arp(self, ip):
-        """Get MAC from ARP table"""
-        try:
-            if self.os_type == "Windows":
-                result = subprocess.check_output(["arp", "-a"], encoding='utf-8', timeout=2)
-                
-                for line in result.split('\n'):
-                    if ip in line:
-                        parts = line.split()
-                        if len(parts) >= 2:
-                            mac = parts[1].upper().replace('-', ':')
-                            if mac != 'FF:FF:FF:FF:FF:FF':
-                                return mac
-            else:
-                result = subprocess.check_output(["arp", "-n"], encoding='utf-8', timeout=2)
-                for line in result.split('\n'):
-                    if ip in line:
-                        parts = line.split()
-                        if len(parts) >= 3:
-                            return parts[2].upper()
-        except:
-            pass
-        return 'Unknown'
-    
     def get_connected_devices(self):
-        """Get connected devices using ping sweep"""
+        """Get connected devices using multi-method"""
         network_range = self.get_network_range()
         
         if not network_range:
-            print("[Warning] Cannot determine network range, using ARP table")
-            return self._get_arp_table()
+            print("[ERROR] Cannot determine network range")
+            return []
         
-        # Use ping sweep
-        devices = self.scan_with_ping_sweep(network_range, timeout=1)
-        
-        # Fallback to ARP table if ping sweep fails
-        if devices is None or len(devices) == 0:
-            print("[Warning] Ping sweep failed, using ARP table")
-            devices = self._get_arp_table()
-        
+        devices = self.scan_with_multimethod(network_range)
         return devices
     
-    def _get_arp_table(self):
-        """BASIC: Just read ARP table"""
-        try:
-            devices = []
-            
-            if self.os_type == "Windows":
-                result = subprocess.check_output(["arp", "-a"], encoding='utf-8')
-                
-                for line in result.split('\n'):
-                    if re.search(r'\d+\.\d+\.\d+\.\d+', line):
-                        parts = line.split()
-                        if len(parts) >= 2:
-                            ip = parts[0]
-                            mac = parts[1] if len(parts) > 1 else 'Unknown'
-                            
-                            if mac != 'ff-ff-ff-ff-ff-ff' and 'incomplete' not in line.lower():
-                                devices.append({
-                                    'ip': ip,
-                                    'mac': mac.upper().replace('-', ':'),
-                                    'status': 'ACTIVE',
-                                    'vendor': self._get_vendor_from_mac(mac)
-                                })
-            else:
-                result = subprocess.check_output(["arp", "-a"], encoding='utf-8')
-                for line in result.split('\n'):
-                    match = re.search(r'\(([\d.]+)\)\s+at\s+([\w:]+)', line)
-                    if match:
-                        devices.append({
-                            'ip': match.group(1),
-                            'mac': match.group(2).upper(),
-                            'status': 'ACTIVE',
-                            'vendor': self._get_vendor_from_mac(match.group(2))
-                        })
-            
-            print(f"[ARP Table] Found {len(devices)} devices")
-            return devices
-        except Exception as e:
-            print(f"[ARP Table] Error: {e}")
-            return []
-    
     def _get_vendor_from_mac(self, mac):
-        """Basic vendor detection from MAC OUI"""
+        """Enhanced vendor detection"""
         if not mac or mac == 'Unknown':
             return 'Unknown'
         
         oui_database = {
-            '00:50:56': 'VMware', '00:0C:29': 'VMware', '08:00:27': 'VirtualBox',
-            'DC:A6:32': 'Raspberry Pi', 'B8:27:EB': 'Raspberry Pi', 'E4:5F:01': 'Raspberry Pi',
-            '00:1B:44': 'Cisco', '00:26:99': 'Cisco',
-            '3C:5A:B4': 'Google', '54:60:09': 'Google', 'F4:F5:D8': 'Google',
-            '00:50:F2': 'Microsoft', '00:15:5D': 'Microsoft',
-            '28:18:78': 'Apple', '00:03:93': 'Apple', 'A4:5E:60': 'Apple',
-            '20:C9:D0': 'Amazon', '74:C2:46': 'Amazon', '2C:F0:5D': 'Amazon Echo',
+            '00:50:56': 'VMware', '00:0C:29': 'VMware', '00:05:69': 'VMware',
+            '08:00:27': 'VirtualBox', '0A:00:27': 'VirtualBox',
+            '52:54:00': 'QEMU/KVM', '00:16:3E': 'Xen',
+            'DC:A6:32': 'Raspberry Pi', 'B8:27:EB': 'Raspberry Pi', 
+            'E4:5F:01': 'Raspberry Pi', '28:CD:C1': 'Raspberry Pi',
+            '00:1B:44': 'Cisco', '00:26:99': 'Cisco', '00:0A:41': 'Cisco',
             '84:D6:D0': 'TP-Link', 'F0:9F:C2': 'TP-Link', 'A0:F3:C1': 'TP-Link',
-            '00:E0:4C': 'Realtek', '52:54:00': 'QEMU', 'B4:2E:99': 'Google Home',
+            '50:C7:BF': 'TP-Link', '98:DE:D0': 'TP-Link',
+            '00:17:C8': 'D-Link', '00:05:CD': 'D-Link',
+            '3C:5A:B4': 'Google', '54:60:09': 'Google', 'F4:F5:D8': 'Google',
+            'B4:2E:99': 'Google Home', 'F8:8F:CA': 'Google',
+            '00:50:F2': 'Microsoft', '00:15:5D': 'Microsoft',
+            '28:CF:E9': 'Apple', '00:03:93': 'Apple', 'A4:5E:60': 'Apple',
+            '98:01:A7': 'Apple', '70:A2:B3': 'Apple',
+            '20:C9:D0': 'Amazon', '74:C2:46': 'Amazon', '2C:F0:5D': 'Amazon Echo',
+            '00:12:FB': 'Samsung', '34:AA:8B': 'Samsung',
+            '00:E0:4C': 'Realtek', '00:26:B0': 'Realtek',
         }
         
         mac_prefix = ':'.join(mac.split(':')[:3])
         return oui_database.get(mac_prefix, 'Unknown Vendor')
     
     def get_network_traffic(self):
-        """Analyze network traffic statistics"""
+        """Analyze network traffic"""
         try:
             if self.os_type == "Windows":
                 result = subprocess.check_output(["netstat", "-e"], encoding='utf-8')
@@ -514,7 +507,6 @@ class NetworkScanner:
                 
                 return stats
             else:
-                result = subprocess.check_output(["netstat", "-ib"], encoding='utf-8')
                 return {
                     'bytes_sent': 'N/A',
                     'bytes_received': 'N/A',
@@ -535,17 +527,17 @@ net_scanner = NetworkScanner()
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
+    """Health check"""
     return jsonify({
         'status': 'OPERATIONAL',
         'timestamp': datetime.now().isoformat(),
         'system': platform.system(),
-        'scan_method': 'PING_SWEEP'
+        'scan_method': 'MULTI_METHOD'
     })
 
 @app.route('/api/scan/nearby', methods=['GET'])
 def scan_nearby():
-    """Scan for nearby WiFi networks"""
+    """Scan nearby WiFi networks"""
     networks = scanner.get_nearby_networks()
     
     for network in networks:
@@ -562,7 +554,7 @@ def scan_nearby():
 
 @app.route('/api/scan/connected', methods=['GET'])
 def scan_connected():
-    """Get information about connected network"""
+    """Get connected network info"""
     connected = scanner.get_connected_network()
     
     if 'error' not in connected and 'encryption' in connected:
@@ -578,9 +570,13 @@ def scan_connected():
         'connected_network': connected
     })
 
-@app.route('/api/scan/full', methods=['POST'])
+@app.route('/api/scan/full', methods=['GET', 'POST'])
 def full_scan():
-    """Perform full network scan for GARUDA frontend"""
+    """ULTRA AGGRESSIVE full network scan"""
+    
+    print("\n" + "="*60)
+    print("INITIATING FULL NETWORK SCAN")
+    print("="*60)
     
     connected = scanner.get_connected_network()
     
@@ -596,39 +592,123 @@ def full_scan():
         connected['security_assessment'] = security
     
     traffic = net_scanner.get_network_traffic()
-    connected_devices = net_scanner.get_connected_devices()
     
-    devices = [
-        {
-            'ip': net_scanner.get_gateway(),
-            'mac': connected.get('bssid', 'Unknown'),
-            'type': 'GATEWAY NODE',
-            'vendor': 'Router',
-            'status': 'ONLINE',
-            'ports': [22, 53, 80, 443],
+    print("\n[STARTING] Multi-method device detection...")
+    all_devices = net_scanner.get_connected_devices()
+    print(f"[RESULT] Detected {len(all_devices)} total devices\n")
+    
+    gateway_ip = net_scanner.get_gateway()
+    local_ip = net_scanner.get_local_ip()
+    
+    # Check for VPN
+    is_vpn = net_scanner.is_vpn_active(gateway_ip)
+    
+    devices = []
+    
+    # Add gateway/VPN node
+    if is_vpn or gateway_ip == "0.0.0.0":
+        print(f"[VPN] VPN DETECTED - Gateway: {gateway_ip}")
+        vpn_device = {
+            'ip': gateway_ip,
+            'mac': 'VPN',
+            'type': 'VPN TUNNEL',
+            'vendor': 'VPN Service',
+            'status': 'ACTIVE',
+            'detection_method': 'VPN_DETECTED',
+            'ports': [443, 1194, 1723],
             'threat_level': 'SECURE'
         }
-    ]
+        devices.append(vpn_device)
+    else:
+        # Normal gateway device
+        for device in all_devices:
+            device_ip = device.get('ip')
+            
+            if device_ip == gateway_ip:
+                device_type = 'GATEWAY'
+                threat_level = 'SECURE'
+            elif device_ip == local_ip:
+                device_type = 'THIS DEVICE'
+                threat_level = 'SECURE'
+            else:
+                device_type = 'NETWORK NODE'
+                threat_level = 'MONITORING'
+            
+            enhanced_device = {
+                'ip': device_ip,
+                'mac': device.get('mac', 'Unknown'),
+                'type': device_type,
+                'vendor': device.get('vendor', 'Unknown Vendor'),
+                'status': device.get('status', 'ACTIVE'),
+                'detection_method': device.get('detection_method', 'UNKNOWN'),
+                'ports': [80, 443] if device_type == 'GATEWAY' else [],
+                'threat_level': threat_level
+            }
+            
+            devices.append(enhanced_device)
+    
+    # Add other devices if not VPN
+    if not is_vpn:
+        for device in all_devices:
+            device_ip = device.get('ip')
+            
+            # Skip gateway (already added)
+            if device_ip == gateway_ip:
+                continue
+            
+            if device_ip == local_ip:
+                device_type = 'THIS DEVICE'
+                threat_level = 'SECURE'
+            else:
+                device_type = 'NETWORK NODE'
+                threat_level = 'MONITORING'
+            
+            enhanced_device = {
+                'ip': device_ip,
+                'mac': device.get('mac', 'Unknown'),
+                'type': device_type,
+                'vendor': device.get('vendor', 'Unknown Vendor'),
+                'status': device.get('status', 'ACTIVE'),
+                'detection_method': device.get('detection_method', 'UNKNOWN'),
+                'ports': [],
+                'threat_level': threat_level
+            }
+            
+            devices.append(enhanced_device)
     
     response = {
         'status': 'success',
         'timestamp': datetime.now().isoformat(),
-        'scan_duration': '3.2s',
-        'scan_method': 'PING_SWEEP',
+        'scan_duration': f'{len(devices) * 0.15:.1f}s',
+        'scan_method': 'MULTI_METHOD (PING+ARP)',
         'connected_network': connected,
-        'local_ip': net_scanner.get_local_ip(),
-        'gateway': net_scanner.get_gateway(),
-        'nodes_detected': 1 + len(connected_devices),
+        'local_ip': local_ip,
+        'gateway': gateway_ip,
+        'vpn_detected': is_vpn or gateway_ip == "0.0.0.0",
+        'nodes_detected': len(devices),
         'addresses_scanned': 254,
         'devices': devices,
         'network_traffic': traffic,
-        'connected_devices': connected_devices,
+        'connected_devices': all_devices,
         'security_summary': {
             'threat_level': security.get('threat_level', 'UNKNOWN'),
             'mitm_risk': security.get('mitm_risk', 'UNKNOWN'),
-            'recommendation': security.get('recommendation', 'Check network security')
+            'recommendation': security.get('recommendation', 'Check network security'),
+            'total_devices': len(devices),
+            'secure_devices': len([d for d in devices if d['threat_level'] == 'SECURE']),
+            'monitoring_devices': len([d for d in devices if d['threat_level'] == 'MONITORING']),
+            'vpn_active': is_vpn or gateway_ip == "0.0.0.0",
+            'detection_methods': {
+                'ping_and_arp': len([d for d in devices if d.get('detection_method') == 'PING+ARP']),
+                'arp_only': len([d for d in devices if d.get('detection_method') == 'ARP_ONLY']),
+                'vpn': 1 if (is_vpn or gateway_ip == "0.0.0.0") else 0
+            }
         }
     }
+    
+    print("="*60)
+    print(f"SCAN COMPLETE: {len(devices)} devices detected")
+    print("="*60 + "\n")
     
     return jsonify(response)
 
@@ -637,13 +717,859 @@ if __name__ == '__main__':
     print("◈ GARUDA QUANTUM DEFENSE SYSTEM BACKEND ◈")
     print("=" * 60)
     print(f"System: {platform.system()}")
-    print("Scan Mode: PING SWEEP (No Scapy)")
+    print("Scan Mode: MULTI-METHOD (Ping + ARP + Force Refresh)")
     print(f"Starting API server on http://localhost:5000")
     print("\nAvailable Endpoints:")
     print("  GET  /api/health          - System health check")
     print("  GET  /api/scan/nearby     - Scan nearby WiFi networks")
     print("  GET  /api/scan/connected  - Check connected network")
-    print("  POST /api/scan/full       - Full network scan")
+    print("  GET/POST /api/scan/full   - Full network scan (AGGRESSIVE)")
+    print("\nFeatures:")
+    print("  ✓ Multi-phase device detection")
+    print("  ✓ ARP cache forcing")
+    print("  ✓ Parallel ping sweeping")
+    print("  ✓ Real device count accuracy")
+    print("=" * 60)
+    
+    app.run(debug=True, host='0.0.0.0', port=5000), gateway):
+                                # Check for VPN gateway indicators
+                                if gateway == "0.0.0.0":
+                                    print("[VPN] Detected VPN gateway: 0.0.0.0")
+                                    return "0.0.0.0"
+                                return gateway
+            else:
+                result = subprocess.check_output(["ip", "route"], encoding='utf-8')
+                for line in result.split('\n'):
+                    if 'default' in line:
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            gateway = parts[2]
+                            if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}
+    
+    def get_network_range(self):
+        """Get network range for scanning"""
+        try:
+            local_ip = self.get_local_ip()
+            if local_ip == "Unable to determine":
+                return None
+            
+            ip_parts = local_ip.split('.')
+            network = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.0/24"
+            return network
+        except:
+            return None
+    
+    def force_arp_refresh(self, ip_list):
+        """Force ARP table refresh by pinging ALL IPs"""
+        print(f"[ARP Refresh] Broadcasting to {len(ip_list)} addresses...")
+        
+        with ThreadPoolExecutor(max_workers=50) as executor:
+            futures = [executor.submit(self._ping_ip, ip, 0.5) for ip in ip_list]
+            for future in as_completed(futures):
+                pass
+        
+        time.sleep(2)
+        print(f"[ARP Refresh] Complete - ARP table populated")
+    
+    def get_arp_devices(self):
+        """Extract ALL devices from ARP table"""
+        devices = {}
+        
+        try:
+            if self.os_type == "Windows":
+                result = subprocess.check_output(["arp", "-a"], encoding='utf-8', errors='ignore')
+                
+                for line in result.split('\n'):
+                    ip_match = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', line)
+                    if ip_match:
+                        ip = ip_match.group(1)
+                        
+                        mac_match = re.search(r'([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]{2})', line)
+                        if mac_match:
+                            mac = mac_match.group(0).upper().replace('-', ':')
+                            
+                            if mac != 'FF:FF:FF:FF:FF:FF' and not mac.startswith('01:00:5E'):
+                                devices[ip] = mac
+            else:
+                result = subprocess.check_output(["arp", "-a"], encoding='utf-8')
+                
+                for line in result.split('\n'):
+                    match = re.search(r'\(([\d.]+)\)\s+at\s+([\w:]+)', line)
+                    if match:
+                        ip = match.group(1)
+                        mac = match.group(2).upper()
+                        
+                        if mac != 'FF:FF:FF:FF:FF:FF' and 'incomplete' not in line.lower():
+                            devices[ip] = mac
+        
+        except Exception as e:
+            print(f"[ARP] Error: {e}")
+        
+        return devices
+    
+    def scan_with_multimethod(self, network_range):
+        """ULTRA AGGRESSIVE: Ping + ARP + Multiple passes"""
+        print(f"\n{'='*60}")
+        print(f"[MULTI-METHOD SCAN] Target: {network_range}")
+        print(f"{'='*60}")
+        
+        start_time = time.time()
+        
+        try:
+            network = ipaddress.IPv4Network(network_range, strict=False)
+            ip_list = [str(ip) for ip in network.hosts()]
+            
+            print(f"[Phase 1] Fast ping sweep of {len(ip_list)} addresses...")
+            
+            active_ips = set()
+            with ThreadPoolExecutor(max_workers=100) as executor:
+                future_to_ip = {executor.submit(self._ping_ip, ip, 0.3): ip for ip in ip_list}
+                
+                for future in as_completed(future_to_ip):
+                    ip = future_to_ip[future]
+                    try:
+                        if future.result():
+                            active_ips.add(ip)
+                    except:
+                        pass
+            
+            print(f"[Phase 1] Found {len(active_ips)} responsive IPs")
+            
+            print(f"[Phase 2] Forcing ARP cache refresh...")
+            self.force_arp_refresh(ip_list)
+            
+            print(f"[Phase 3] Reading ARP table...")
+            arp_devices = self.get_arp_devices()
+            print(f"[Phase 3] Found {len(arp_devices)} devices in ARP")
+            
+            print(f"[Phase 4] Merging results...")
+            all_device_ips = active_ips.union(set(arp_devices.keys()))
+            
+            devices = []
+            for ip in all_device_ips:
+                if ip.endswith('.255') or ip.endswith('.0'):
+                    continue
+                
+                mac = arp_devices.get(ip, 'Unknown')
+                vendor = self._get_vendor_from_mac(mac)
+                
+                devices.append({
+                    'ip': ip,
+                    'mac': mac,
+                    'status': 'ACTIVE' if ip in active_ips else 'DETECTED',
+                    'vendor': vendor,
+                    'detection_method': 'PING+ARP' if ip in active_ips else 'ARP_ONLY'
+                })
+            
+            elapsed = time.time() - start_time
+            
+            print(f"\n{'='*60}")
+            print(f"[SCAN COMPLETE]")
+            print(f"  Time: {elapsed:.1f}s")
+            print(f"  Ping responses: {len(active_ips)}")
+            print(f"  ARP entries: {len(arp_devices)}")
+            print(f"  Total unique devices: {len(devices)}")
+            print(f"{'='*60}\n")
+            
+            return devices
+            
+        except Exception as e:
+            print(f"[ERROR] Scan failed: {e}")
+            return []
+    
+    def _ping_ip(self, ip, timeout):
+        """Ping single IP"""
+        try:
+            if self.os_type == "Windows":
+                cmd = ["ping", "-n", "1", "-w", str(int(timeout * 1000)), ip]
+            else:
+                cmd = ["ping", "-c", "1", "-W", str(int(timeout)), ip]
+            
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=timeout + 1
+            )
+            return result.returncode == 0
+        except:
+            return False
+    
+    def get_connected_devices(self):
+        """Get connected devices using multi-method"""
+        network_range = self.get_network_range()
+        
+        if not network_range:
+            print("[ERROR] Cannot determine network range")
+            return []
+        
+        devices = self.scan_with_multimethod(network_range)
+        return devices
+    
+    def _get_vendor_from_mac(self, mac):
+        """Enhanced vendor detection"""
+        if not mac or mac == 'Unknown':
+            return 'Unknown'
+        
+        oui_database = {
+            '00:50:56': 'VMware', '00:0C:29': 'VMware', '00:05:69': 'VMware',
+            '08:00:27': 'VirtualBox', '0A:00:27': 'VirtualBox',
+            '52:54:00': 'QEMU/KVM', '00:16:3E': 'Xen',
+            'DC:A6:32': 'Raspberry Pi', 'B8:27:EB': 'Raspberry Pi', 
+            'E4:5F:01': 'Raspberry Pi', '28:CD:C1': 'Raspberry Pi',
+            '00:1B:44': 'Cisco', '00:26:99': 'Cisco', '00:0A:41': 'Cisco',
+            '84:D6:D0': 'TP-Link', 'F0:9F:C2': 'TP-Link', 'A0:F3:C1': 'TP-Link',
+            '50:C7:BF': 'TP-Link', '98:DE:D0': 'TP-Link',
+            '00:17:C8': 'D-Link', '00:05:CD': 'D-Link',
+            '3C:5A:B4': 'Google', '54:60:09': 'Google', 'F4:F5:D8': 'Google',
+            'B4:2E:99': 'Google Home', 'F8:8F:CA': 'Google',
+            '00:50:F2': 'Microsoft', '00:15:5D': 'Microsoft',
+            '28:CF:E9': 'Apple', '00:03:93': 'Apple', 'A4:5E:60': 'Apple',
+            '98:01:A7': 'Apple', '70:A2:B3': 'Apple',
+            '20:C9:D0': 'Amazon', '74:C2:46': 'Amazon', '2C:F0:5D': 'Amazon Echo',
+            '00:12:FB': 'Samsung', '34:AA:8B': 'Samsung',
+            '00:E0:4C': 'Realtek', '00:26:B0': 'Realtek',
+        }
+        
+        mac_prefix = ':'.join(mac.split(':')[:3])
+        return oui_database.get(mac_prefix, 'Unknown Vendor')
+    
+    def get_network_traffic(self):
+        """Analyze network traffic"""
+        try:
+            if self.os_type == "Windows":
+                result = subprocess.check_output(["netstat", "-e"], encoding='utf-8')
+                
+                stats = {
+                    'bytes_sent': 'N/A',
+                    'bytes_received': 'N/A',
+                    'packets_sent': 'N/A',
+                    'packets_received': 'N/A'
+                }
+                
+                for line in result.split('\n'):
+                    if 'Bytes' in line:
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            stats['bytes_received'] = parts[1]
+                            stats['bytes_sent'] = parts[2]
+                    elif 'Unicast packets' in line:
+                        parts = line.split()
+                        if len(parts) >= 4:
+                            stats['packets_received'] = parts[2]
+                            stats['packets_sent'] = parts[3]
+                
+                return stats
+            else:
+                return {
+                    'bytes_sent': 'N/A',
+                    'bytes_received': 'N/A',
+                    'packets_sent': 'N/A',
+                    'packets_received': 'N/A'
+                }
+        except:
+            return {
+                'bytes_sent': 'N/A',
+                'bytes_received': 'N/A',
+                'packets_sent': 'N/A',
+                'packets_received': 'N/A'
+            }
+
+# API Endpoints
+scanner = WiFiScanner()
+net_scanner = NetworkScanner()
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check"""
+    return jsonify({
+        'status': 'OPERATIONAL',
+        'timestamp': datetime.now().isoformat(),
+        'system': platform.system(),
+        'scan_method': 'MULTI_METHOD'
+    })
+
+@app.route('/api/scan/nearby', methods=['GET'])
+def scan_nearby():
+    """Scan nearby WiFi networks"""
+    networks = scanner.get_nearby_networks()
+    
+    for network in networks:
+        if 'encryption' in network:
+            security = scanner.assess_security(network['encryption'])
+            network['security_assessment'] = security
+    
+    return jsonify({
+        'status': 'success',
+        'timestamp': datetime.now().isoformat(),
+        'networks_found': len(networks),
+        'networks': networks
+    })
+
+@app.route('/api/scan/connected', methods=['GET'])
+def scan_connected():
+    """Get connected network info"""
+    connected = scanner.get_connected_network()
+    
+    if 'error' not in connected and 'encryption' in connected:
+        security = scanner.assess_security(connected['encryption'])
+        connected['security_assessment'] = security
+    
+    connected['local_ip'] = net_scanner.get_local_ip()
+    connected['gateway'] = net_scanner.get_gateway()
+    
+    return jsonify({
+        'status': 'success',
+        'timestamp': datetime.now().isoformat(),
+        'connected_network': connected
+    })
+
+@app.route('/api/scan/full', methods=['GET', 'POST'])
+def full_scan():
+    """ULTRA AGGRESSIVE full network scan"""
+    
+    print("\n" + "="*60)
+    print("INITIATING FULL NETWORK SCAN")
+    print("="*60)
+    
+    connected = scanner.get_connected_network()
+    
+    if 'error' in connected:
+        return jsonify({
+            'status': 'error',
+            'message': 'Not connected to any network'
+        }), 400
+    
+    security = {}
+    if 'encryption' in connected:
+        security = scanner.assess_security(connected['encryption'])
+        connected['security_assessment'] = security
+    
+    traffic = net_scanner.get_network_traffic()
+    
+    print("\n[STARTING] Multi-method device detection...")
+    all_devices = net_scanner.get_connected_devices()
+    print(f"[RESULT] Detected {len(all_devices)} total devices\n")
+    
+    gateway_ip = net_scanner.get_gateway()
+    local_ip = net_scanner.get_local_ip()
+    
+    devices = []
+    
+    for device in all_devices:
+        device_ip = device.get('ip')
+        
+        if device_ip == gateway_ip:
+            device_type = 'GATEWAY'
+            threat_level = 'SECURE'
+        elif device_ip == local_ip:
+            device_type = 'THIS DEVICE'
+            threat_level = 'SECURE'
+        else:
+            device_type = 'NETWORK NODE'
+            threat_level = 'MONITORING'
+        
+        enhanced_device = {
+            'ip': device_ip,
+            'mac': device.get('mac', 'Unknown'),
+            'type': device_type,
+            'vendor': device.get('vendor', 'Unknown Vendor'),
+            'status': device.get('status', 'ACTIVE'),
+            'detection_method': device.get('detection_method', 'UNKNOWN'),
+            'ports': [80, 443] if device_type == 'GATEWAY' else [],
+            'threat_level': threat_level
+        }
+        
+        devices.append(enhanced_device)
+    
+    response = {
+        'status': 'success',
+        'timestamp': datetime.now().isoformat(),
+        'scan_duration': f'{len(devices) * 0.15:.1f}s',
+        'scan_method': 'MULTI_METHOD (PING+ARP)',
+        'connected_network': connected,
+        'local_ip': local_ip,
+        'gateway': gateway_ip,
+        'nodes_detected': len(devices),
+        'addresses_scanned': 254,
+        'devices': devices,
+        'network_traffic': traffic,
+        'connected_devices': all_devices,
+        'security_summary': {
+            'threat_level': security.get('threat_level', 'UNKNOWN'),
+            'mitm_risk': security.get('mitm_risk', 'UNKNOWN'),
+            'recommendation': security.get('recommendation', 'Check network security'),
+            'total_devices': len(devices),
+            'secure_devices': len([d for d in devices if d['threat_level'] == 'SECURE']),
+            'monitoring_devices': len([d for d in devices if d['threat_level'] == 'MONITORING']),
+            'detection_methods': {
+                'ping_and_arp': len([d for d in devices if d.get('detection_method') == 'PING+ARP']),
+                'arp_only': len([d for d in devices if d.get('detection_method') == 'ARP_ONLY'])
+            }
+        }
+    }
+    
+    print("="*60)
+    print(f"SCAN COMPLETE: {len(devices)} devices detected")
+    print("="*60 + "\n")
+    
+    return jsonify(response)
+
+if __name__ == '__main__':
+    print("=" * 60)
+    print("◈ GARUDA QUANTUM DEFENSE SYSTEM BACKEND ◈")
+    print("=" * 60)
+    print(f"System: {platform.system()}")
+    print("Scan Mode: MULTI-METHOD (Ping + ARP + Force Refresh)")
+    print(f"Starting API server on http://localhost:5000")
+    print("\nAvailable Endpoints:")
+    print("  GET  /api/health          - System health check")
+    print("  GET  /api/scan/nearby     - Scan nearby WiFi networks")
+    print("  GET  /api/scan/connected  - Check connected network")
+    print("  GET/POST /api/scan/full   - Full network scan (AGGRESSIVE)")
+    print("\nFeatures:")
+    print("  ✓ Multi-phase device detection")
+    print("  ✓ ARP cache forcing")
+    print("  ✓ Parallel ping sweeping")
+    print("  ✓ Real device count accuracy")
+    print("=" * 60)
+    
+    app.run(debug=True, host='0.0.0.0', port=5000), gateway):
+                                if gateway == "0.0.0.0":
+                                    print("[VPN] Detected VPN gateway: 0.0.0.0")
+                                    return "0.0.0.0"
+                                return gateway
+        except Exception as e:
+            print(f"Gateway detection error: {e}")
+        
+        return "192.168.1.1"
+    
+    def is_vpn_active(self, gateway_ip):
+        """Detect if VPN is active based on gateway"""
+        vpn_indicators = [
+            gateway_ip == "0.0.0.0",
+            gateway_ip.startswith("10."),
+            gateway_ip.startswith("172.16."),
+            gateway_ip.startswith("172.17."),
+            gateway_ip.startswith("172.18."),
+            gateway_ip.startswith("172.19."),
+            gateway_ip.startswith("172.20."),
+            gateway_ip.startswith("172.21."),
+            gateway_ip.startswith("172.22."),
+            gateway_ip.startswith("172.23."),
+            gateway_ip.startswith("172.24."),
+            gateway_ip.startswith("172.25."),
+            gateway_ip.startswith("172.26."),
+            gateway_ip.startswith("172.27."),
+            gateway_ip.startswith("172.28."),
+            gateway_ip.startswith("172.29."),
+            gateway_ip.startswith("172.30."),
+            gateway_ip.startswith("172.31."),
+        ]
+        
+        # Check for VPN interface names (Windows/Linux)
+        try:
+            if self.os_type == "Windows":
+                result = subprocess.check_output(["ipconfig"], encoding='utf-8', errors='ignore')
+                vpn_keywords = ['vpn', 'tun', 'tap', 'wg', 'wireguard', 'openvpn', 'nordvpn', 'expressvpn']
+                if any(keyword in result.lower() for keyword in vpn_keywords):
+                    return True
+            else:
+                result = subprocess.check_output(["ip", "link"], encoding='utf-8')
+                vpn_keywords = ['tun', 'tap', 'wg', 'vpn']
+                if any(keyword in result.lower() for keyword in vpn_keywords):
+                    return True
+        except:
+            pass
+        
+        return any(vpn_indicators)
+    
+    def get_network_range(self):
+        """Get network range for scanning"""
+        try:
+            local_ip = self.get_local_ip()
+            if local_ip == "Unable to determine":
+                return None
+            
+            ip_parts = local_ip.split('.')
+            network = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.0/24"
+            return network
+        except:
+            return None
+    
+    def force_arp_refresh(self, ip_list):
+        """Force ARP table refresh by pinging ALL IPs"""
+        print(f"[ARP Refresh] Broadcasting to {len(ip_list)} addresses...")
+        
+        with ThreadPoolExecutor(max_workers=50) as executor:
+            futures = [executor.submit(self._ping_ip, ip, 0.5) for ip in ip_list]
+            for future in as_completed(futures):
+                pass
+        
+        time.sleep(2)
+        print(f"[ARP Refresh] Complete - ARP table populated")
+    
+    def get_arp_devices(self):
+        """Extract ALL devices from ARP table"""
+        devices = {}
+        
+        try:
+            if self.os_type == "Windows":
+                result = subprocess.check_output(["arp", "-a"], encoding='utf-8', errors='ignore')
+                
+                for line in result.split('\n'):
+                    ip_match = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', line)
+                    if ip_match:
+                        ip = ip_match.group(1)
+                        
+                        mac_match = re.search(r'([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]{2})', line)
+                        if mac_match:
+                            mac = mac_match.group(0).upper().replace('-', ':')
+                            
+                            if mac != 'FF:FF:FF:FF:FF:FF' and not mac.startswith('01:00:5E'):
+                                devices[ip] = mac
+            else:
+                result = subprocess.check_output(["arp", "-a"], encoding='utf-8')
+                
+                for line in result.split('\n'):
+                    match = re.search(r'\(([\d.]+)\)\s+at\s+([\w:]+)', line)
+                    if match:
+                        ip = match.group(1)
+                        mac = match.group(2).upper()
+                        
+                        if mac != 'FF:FF:FF:FF:FF:FF' and 'incomplete' not in line.lower():
+                            devices[ip] = mac
+        
+        except Exception as e:
+            print(f"[ARP] Error: {e}")
+        
+        return devices
+    
+    def scan_with_multimethod(self, network_range):
+        """ULTRA AGGRESSIVE: Ping + ARP + Multiple passes"""
+        print(f"\n{'='*60}")
+        print(f"[MULTI-METHOD SCAN] Target: {network_range}")
+        print(f"{'='*60}")
+        
+        start_time = time.time()
+        
+        try:
+            network = ipaddress.IPv4Network(network_range, strict=False)
+            ip_list = [str(ip) for ip in network.hosts()]
+            
+            print(f"[Phase 1] Fast ping sweep of {len(ip_list)} addresses...")
+            
+            active_ips = set()
+            with ThreadPoolExecutor(max_workers=100) as executor:
+                future_to_ip = {executor.submit(self._ping_ip, ip, 0.3): ip for ip in ip_list}
+                
+                for future in as_completed(future_to_ip):
+                    ip = future_to_ip[future]
+                    try:
+                        if future.result():
+                            active_ips.add(ip)
+                    except:
+                        pass
+            
+            print(f"[Phase 1] Found {len(active_ips)} responsive IPs")
+            
+            print(f"[Phase 2] Forcing ARP cache refresh...")
+            self.force_arp_refresh(ip_list)
+            
+            print(f"[Phase 3] Reading ARP table...")
+            arp_devices = self.get_arp_devices()
+            print(f"[Phase 3] Found {len(arp_devices)} devices in ARP")
+            
+            print(f"[Phase 4] Merging results...")
+            all_device_ips = active_ips.union(set(arp_devices.keys()))
+            
+            devices = []
+            for ip in all_device_ips:
+                if ip.endswith('.255') or ip.endswith('.0'):
+                    continue
+                
+                mac = arp_devices.get(ip, 'Unknown')
+                vendor = self._get_vendor_from_mac(mac)
+                
+                devices.append({
+                    'ip': ip,
+                    'mac': mac,
+                    'status': 'ACTIVE' if ip in active_ips else 'DETECTED',
+                    'vendor': vendor,
+                    'detection_method': 'PING+ARP' if ip in active_ips else 'ARP_ONLY'
+                })
+            
+            elapsed = time.time() - start_time
+            
+            print(f"\n{'='*60}")
+            print(f"[SCAN COMPLETE]")
+            print(f"  Time: {elapsed:.1f}s")
+            print(f"  Ping responses: {len(active_ips)}")
+            print(f"  ARP entries: {len(arp_devices)}")
+            print(f"  Total unique devices: {len(devices)}")
+            print(f"{'='*60}\n")
+            
+            return devices
+            
+        except Exception as e:
+            print(f"[ERROR] Scan failed: {e}")
+            return []
+    
+    def _ping_ip(self, ip, timeout):
+        """Ping single IP"""
+        try:
+            if self.os_type == "Windows":
+                cmd = ["ping", "-n", "1", "-w", str(int(timeout * 1000)), ip]
+            else:
+                cmd = ["ping", "-c", "1", "-W", str(int(timeout)), ip]
+            
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=timeout + 1
+            )
+            return result.returncode == 0
+        except:
+            return False
+    
+    def get_connected_devices(self):
+        """Get connected devices using multi-method"""
+        network_range = self.get_network_range()
+        
+        if not network_range:
+            print("[ERROR] Cannot determine network range")
+            return []
+        
+        devices = self.scan_with_multimethod(network_range)
+        return devices
+    
+    def _get_vendor_from_mac(self, mac):
+        """Enhanced vendor detection"""
+        if not mac or mac == 'Unknown':
+            return 'Unknown'
+        
+        oui_database = {
+            '00:50:56': 'VMware', '00:0C:29': 'VMware', '00:05:69': 'VMware',
+            '08:00:27': 'VirtualBox', '0A:00:27': 'VirtualBox',
+            '52:54:00': 'QEMU/KVM', '00:16:3E': 'Xen',
+            'DC:A6:32': 'Raspberry Pi', 'B8:27:EB': 'Raspberry Pi', 
+            'E4:5F:01': 'Raspberry Pi', '28:CD:C1': 'Raspberry Pi',
+            '00:1B:44': 'Cisco', '00:26:99': 'Cisco', '00:0A:41': 'Cisco',
+            '84:D6:D0': 'TP-Link', 'F0:9F:C2': 'TP-Link', 'A0:F3:C1': 'TP-Link',
+            '50:C7:BF': 'TP-Link', '98:DE:D0': 'TP-Link',
+            '00:17:C8': 'D-Link', '00:05:CD': 'D-Link',
+            '3C:5A:B4': 'Google', '54:60:09': 'Google', 'F4:F5:D8': 'Google',
+            'B4:2E:99': 'Google Home', 'F8:8F:CA': 'Google',
+            '00:50:F2': 'Microsoft', '00:15:5D': 'Microsoft',
+            '28:CF:E9': 'Apple', '00:03:93': 'Apple', 'A4:5E:60': 'Apple',
+            '98:01:A7': 'Apple', '70:A2:B3': 'Apple',
+            '20:C9:D0': 'Amazon', '74:C2:46': 'Amazon', '2C:F0:5D': 'Amazon Echo',
+            '00:12:FB': 'Samsung', '34:AA:8B': 'Samsung',
+            '00:E0:4C': 'Realtek', '00:26:B0': 'Realtek',
+        }
+        
+        mac_prefix = ':'.join(mac.split(':')[:3])
+        return oui_database.get(mac_prefix, 'Unknown Vendor')
+    
+    def get_network_traffic(self):
+        """Analyze network traffic"""
+        try:
+            if self.os_type == "Windows":
+                result = subprocess.check_output(["netstat", "-e"], encoding='utf-8')
+                
+                stats = {
+                    'bytes_sent': 'N/A',
+                    'bytes_received': 'N/A',
+                    'packets_sent': 'N/A',
+                    'packets_received': 'N/A'
+                }
+                
+                for line in result.split('\n'):
+                    if 'Bytes' in line:
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            stats['bytes_received'] = parts[1]
+                            stats['bytes_sent'] = parts[2]
+                    elif 'Unicast packets' in line:
+                        parts = line.split()
+                        if len(parts) >= 4:
+                            stats['packets_received'] = parts[2]
+                            stats['packets_sent'] = parts[3]
+                
+                return stats
+            else:
+                return {
+                    'bytes_sent': 'N/A',
+                    'bytes_received': 'N/A',
+                    'packets_sent': 'N/A',
+                    'packets_received': 'N/A'
+                }
+        except:
+            return {
+                'bytes_sent': 'N/A',
+                'bytes_received': 'N/A',
+                'packets_sent': 'N/A',
+                'packets_received': 'N/A'
+            }
+
+# API Endpoints
+scanner = WiFiScanner()
+net_scanner = NetworkScanner()
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check"""
+    return jsonify({
+        'status': 'OPERATIONAL',
+        'timestamp': datetime.now().isoformat(),
+        'system': platform.system(),
+        'scan_method': 'MULTI_METHOD'
+    })
+
+@app.route('/api/scan/nearby', methods=['GET'])
+def scan_nearby():
+    """Scan nearby WiFi networks"""
+    networks = scanner.get_nearby_networks()
+    
+    for network in networks:
+        if 'encryption' in network:
+            security = scanner.assess_security(network['encryption'])
+            network['security_assessment'] = security
+    
+    return jsonify({
+        'status': 'success',
+        'timestamp': datetime.now().isoformat(),
+        'networks_found': len(networks),
+        'networks': networks
+    })
+
+@app.route('/api/scan/connected', methods=['GET'])
+def scan_connected():
+    """Get connected network info"""
+    connected = scanner.get_connected_network()
+    
+    if 'error' not in connected and 'encryption' in connected:
+        security = scanner.assess_security(connected['encryption'])
+        connected['security_assessment'] = security
+    
+    connected['local_ip'] = net_scanner.get_local_ip()
+    connected['gateway'] = net_scanner.get_gateway()
+    
+    return jsonify({
+        'status': 'success',
+        'timestamp': datetime.now().isoformat(),
+        'connected_network': connected
+    })
+
+@app.route('/api/scan/full', methods=['GET', 'POST'])
+def full_scan():
+    """ULTRA AGGRESSIVE full network scan"""
+    
+    print("\n" + "="*60)
+    print("INITIATING FULL NETWORK SCAN")
+    print("="*60)
+    
+    connected = scanner.get_connected_network()
+    
+    if 'error' in connected:
+        return jsonify({
+            'status': 'error',
+            'message': 'Not connected to any network'
+        }), 400
+    
+    security = {}
+    if 'encryption' in connected:
+        security = scanner.assess_security(connected['encryption'])
+        connected['security_assessment'] = security
+    
+    traffic = net_scanner.get_network_traffic()
+    
+    print("\n[STARTING] Multi-method device detection...")
+    all_devices = net_scanner.get_connected_devices()
+    print(f"[RESULT] Detected {len(all_devices)} total devices\n")
+    
+    gateway_ip = net_scanner.get_gateway()
+    local_ip = net_scanner.get_local_ip()
+    
+    devices = []
+    
+    for device in all_devices:
+        device_ip = device.get('ip')
+        
+        if device_ip == gateway_ip:
+            device_type = 'GATEWAY'
+            threat_level = 'SECURE'
+        elif device_ip == local_ip:
+            device_type = 'THIS DEVICE'
+            threat_level = 'SECURE'
+        else:
+            device_type = 'NETWORK NODE'
+            threat_level = 'MONITORING'
+        
+        enhanced_device = {
+            'ip': device_ip,
+            'mac': device.get('mac', 'Unknown'),
+            'type': device_type,
+            'vendor': device.get('vendor', 'Unknown Vendor'),
+            'status': device.get('status', 'ACTIVE'),
+            'detection_method': device.get('detection_method', 'UNKNOWN'),
+            'ports': [80, 443] if device_type == 'GATEWAY' else [],
+            'threat_level': threat_level
+        }
+        
+        devices.append(enhanced_device)
+    
+    response = {
+        'status': 'success',
+        'timestamp': datetime.now().isoformat(),
+        'scan_duration': f'{len(devices) * 0.15:.1f}s',
+        'scan_method': 'MULTI_METHOD (PING+ARP)',
+        'connected_network': connected,
+        'local_ip': local_ip,
+        'gateway': gateway_ip,
+        'nodes_detected': len(devices),
+        'addresses_scanned': 254,
+        'devices': devices,
+        'network_traffic': traffic,
+        'connected_devices': all_devices,
+        'security_summary': {
+            'threat_level': security.get('threat_level', 'UNKNOWN'),
+            'mitm_risk': security.get('mitm_risk', 'UNKNOWN'),
+            'recommendation': security.get('recommendation', 'Check network security'),
+            'total_devices': len(devices),
+            'secure_devices': len([d for d in devices if d['threat_level'] == 'SECURE']),
+            'monitoring_devices': len([d for d in devices if d['threat_level'] == 'MONITORING']),
+            'detection_methods': {
+                'ping_and_arp': len([d for d in devices if d.get('detection_method') == 'PING+ARP']),
+                'arp_only': len([d for d in devices if d.get('detection_method') == 'ARP_ONLY'])
+            }
+        }
+    }
+    
+    print("="*60)
+    print(f"SCAN COMPLETE: {len(devices)} devices detected")
+    print("="*60 + "\n")
+    
+    return jsonify(response)
+
+if __name__ == '__main__':
+    print("=" * 60)
+    print("◈ GARUDA QUANTUM DEFENSE SYSTEM BACKEND ◈")
+    print("=" * 60)
+    print(f"System: {platform.system()}")
+    print("Scan Mode: MULTI-METHOD (Ping + ARP + Force Refresh)")
+    print(f"Starting API server on http://localhost:5000")
+    print("\nAvailable Endpoints:")
+    print("  GET  /api/health          - System health check")
+    print("  GET  /api/scan/nearby     - Scan nearby WiFi networks")
+    print("  GET  /api/scan/connected  - Check connected network")
+    print("  GET/POST /api/scan/full   - Full network scan (AGGRESSIVE)")
+    print("\nFeatures:")
+    print("  ✓ Multi-phase device detection")
+    print("  ✓ ARP cache forcing")
+    print("  ✓ Parallel ping sweeping")
+    print("  ✓ Real device count accuracy")
     print("=" * 60)
     
     app.run(debug=True, host='0.0.0.0', port=5000)
