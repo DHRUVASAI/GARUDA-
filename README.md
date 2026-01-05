@@ -79,7 +79,11 @@ garuda
 ## ⚡ Installation
 
 ### Option 1: Quick Start (Windows)
-1. **Clone** the repository.
+1. **Clone** the repository:
+   ```bash
+   git clone https://github.com/DHRUVASAI/GARUDA-.git
+   cd GARUDA-
+   ```
 2. **Double-click** `start_garuda.bat`.
 3. Select **Option 1** (Local Deployment).
 4. The dashboard will open automatically in your browser.
@@ -105,6 +109,15 @@ garuda
 
 4. **Access**
    Open `http://localhost:8000/index.html` (or `garuda-visualization.html`)
+
+---
+
+## 🎬 Feature Previews
+
+| Preview | Description |
+| ------- | ----------- |
+| ![Dashboard](./public/assets/garuda_hero.png) | **Cyberpunk Dashboard** — Real-time system status, threat level monitoring, and particle-based visual effects. |
+| ![Full Scan](./public/assets/garuda_full_scan.png) | **Deep Scan Results** — Comprehensive network topology, device identification, and security assessment after a full scan. |
 
 ---
 
