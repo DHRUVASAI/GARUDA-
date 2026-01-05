@@ -20,7 +20,7 @@
   <a href="DEPLOYMENT_GUIDE.md">Deployment Guide</a>
 </p>
 
-<img src="./public/assets/garuda_hero.png" alt="GARUDA Interface" width="900" />
+<img src="public/assets/garuda_hero.png" alt="GARUDA Interface" width="900" />
 <!-- Note: Replace the above image path with an actual screenshot if available, or remove if not -->
 
 </div>
@@ -116,8 +116,8 @@ garuda
 
 | Preview | Description |
 | ------- | ----------- |
-| ![Dashboard](./public/assets/garuda_hero.png) | **Cyberpunk Dashboard** — Real-time system status, threat level monitoring, and particle-based visual effects. |
-| ![Full Scan](./public/assets/garuda_full_scan.png) | **Deep Scan Results** — Comprehensive network topology, device identification, and security assessment after a full scan. |
+| ![Dashboard](public/assets/garuda_hero.png) | **Cyberpunk Dashboard** — Real-time system status, threat level monitoring, and particle-based visual effects. |
+| ![Full Scan](public/assets/garuda_full_scan.png) | **Deep Scan Results** — Comprehensive network topology, device identification, and security assessment after a full scan. |
 
 ---
 
