@@ -546,55 +546,80 @@ async function loadScans() {
   const el = document.getElementById('scans-content');
   el.innerHTML = loadingHTML();
   try {
-    const data = await apiFetch('/api/history/scans?limit=50');
-    const scans = Array.isArray(data) ? data : (data.scans || []);
-    if (scans.length === 0) { el.innerHTML = emptyHTML('No scans recorded yet. Run a full scan first.'); return; }
-
-    let html = `<div class="count">${scans.length} scan${scans.length !== 1 ? 's' : ''} recorded</div>`;
-    html += `<div class="table-wrap"><table><thead><tr>
-      <th>#</th><th>Timestamp</th><th>Network</th><th>Encryption</th><th>Devices</th><th>Risk Score</th><th>Risk Label</th><th>Threat Level</th>
-    </tr></thead><tbody>`;
-
-    scans.forEach((s, i) => {
-      const rid = 'scan_' + (s.id || i);
-      html += `<tr class="scan-row" data-rid="${rid}" style="cursor:pointer">
-        <td>${i + 1}</td>
-        <td>${fmtDate(s.timestamp)}</td>
-        <td>${s.ssid || '—'}</td>
-        <td>${s.encryption || '—'}</td>
-        <td>${s.device_count ?? '—'}</td>
-        <td style="font-family:'Inter',sans-serif;font-weight:600;color:${riskColor(s.risk_label)}">${s.risk_score ?? '—'}</td>
-        <td><span class="badge ${riskClass(s.risk_label)}">${s.risk_label || '—'}</span></td>
-        <td><span class="badge ${riskClass(s.threat_level)}">${s.threat_level || '—'}</span></td>
-      </tr>
-      <tr class="expand-row" id="${rid}" style="display:none">
-        <td colspan="8">
-          <div class="expand-content">
-            <div>Duration: <span>${s.duration || s.scan_duration || '—'}</span></div>
-            <div>Gateway IP: <span>${s.gateway_ip || '—'}</span></div>
-            <div>Local IP: <span>${s.local_ip || '—'}</span></div>
-            <div>Active: <span>${s.active_count ?? '—'}</span></div>
-            <div>Unknown: <span>${s.unknown_count ?? '—'}</span></div>
-          </div>
-        </td>
-      </tr>`;
-    });
-    html += '</tbody></table></div>';
-    el.innerHTML = html;
-
-    // Row click to expand
-    el.querySelectorAll('.scan-row').forEach(row => {
-      row.addEventListener('click', () => {
-        const rid = row.dataset.rid;
-        const expRow = document.getElementById(rid);
-        if (expandedScanRow && expandedScanRow !== expRow) expandedScanRow.style.display = 'none';
-        expRow.style.display = expRow.style.display === 'none' ? 'table-row' : 'none';
-        expandedScanRow = expRow.style.display === 'table-row' ? expRow : null;
-      });
-    });
+    const data = await apiFetch('/api/history/scans?limit=200');
+    allScans = Array.isArray(data) ? data : (data.scans || []);
+    scanPage = 1;
+    renderScans(el);
   } catch (e) {
     el.innerHTML = errorHTML(e.message, loadScans);
   }
+}
+
+function renderScans(el) {
+  if (!el) el = document.getElementById('scans-content');
+  const totalPages = Math.max(1, Math.ceil(allScans.length / SCAN_PAGE_SIZE));
+  if (scanPage > totalPages) scanPage = totalPages;
+  const start = (scanPage - 1) * SCAN_PAGE_SIZE;
+  const pageScans = allScans.slice(start, start + SCAN_PAGE_SIZE);
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div class="count">Showing ${start+1}\u2013${Math.min(start+SCAN_PAGE_SIZE, allScans.length)} of ${allScans.length} scans</div>
+  </div>`;
+
+  html += `<div class="table-wrap"><table><thead><tr>
+    <th>#</th><th>Timestamp</th><th>Network</th><th>Encryption</th><th>Devices</th><th>Risk Score</th><th>Risk Label</th><th>Threat Level</th>
+  </tr></thead><tbody>`;
+
+  pageScans.forEach((s, i) => {
+    const rid = 'scan_' + (s.id || i);
+    const globalIdx = start + i + 1;
+    html += `<tr class="scan-row" data-rid="${rid}" style="cursor:pointer">
+      <td>${globalIdx}</td>
+      <td>${fmtDate(s.timestamp)}</td>
+      <td>${s.ssid || '\u2014'}</td>
+      <td>${s.encryption || '\u2014'}</td>
+      <td>${s.device_count ?? '\u2014'}</td>
+      <td style="font-family:'Inter',sans-serif;font-weight:600;color:${riskColor(s.risk_label)}">${s.risk_score ?? '\u2014'}</td>
+      <td><span class="badge ${riskClass(s.risk_label)}">${s.risk_label || '\u2014'}</span></td>
+      <td><span class="badge ${riskClass(s.threat_level)}">${s.threat_level || '\u2014'}</span></td>
+    </tr>
+    <tr class="expand-row" id="${rid}" style="display:none">
+      <td colspan="8">
+        <div class="expand-content">
+          <div>Duration: <span>${s.duration || '\u2014'}</span></div>
+          <div>Gateway IP: <span>${s.gateway_ip || '\u2014'}</span></div>
+          <div>Local IP: <span>${s.local_ip || '\u2014'}</span></div>
+          <div>Active: <span>${s.active_count ?? '\u2014'}</span></div>
+          <div>Unknown Vendors: <span>${s.unknown_count ?? '\u2014'}</span></div>
+        </div>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+
+  // Pagination controls
+  html += buildPagination(allScans.length, scanPage, totalPages).replace(/goDevicePage/g, 'goScanPage');
+
+  el.innerHTML = html;
+
+  // Row click expand
+  el.querySelectorAll('.scan-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const rid = row.dataset.rid;
+      const expRow = document.getElementById(rid);
+      if (expandedScanRow && expandedScanRow !== expRow) expandedScanRow.style.display = 'none';
+      expRow.style.display = expRow.style.display === 'none' ? 'table-row' : 'none';
+      expandedScanRow = expRow.style.display === 'table-row' ? expRow : null;
+    });
+  });
+}
+
+function goScanPage(p) {
+  const totalPages = Math.max(1, Math.ceil(allScans.length / SCAN_PAGE_SIZE));
+  if (p < 1 || p > totalPages) return;
+  scanPage = p;
+  renderScans();
+  document.getElementById('scans-content').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ══════════════════════════════════════════
@@ -678,6 +703,10 @@ function setAlertFilter(f) {
 //  SECTION 4 — KNOWN DEVICES (PAGINATED)
 // ══════════════════════════════════════════
 let allDevices = [];
+let allScans = [];
+let scanPage = 1;
+const SCAN_PAGE_SIZE = 20;
+let expandedScanRow = null;
 let devicePage = 1;
 let deviceQuery = '';
 let deviceCapped = false;

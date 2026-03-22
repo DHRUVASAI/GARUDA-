@@ -58,7 +58,11 @@ body{font-family:var(--font-ui);background:var(--bg);color:var(--t0);min-height:
 
 /* CARDS */
 .metric-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
-.metric-card{background:var(--s1);border:1px solid var(--b0);border-radius:var(--radius);padding:16px;transition:border-color 0.15s}
+.metric-card{background:var(--s1);border:1px solid var(--b0);border-left:3px solid var(--b0);border-radius:var(--radius);padding:16px;transition:border-color 0.15s}
+.metric-card:nth-child(1){border-left-color:var(--accent)}
+.metric-card:nth-child(2){border-left-color:var(--success)}
+.metric-card:nth-child(3){border-left-color:var(--danger)}
+.metric-card:nth-child(4){border-left-color:var(--warn)}
 .metric-card:hover{border-color:var(--b1)}
 .metric-label{font-size:11px;color:var(--t2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;font-weight:500}
 .metric-value{font-family:var(--font-mono);font-size:28px;font-weight:700;line-height:1}
@@ -123,7 +127,8 @@ body{font-family:var(--font-ui);background:var(--bg);color:var(--t0);min-height:
 .filter-bar .btn-secondary.active{background:rgba(31,111,235,0.15);color:var(--accent);border-color:rgba(31,111,235,0.3)}
 
 /* TOPOLOGY */
-.topo-container{position:relative;background:var(--bg);border-radius:var(--radius);border:1px solid var(--b0);overflow:hidden}
+.topo-container{position:relative;background:radial-gradient(circle,#1c2128 1px,transparent 1px);background-size:28px 28px;background-color:#0d1117;border-radius:var(--radius);border:1px solid var(--b0);overflow:hidden}
+@keyframes pulse-ring{0%{opacity:0.6;r:14}100%{opacity:0;r:22}}
 .topo-svg{width:100%;height:500px;display:block}
 .topo-controls{position:absolute;top:12px;right:12px;display:flex;gap:4px;flex-direction:column}
 .topo-controls button{width:32px;height:32px;background:var(--s1);border:1px solid var(--b0);border-radius:4px;color:var(--t1);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all 0.15s}
@@ -139,7 +144,7 @@ body{font-family:var(--font-ui);background:var(--bg);color:var(--t0);min-height:
 #topo-tooltip .tt-val{color:var(--t0);font-size:10px;font-family:var(--font-mono)}
 
 /* RISK SEGMENTED BAR */
-.risk-segment-bar{display:flex;height:32px;border-radius:4px;overflow:hidden;margin-bottom:8px}
+.risk-segment-bar{display:block;margin-bottom:8px}
 .risk-segment{display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#fff;min-width:40px;transition:flex-grow 0.6s}
 .risk-segment-labels{display:flex;margin-bottom:16px;font-size:10px;color:var(--t1)}
 .risk-segment-labels > div{display:flex;flex-direction:column;align-items:center;gap:2px}
@@ -361,9 +366,9 @@ body{font-family:var(--font-ui);background:var(--bg);color:var(--t0);min-height:
       <svg class="topo-svg" id="topo-svg"></svg>
       <div class="topo-node-count" id="topoCount">0 nodes</div>
       <div class="topo-controls">
-        <button onclick="topoZoom(1.3)" title="Zoom in">+</button>
-        <button onclick="topoZoom(0.7)" title="Zoom out">-</button>
-        <button onclick="topoReset()" title="Reset">⟲</button>
+        <button onclick="topoZoom(1.3)" title="Zoom in">＋</button>
+        <button onclick="topoZoom(0.7)" title="Zoom out">－</button>
+        <button onclick="topoReset()" title="Reset view">↺</button>
       </div>
       <div class="topo-layout-btns">
         <button class="btn-secondary active" id="btn-force" onclick="setTopoLayout('force')">Force</button>
@@ -375,6 +380,20 @@ body{font-family:var(--font-ui);background:var(--bg);color:var(--t0);min-height:
         <span><span class="leg-dot" style="background:#2ea043"></span>Your Device</span>
         <span><span class="leg-dot" style="background:#8b949e"></span>Node</span>
         <span><span class="leg-dot" style="background:#da3633"></span>Risky</span>
+      </div>
+    </div>
+    <div id="nodeDetail" style="display:none;margin-top:12px;padding:16px 20px;background:var(--s1);border:1px solid var(--b0);border-radius:var(--radius);font-size:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-family:var(--font-mono);font-weight:600;color:var(--accent);font-size:13px" id="nd-ip">—</span>
+        <button class="btn-secondary" onclick="closeNodeDetail()" style="font-size:11px;padding:2px 10px">✕ Close</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
+        <div class="info-row"><span class="info-key">Type</span><span class="info-val" id="nd-type">—</span></div>
+        <div class="info-row"><span class="info-key">Vendor</span><span class="info-val" id="nd-vendor">—</span></div>
+        <div class="info-row"><span class="info-key">MAC</span><span class="info-val" id="nd-mac">—</span></div>
+        <div class="info-row"><span class="info-key">Status</span><span class="info-val" id="nd-status">—</span></div>
+        <div class="info-row"><span class="info-key">Detection</span><span class="info-val" id="nd-detect">—</span></div>
+        <div class="info-row"><span class="info-key">Open Ports</span><span class="info-val" id="nd-ports">None</span></div>
       </div>
     </div>
   </div>
@@ -686,13 +705,21 @@ function exportCSV() {
 function updateThreatAnalysis(pred) {
   const segBar = document.getElementById('riskSegBar');
   const segLabels = document.getElementById('riskSegLabels');
-  const compNames = {encryption:'Encryption',unknown_devices:'Unknown Devices',arp_anomalies:'ARP Anomalies',open_ports:'Open Ports',device_density:'Device Density',traffic_anomaly:'Traffic'};
-  const compColors = {encryption:'var(--critical)',unknown_devices:'var(--warn)',arp_anomalies:'var(--danger)',open_ports:'var(--accent)',device_density:'#8b5cf6',traffic_anomaly:'#ec4899'};
+  const compNames = {encryption:'Encryption Weakness',unknown_devices:'Unknown Devices',arp_anomalies:'ARP Anomalies',open_ports:'Open Port Exposure',device_density:'Device Density',traffic_anomaly:'Traffic Anomaly'};
+  const compColors = {encryption:'#f85149',unknown_devices:'#d29922',arp_anomalies:'#da3633',open_ports:'#1f6feb',device_density:'#8b5cf6',traffic_anomaly:'#ec4899'};
   if (pred.component_scores) {
-    const entries = Object.entries(pred.component_scores);
-    const total = entries.reduce((a,[,v]) => a + v, 0) || 1;
-    segBar.innerHTML = entries.map(([k,v]) => `<div class="risk-segment" style="flex-grow:${Math.max(v,5)};background:${compColors[k]||'var(--accent)'}">${v}%</div>`).join('');
-    segLabels.innerHTML = entries.map(([k,v]) => `<div style="flex:1;text-align:center"><div style="color:${compColors[k]||'var(--t1)'};font-weight:600">${v}%</div><div>${compNames[k]||k}</div></div>`).join('');
+    segBar.innerHTML = Object.entries(pred.component_scores).map(([k,v]) => `
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:11px">
+          <span style="color:var(--t1)">${compNames[k]||k}</span>
+          <span style="color:${compColors[k]||'var(--accent)'};font-family:var(--font-mono);font-weight:600">${v}%</span>
+        </div>
+        <div style="height:6px;background:var(--s3);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${v}%;background:${compColors[k]||'var(--accent)'};border-radius:3px;transition:width 0.6s ease"></div>
+        </div>
+      </div>
+    `).join('');
+    segLabels.innerHTML = '';
   }
   const rMeta = document.getElementById('riskMeta');
   rMeta.textContent = pred.risk_label ? `Overall: ${pred.risk_label} (Score: ${pred.risk_score || 0}/100)` : '';
@@ -701,7 +728,7 @@ function updateThreatAnalysis(pred) {
   if (pred.attack_predictions && pred.attack_predictions.length > 0) {
     tbody.innerHTML = pred.attack_predictions.map(a => {
       const sevCls = 'sev-' + (a.severity||'').toLowerCase();
-      return `<tr><td>${a.type}</td><td class="mono">${a.probability}%</td><td class="${sevCls}">${a.severity}</td><td>${a.affected_devices||'—'}</td><td style="font-size:11px;color:var(--t1)">${a.description||'—'}</td></tr>`;
+      return `<tr><td>${a.type}</td><td class="mono">${a.probability}%</td><td class="${sevCls}">${a.severity}</td><td>${a.affected_devices||'\u2014'}</td><td style="font-size:11px;color:var(--t1)">${a.description||'\u2014'}</td></tr>`;
     }).join('');
   }
 }
@@ -728,21 +755,28 @@ function updateTraffic(t) {
 }
 
 function renderCharts() {
-  const chartOpts = {responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{color:'#8b949e',font:{size:10,family:'Inter'},boxWidth:10}}},scales:{x:{ticks:{color:'#484f58',font:{size:9,family:'JetBrains Mono'}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#484f58',font:{size:9,family:'JetBrains Mono'}},grid:{color:'rgba(255,255,255,0.04)'}}}};
+  const fmtBytes = v => {
+    if (v >= 1073741824) return (v/1073741824).toFixed(1)+' GB';
+    if (v >= 1048576) return (v/1048576).toFixed(1)+' MB';
+    if (v >= 1024) return (v/1024).toFixed(1)+' KB';
+    return v+' B';
+  };
+  const bytesOpts = {responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{color:'#8b949e',font:{size:10,family:'Inter'},boxWidth:10}},tooltip:{callbacks:{label:ctx=>{return ` ${ctx.dataset.label}: ${fmtBytes(ctx.raw)}`;}}}},scales:{x:{ticks:{color:'#484f58',font:{size:9,family:'JetBrains Mono'}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#484f58',font:{size:9,family:'JetBrains Mono'},maxTicksLimit:6,callback:function(value){return fmtBytes(value);}},grid:{color:'rgba(255,255,255,0.04)'}}}};
+  const pktOpts = {responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{color:'#8b949e',font:{size:10,family:'Inter'},boxWidth:10}}},scales:{x:{ticks:{color:'#484f58',font:{size:9,family:'JetBrains Mono'}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#484f58',font:{size:9,family:'JetBrains Mono'},maxTicksLimit:6},grid:{color:'rgba(255,255,255,0.04)'}}}};
   
   const ctx1 = document.getElementById('bytesChart').getContext('2d');
   if (bytesChart) bytesChart.destroy();
   bytesChart = new Chart(ctx1, {type:'line', data:{labels:trafficHistory.labels,datasets:[
-    {label:'Sent',data:trafficHistory.bytesSent,borderColor:'#1f6feb',backgroundColor:'rgba(31,111,235,0.1)',fill:true,tension:0.4,pointRadius:2,borderWidth:2},
-    {label:'Received',data:trafficHistory.bytesRecv,borderColor:'#2ea043',backgroundColor:'rgba(46,160,67,0.1)',fill:true,tension:0.4,pointRadius:2,borderWidth:2}
-  ]}, options:chartOpts});
+    {label:'Sent',data:trafficHistory.bytesSent,borderColor:'#1f6feb',backgroundColor:'rgba(31,111,235,0.1)',fill:true,tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5},
+    {label:'Received',data:trafficHistory.bytesRecv,borderColor:'#2ea043',backgroundColor:'rgba(46,160,67,0.1)',fill:true,tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5}
+  ]}, options:bytesOpts});
 
   const ctx2 = document.getElementById('packetsChart').getContext('2d');
   if (packetsChart) packetsChart.destroy();
   packetsChart = new Chart(ctx2, {type:'line', data:{labels:trafficHistory.labels,datasets:[
-    {label:'Sent',data:trafficHistory.pktSent,borderColor:'#d29922',backgroundColor:'transparent',tension:0.4,pointRadius:2,borderWidth:2},
-    {label:'Received',data:trafficHistory.pktRecv,borderColor:'#8b5cf6',backgroundColor:'transparent',tension:0.4,pointRadius:2,borderWidth:2}
-  ]}, options:chartOpts});
+    {label:'Sent',data:trafficHistory.pktSent,borderColor:'#d29922',backgroundColor:'transparent',tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5},
+    {label:'Received',data:trafficHistory.pktRecv,borderColor:'#8b5cf6',backgroundColor:'transparent',tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5}
+  ]}, options:pktOpts});
 }
 
 function setTimeRange(range, btn) {
@@ -770,7 +804,7 @@ function buildTopology(data) {
   const gateway = data.gateway;
   const localIp = data.local_ip;
   const portData = data.port_scan || {};
-  const allDevices = [{ip:gateway,mac:'—',vendor:'Router/Gateway',status:'ACTIVE',type:'GATEWAY'}, ...devices.map(d => ({...d,type:d.ip===localIp?'THIS_DEVICE':'NODE'}))];
+  const allDevices = [{ip:gateway,mac:'\u2014',vendor:'Router/Gateway',status:'ACTIVE',type:'GATEWAY'}, ...devices.map(d => ({...d,type:d.ip===localIp?'THIS_DEVICE':'NODE'}))];
   
   document.getElementById('topoCount').textContent = allDevices.length + ' nodes';
 
@@ -784,8 +818,8 @@ function buildTopology(data) {
     line.setAttribute('x1',gwPos.x); line.setAttribute('y1',gwPos.y);
     line.setAttribute('x2',positions[i].x); line.setAttribute('y2',positions[i].y);
     const hasRisky = (portData[allDevices[i].ip]||[]).some(p => RISKY_PORTS.has(p));
-    line.setAttribute('stroke', hasRisky ? 'rgba(218,54,51,0.3)' : 'rgba(255,255,255,0.08)');
-    line.setAttribute('stroke-width','1');
+    line.setAttribute('stroke', hasRisky ? 'rgba(218,54,51,0.4)' : 'rgba(139,148,158,0.2)');
+    line.setAttribute('stroke-width', hasRisky ? '2' : '1.5');
     edgeGroup.appendChild(line);
   }
   svg.appendChild(edgeGroup);
@@ -794,13 +828,29 @@ function buildTopology(data) {
   const nodeGroup = document.createElementNS('http://www.w3.org/2000/svg','g');
   allDevices.forEach((d, i) => {
     const pos = positions[i];
-    const r = d.type === 'GATEWAY' ? 16 : d.type === 'THIS_DEVICE' ? 12 : 8;
     const ports = portData[d.ip] || [];
     const hasRisky = ports.some(p => RISKY_PORTS.has(p));
+    let r = d.type === 'GATEWAY' ? 20 : d.type === 'THIS_DEVICE' ? 14 : hasRisky ? 11 : 9;
     let fill = '#8b949e';
     if (d.type === 'GATEWAY') fill = '#1f6feb';
     else if (d.type === 'THIS_DEVICE') fill = '#2ea043';
     else if (hasRisky) fill = '#da3633';
+
+    // Outer ring for gateway
+    if (d.type === 'GATEWAY') {
+      const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      ring.setAttribute('cx',pos.x); ring.setAttribute('cy',pos.y); ring.setAttribute('r',28);
+      ring.setAttribute('fill','none'); ring.setAttribute('stroke','#1f6feb'); ring.setAttribute('stroke-width','1.5'); ring.setAttribute('opacity','0.25');
+      nodeGroup.appendChild(ring);
+    }
+    // Pulsing ring for risky
+    if (hasRisky && d.type !== 'GATEWAY') {
+      const pr = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      pr.setAttribute('cx',pos.x); pr.setAttribute('cy',pos.y); pr.setAttribute('r','14');
+      pr.setAttribute('fill','none'); pr.setAttribute('stroke','#da3633'); pr.setAttribute('stroke-width','1');
+      pr.style.animation = 'pulse-ring 2s infinite';
+      nodeGroup.appendChild(pr);
+    }
 
     const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
     circle.setAttribute('cx',pos.x); circle.setAttribute('cy',pos.y); circle.setAttribute('r',r);
@@ -812,8 +862,8 @@ function buildTopology(data) {
       const tip = document.getElementById('topo-tooltip');
       document.getElementById('tt-ip').textContent = d.ip;
       document.getElementById('tt-vendor').textContent = d.vendor || 'Unknown';
-      document.getElementById('tt-mac').textContent = d.mac || '—';
-      document.getElementById('tt-status').textContent = d.status || '—';
+      document.getElementById('tt-mac').textContent = d.mac || '\u2014';
+      document.getElementById('tt-status').textContent = d.status || '\u2014';
       document.getElementById('tt-type').textContent = d.type;
       document.getElementById('tt-ports').textContent = ports.length > 0 ? ports.join(', ') : 'None';
       tip.style.left = (e.clientX + 12) + 'px';
@@ -829,19 +879,35 @@ function buildTopology(data) {
       tip.style.left = (e.clientX + 12) + 'px';
       tip.style.top = (e.clientY - 10) + 'px';
     });
+    circle.addEventListener('click', () => {
+      showNodeDetail(d, ports);
+    });
     nodeGroup.appendChild(circle);
 
-    // Labels for gateway and local
-    if (d.type === 'GATEWAY' || d.type === 'THIS_DEVICE') {
-      const text = document.createElementNS('http://www.w3.org/2000/svg','text');
-      text.setAttribute('x',pos.x); text.setAttribute('y',pos.y + r + 14);
-      text.setAttribute('text-anchor','middle'); text.setAttribute('fill','#8b949e');
-      text.setAttribute('font-size','10'); text.setAttribute('font-family','JetBrains Mono');
-      text.textContent = d.ip;
-      nodeGroup.appendChild(text);
-    }
+    // IP labels for ALL nodes
+    const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+    text.setAttribute('x',pos.x); text.setAttribute('y',pos.y + r + 14);
+    text.setAttribute('text-anchor','middle'); text.setAttribute('fill','#8b949e');
+    text.setAttribute('font-size','9'); text.setAttribute('font-family','JetBrains Mono');
+    const label = d.ip ? d.ip.split('.').pop() : '?';
+    text.textContent = d.type === 'GATEWAY' ? 'GW' : d.type === 'THIS_DEVICE' ? 'YOU' : label;
+    nodeGroup.appendChild(text);
   });
   svg.appendChild(nodeGroup);
+}
+
+function showNodeDetail(d, ports) {
+  document.getElementById('nd-ip').textContent = d.ip || '\u2014';
+  document.getElementById('nd-type').textContent = d.type || '\u2014';
+  document.getElementById('nd-vendor').textContent = d.vendor || 'Unknown';
+  document.getElementById('nd-mac').textContent = d.mac || '\u2014';
+  document.getElementById('nd-status').textContent = d.status || '\u2014';
+  document.getElementById('nd-detect').textContent = d.detection_method || '\u2014';
+  document.getElementById('nd-ports').textContent = ports.length > 0 ? ports.join(', ') : 'None';
+  document.getElementById('nodeDetail').style.display = 'block';
+}
+function closeNodeDetail() {
+  document.getElementById('nodeDetail').style.display = 'none';
 }
 
 function calcPositions(devices, W, H, layout) {
