@@ -312,65 +312,6 @@ body{font-family:var(--font-ui);background:var(--bg);color:var(--t0);min-height:
     <div class="scan-controls">
       <button class="btn-primary" id="scanBtn" onclick="startScan()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-      <span id="topBtnTxt">Run Scan</span>
-    </button>
-  </div>
-</header>
-
-<!-- MAIN CONTENT -->
-<main class="main">
-  <div class="inline-error" id="offBar">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-    Backend offline — run: <code>python garuda_backend.py</code>
-  </div>
-
-  <!-- OVERVIEW PAGE -->
-  <div class="page active" id="page-overview">
-    <div class="metric-row" id="overviewMetrics">
-      <div class="metric-card">
-        <div class="metric-label">Network Status</div>
-        <div class="metric-value" id="ov-status" style="font-size:18px;font-family:var(--font-ui)"><div class="skeleton" style="width:80px;height:20px"></div></div>
-        <div class="metric-sub" id="ov-status-sub">Run a scan to check</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Devices Detected</div>
-        <div class="metric-value" id="ov-devices" style="color:var(--accent)"><div class="skeleton" style="width:48px;height:28px"></div></div>
-        <div class="metric-sub">on local network</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Open Ports Found</div>
-        <div class="metric-value" id="ov-ports"><div class="skeleton" style="width:48px;height:28px"></div></div>
-        <div class="metric-sub" id="ov-ports-sub">across all devices</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Risk Score</div>
-        <div class="metric-value" id="ov-risk" style="font-size:22px"><div class="skeleton" style="width:80px;height:22px"></div></div>
-        <div class="risk-bar-container"><div class="risk-bar-fill" id="ov-risk-bar" style="width:0%;background:var(--accent)"></div></div>
-      </div>
-    </div>
-    <div class="grid-2">
-      <div class="panel">
-        <div class="panel-title">Last Scan Summary</div>
-        <div id="ov-scan-summary">
-          <div class="info-row"><span class="info-key">SSID</span><span class="info-val" id="ov-ssid">—</span></div>
-          <div class="info-row"><span class="info-key">Encryption</span><span class="info-val" id="ov-enc">—</span></div>
-          <div class="info-row"><span class="info-key">Gateway</span><span class="info-val" id="ov-gw">—</span></div>
-          <div class="info-row"><span class="info-key">Signal</span><span class="info-val" id="ov-sig">—</span></div>
-          <div class="info-row"><span class="info-key">Channel</span><span class="info-val" id="ov-ch">—</span></div>
-          <div class="info-row"><span class="info-key">Scan Duration</span><span class="info-val" id="ov-dur">—</span></div>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-title">Recent Threat Indicators</div>
-        <div id="ov-threats">
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <p>No threats detected yet. Run a scan to analyze your network.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
         <span id="btnTxt">Initialize Scan</span>
       </button>
