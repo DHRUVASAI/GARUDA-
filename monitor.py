@@ -199,9 +199,10 @@ def run_full_scan():
         traffic = get_real_traffic()
         local_ip = net_sc.get_local_ip()
         gateway_ip = net_sc.get_gateway()
-        all_devices = net_sc.get_connected_devices()
+        scan_result = net_sc.get_connected_devices()
+        all_devices, total_found, net_size = scan_result if isinstance(scan_result, tuple) else (scan_result, len(scan_result), 'small')
 
-        print(f"[SCAN] Found {len(all_devices)} devices")
+        print(f"[SCAN] Found {len(all_devices)} devices (total: {total_found}, network: {net_size})")
 
         # Port scan (gateway + local + up to 8 others)
         targets = [gateway_ip, local_ip] + \

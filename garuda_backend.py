@@ -243,6 +243,17 @@ class NetworkScanner:
         except:
             return None
 
+    def detect_network_size(self, network_range):
+        """Classify network: small=home, large=college/office, enterprise=corporate"""
+        try:
+            network = ipaddress.IPv4Network(network_range, strict=False)
+            hosts = network.num_addresses - 2
+            if hosts > 500:   return 'enterprise'
+            elif hosts > 100: return 'large'
+            else:             return 'small'
+        except:
+            return 'small'
+
     def _ping_ip(self, ip, timeout=0.5):
         try:
             cmd = ["ping", "-n", "1", "-w", str(int(timeout*1000)), ip] if OS == "Windows" \
@@ -298,17 +309,38 @@ class NetworkScanner:
         except:
             return None
 
-    def get_connected_devices(self):
+    def get_connected_devices(self, max_devices=50):
         network_range = self.get_network_range()
         if not network_range:
             return []
         try:
+            net_size = self.detect_network_size(network_range)
             network = ipaddress.IPv4Network(network_range, strict=False)
             ip_list = [str(ip) for ip in network.hosts()]
+            local_ip = self.get_local_ip()
+            gateway_ip = self.get_gateway()
 
+            # Tune settings based on network size
+            if net_size == 'enterprise':
+                ping_timeout = 0.2
+                workers = 200
+                arp_wait = 0.5
+                print(f"[SCAN] Enterprise network detected ({len(ip_list)} hosts) — fast mode")
+            elif net_size == 'large':
+                ping_timeout = 0.3
+                workers = 150
+                arp_wait = 1.0
+                print(f"[SCAN] Large network detected ({len(ip_list)} hosts) — optimized mode")
+            else:
+                ping_timeout = 0.4
+                workers = 100
+                arp_wait = 1.5
+                print(f"[SCAN] Home network detected ({len(ip_list)} hosts) — normal mode")
+
+            # Phase 1: Parallel ping sweep
             active_ips = set()
-            with concurrent.futures.ThreadPoolExecutor(max_workers=150) as ex:
-                future_to_ip = {ex.submit(self._ping_ip, ip, 0.4): ip for ip in ip_list}
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+                future_to_ip = {ex.submit(self._ping_ip, ip, ping_timeout): ip for ip in ip_list}
                 for future in concurrent.futures.as_completed(future_to_ip):
                     ip = future_to_ip[future]
                     try:
@@ -317,15 +349,32 @@ class NetworkScanner:
                     except:
                         pass
 
-            remaining = [ip for ip in ip_list if ip not in active_ips]
-            with concurrent.futures.ThreadPoolExecutor(max_workers=100) as ex:
-                list(ex.map(lambda ip: self._ping_ip(ip, 0.5), remaining))
-            time.sleep(1.5)
+            # Phase 2: ARP refresh (skip for enterprise — too slow)
+            if net_size != 'enterprise':
+                remaining = [ip for ip in ip_list if ip not in active_ips]
+                with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+                    list(ex.map(lambda ip: self._ping_ip(ip, 0.3), remaining))
+                time.sleep(arp_wait)
 
+            # Phase 3: Read ARP table
             arp = self.get_arp_table()
             all_ips = active_ips.union(set(arp.keys()))
+
+            # Build device list — always include gateway and local IP first
+            priority_ips = {gateway_ip, local_ip}
+            other_ips = sorted(
+                [ip for ip in all_ips if ip not in priority_ips
+                 and not ip.endswith('.255') and not ip.endswith('.0')],
+                key=lambda x: list(map(int, x.split('.')))
+            )
+
+            # Cap at max_devices — always keep gateway + local
+            capped = list(priority_ips.intersection(all_ips)) + other_ips
+            total_found = len(capped)
+            capped = capped[:max_devices]
+
             devices = []
-            for ip in sorted(all_ips, key=lambda x: list(map(int, x.split('.')))):
+            for ip in capped:
                 if ip.endswith('.255') or ip.endswith('.0'):
                     continue
                 mac = arp.get(ip, 'Unknown')
@@ -337,10 +386,13 @@ class NetworkScanner:
                     'status': 'ACTIVE' if ip in active_ips else 'DETECTED',
                     'detection_method': 'PING+ARP' if ip in active_ips else 'ARP_ONLY',
                 })
-            return devices
+
+            print(f"[SCAN] Found {total_found} devices — showing {len(devices)} (capped at {max_devices})")
+            return devices, total_found, net_size
+
         except Exception as e:
             print(f"Scan error: {e}")
-            return []
+            return [], 0, 'unknown'
 
     def get_interface_stats(self):
         try:
@@ -498,7 +550,10 @@ def full_scan():
     traffic = get_real_traffic()
     local_ip = net_sc.get_local_ip()
     gateway_ip = net_sc.get_gateway()
-    all_devices = net_sc.get_connected_devices()
+
+    # Smart scan — returns (devices, total_found, net_size)
+    scan_result = net_sc.get_connected_devices(max_devices=50)
+    all_devices, total_found, net_size = scan_result if isinstance(scan_result, tuple) else (scan_result, len(scan_result), 'small')
 
     scan_targets = [gateway_ip, local_ip] + \
                    [d['ip'] for d in all_devices if d['ip'] not in (gateway_ip, local_ip)][:8]
@@ -529,6 +584,10 @@ def full_scan():
         'threat_level': security.get('threat_level', 'UNKNOWN'),
         'mitm_risk': security.get('mitm_risk', 'UNKNOWN'),
         'total_devices': len(devices),
+        'total_found': total_found,
+        'showing': len(devices),
+        'capped': total_found > len(devices),
+        'network_size': net_size,
         'active_devices': len([d for d in devices if d.get('status') == 'ACTIVE']),
         'unknown_vendors': len([d for d in devices if d.get('vendor') in ('Unknown', 'Unknown Vendor')]),
     }
@@ -636,6 +695,42 @@ def device_history():
     return jsonify(get_known_devices())
 
 
+@app.route('/api/arp/status', methods=['GET'])
+def arp_status():
+    """Real-time ARP table status + spoofing detection."""
+    gateway_ip = net_sc.get_gateway()
+    current_arp = net_sc.get_arp_table()
+    gateway_mac = current_arp.get(gateway_ip, 'Unknown')
+
+    # Check for spoofing using DB history if available
+    spoofing_detected = False
+    suspicious_ips = []
+
+    if DB_AVAILABLE:
+        try:
+            from database import get_arp_history
+            for ip, mac in current_arp.items():
+                history = get_arp_history(ip, hours=24)
+                # Get unique MACs seen for this IP in last 24h
+                past_macs = set(h['mac'] for h in history if h.get('mac'))
+                if len(past_macs) > 1 and mac not in past_macs:
+                    suspicious_ips.append(ip)
+                    if ip == gateway_ip:
+                        spoofing_detected = True
+        except Exception as e:
+            print(f"[ARP] History check error: {e}")
+
+    return jsonify({
+        'current_arp': current_arp,
+        'gateway_ip': gateway_ip,
+        'gateway_mac': gateway_mac,
+        'spoofing_detected': spoofing_detected,
+        'suspicious_ips': suspicious_ips,
+        'total_entries': len(current_arp),
+        'last_checked': datetime.now().isoformat(),
+    })
+
+
 @app.route('/api/alerts/acknowledge/<int:alert_id>', methods=['POST'])
 def ack_alert(alert_id):
     if not DB_AVAILABLE:
@@ -653,4 +748,4 @@ if __name__ == '__main__':
     print(f"  DB: {'Connected' if DB_AVAILABLE else 'Not available'}")
     print(f"  http://localhost:5000")
     print("=" * 55)
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)

@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GARUDA — History Dashboard</title>
+<meta name="description" content="GARUDA Network Defense System — History Dashboard for scan history, alerts, known devices, and traffic analysis."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+/* ── RESET & BASE ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px;scroll-behavior:smooth}
+body{background:#0d1117;color:#eef0f7;font-family:'Inter',sans-serif;line-height:1.6;overflow-x:hidden}
+h1,h2,h3,h4,h5,h6{font-family:'Inter',sans-serif;font-weight:600;letter-spacing:-.02em}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:#0d1117}
+::-webkit-scrollbar-thumb{background:#3d4658;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#8b93a6}
+
+/* ── LAYOUT ── */
+.layout{display:flex;min-height:100vh}
+.sidebar{width:220px;background:#0d1117;border-right:1px solid rgba(255,255,255,.05);position:fixed;top:0;left:0;height:100vh;display:flex;flex-direction:column;z-index:100;transition:transform .25s ease}
+.main{margin-left:220px;flex:1;padding:28px 32px 60px;min-height:100vh}
+
+/* ── SIDEBAR ── */
+.sidebar-logo{padding:24px 20px 8px;border-bottom:1px solid rgba(255,255,255,.05)}
+.sidebar-logo h1{font-size:1.15rem;font-weight:700;display:flex;align-items:center;gap:8px;color:#eef0f7}
+.sidebar-logo h1 span.shield{font-size:1.3rem}
+.sidebar-badge{display:inline-block;background:rgba(59,130,246,.12);color:#3b82f6;font-family:'JetBrains Mono',monospace;font-size:.65rem;padding:2px 8px;border-radius:4px;margin-top:6px;letter-spacing:.04em}
+.sidebar-nav{flex:1;padding:16px 0}
+.sidebar-nav a{display:flex;align-items:center;gap:10px;padding:10px 20px;color:#8b93a6;text-decoration:none;font-size:.85rem;border-left:3px solid transparent;transition:all .15s ease;cursor:pointer}
+.sidebar-nav a:hover{color:#eef0f7;background:rgba(255,255,255,.02)}
+.sidebar-nav a.active{color:#eef0f7;border-left-color:#3b82f6;background:rgba(59,130,246,.06)}
+.sidebar-nav a .nav-icon{font-size:1rem;width:20px;text-align:center}
+.sidebar-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,.05);font-size:.7rem;color:#3d4658}
+
+/* ── HAMBURGER ── */
+.hamburger{display:none;position:fixed;top:14px;left:14px;z-index:200;background:#0d1117;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 10px;cursor:pointer;color:#eef0f7;font-size:1.2rem;line-height:1}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:90}
+
+/* ── SECTION ── */
+.section{display:none;animation:fadeIn .3s ease}
+.section.active{display:block}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.section-title{font-size:1.6rem;font-weight:700;margin-bottom:4px}
+.section-sub{color:#8b93a6;font-size:.8rem;margin-bottom:24px}
+
+/* ── CARDS ROW ── */
+.cards-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px}
+.card{background:#161b22;border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:20px;transition:border-color .15s}
+.card:hover{border-color:rgba(255,255,255,.1)}
+.card-label{font-size:.7rem;color:#8b93a6;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.card-value{font-family:'Inter',sans-serif;font-size:1.8rem;font-weight:700;line-height:1.2}
+.card-foot{font-size:.65rem;color:#3d4658;margin-top:6px}
+
+/* ── TABLE ── */
+.table-wrap{overflow-x:auto;border:1px solid rgba(255,255,255,.05);border-radius:10px;background:#161b22}
+table{width:100%;border-collapse:collapse;font-size:.8rem}
+th{text-align:left;padding:12px 14px;color:#8b93a6;font-weight:500;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(255,255,255,.05);position:sticky;top:0;background:#161b22}
+td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.03)}
+tr:nth-child(even) td{background:rgba(255,255,255,.01)}
+tr:hover td{background:rgba(59,130,246,.04)}
+.expand-row td{background:#1c2128!important;padding:8px 14px 14px}
+.expand-content{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;font-size:.75rem;color:#8b93a6}
+.expand-content span{color:#eef0f7;font-weight:500}
+
+/* ── BADGES ── */
+.badge{display:inline-block;padding:2px 10px;border-radius:4px;font-size:.7rem;font-weight:500;letter-spacing:.03em}
+.badge-critical{background:rgba(239,68,68,.12);color:#ef4444}
+.badge-high{background:rgba(249,115,22,.12);color:#f97316}
+.badge-medium{background:rgba(245,158,11,.12);color:#f59e0b}
+.badge-low{background:rgba(16,185,129,.12);color:#10b981}
+.badge-secure{background:rgba(16,185,129,.12);color:#10b981}
+.badge-unknown{background:rgba(61,70,88,.25);color:#8b93a6}
+.badge-acked{background:rgba(16,185,129,.1);color:#10b981}
+.badge-unacked{background:rgba(239,68,68,.1);color:#ef4444}
+
+/* ── FILTER BAR ── */
+.filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.filter-btn{background:#1c2128;border:1px solid rgba(255,255,255,.05);color:#8b93a6;padding:6px 14px;border-radius:6px;font-size:.75rem;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s}
+.filter-btn:hover{border-color:rgba(255,255,255,.1);color:#eef0f7}
+.filter-btn.active{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.3);color:#3b82f6}
+
+/* ── SEARCH ── */
+.search-wrap{margin-bottom:18px}
+.search-input{width:100%;max-width:420px;background:#1c2128;border:1px solid rgba(255,255,255,.05);color:#eef0f7;padding:10px 14px;border-radius:8px;font-size:.8rem;font-family:'Inter',sans-serif;outline:none;transition:border-color .15s}
+.search-input:focus{border-color:rgba(59,130,246,.4)}
+.search-input::placeholder{color:#3d4658}
+
+/* ── ACTION BUTTON ── */
+.btn{background:rgba(59,130,246,.12);color:#3b82f6;border:1px solid rgba(59,130,246,.2);padding:5px 12px;border-radius:5px;font-size:.7rem;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s}
+.btn:hover{background:rgba(59,130,246,.2)}
+.btn-sm{padding:3px 9px;font-size:.65rem}
+
+/* ── CHART WRAPPER ── */
+.chart-box{background:#161b22;border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:20px}
+.chart-box h3{font-size:.9rem;margin-bottom:14px;font-weight:600}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+
+/* ── STATS ROW ── */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:20px}
+.stat-card{background:#1c2128;border:1px solid rgba(255,255,255,.05);border-radius:8px;padding:14px 16px}
+.stat-label{font-size:.65rem;color:#8b93a6;text-transform:uppercase;letter-spacing:.05em}
+.stat-value{font-family:'Inter',sans-serif;font-size:1.15rem;font-weight:600;margin-top:2px}
+
+/* ── PILLS ── */
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.pill{padding:3px 10px;border-radius:12px;font-size:.7rem;font-weight:500}
+
+/* ── TRUST BAR ── */
+.times-bar{display:inline-block;height:6px;border-radius:3px;background:#3b82f6;min-width:4px;max-width:100px}
+
+/* ── LOADING / ERROR / EMPTY ── */
+.loading{display:flex;align-items:center;justify-content:center;padding:48px 20px;color:#8b93a6;font-size:.85rem;gap:10px}
+.spinner{width:18px;height:18px;border:2px solid rgba(59,130,246,.2);border-top-color:#3b82f6;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error-state{text-align:center;padding:48px 20px;color:#ef4444;font-size:.85rem}
+.error-state p{color:#8b93a6;margin-top:6px;font-size:.75rem}
+.empty-state{text-align:center;padding:48px 20px;color:#3d4658;font-size:.85rem}
+
+/* ── LATEST SCAN INFO ── */
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:16px}
+.info-item{background:#1c2128;border:1px solid rgba(255,255,255,.05);border-radius:8px;padding:14px 16px}
+.info-item .label{font-size:.65rem;color:#8b93a6;text-transform:uppercase;letter-spacing:.04em}
+.info-item .value{font-family:'Inter',sans-serif;font-size:1rem;font-weight:600;margin-top:2px}
+
+/* ── ALERT ROW COMPACT ── */
+.alert-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.03);font-size:.8rem;transition:background .15s}
+.alert-row:hover{background:rgba(255,255,255,.02)}
+.alert-row .alert-title{flex:1;color:#eef0f7}
+.alert-row .alert-ts{color:#3d4658;font-size:.7rem;min-width:120px;text-align:right}
+.alert-row .alert-ack-btn{margin-left:8px}
+.unacked-highlight{background:rgba(239,68,68,.03)!important}
+
+/* ── TIME RANGE SELECTOR ── */
+.range-selector{display:flex;gap:6px;margin-bottom:18px}
+
+/* ── COUNT BADGE ── */
+.count{font-family:'Inter',sans-serif;font-weight:600;color:#eef0f7;font-size:.9rem;margin-bottom:14px}
+
+/* ── PAGINATION ── */
+.pagination{display:flex;align-items:center;gap:6px;margin-top:14px;flex-wrap:wrap}
+.page-btn{background:#1c2128;border:1px solid rgba(255,255,255,.05);color:#8b93a6;padding:5px 11px;border-radius:5px;font-size:.75rem;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s;min-width:34px;text-align:center}
+.page-btn:hover{border-color:rgba(255,255,255,.1);color:#eef0f7}
+.page-btn.active{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.3);color:#3b82f6}
+.page-btn:disabled{opacity:.35;cursor:not-allowed}
+.page-info{font-size:.75rem;color:#3d4658;margin-left:6px}
+.network-banner{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:7px;font-size:.8rem;margin-bottom:14px;border:1px solid}
+.network-banner.large{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.2);color:#f59e0b}
+
+/* ── NAV BADGE ── */
+.nav-badge{background:#ef4444;color:white;font-family:'Inter',sans-serif;font-weight:700;font-size:.6rem;padding:1px 6px;border-radius:10px;margin-left:auto;min-width:18px;text-align:center}
+
+/* ── ARP CARD ── */
+.arp-card{background:#161b22;border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:20px;margin-bottom:20px;grid-column:1/-1}
+.arp-card h3{font-size:.9rem;margin-bottom:12px;font-weight:600}
+.arp-row{display:flex;flex-wrap:wrap;align-items:center;gap:14px;font-size:.8rem}
+.arp-row .arp-item{color:#8b93a6}
+.arp-row .arp-item span{color:#eef0f7;font-weight:500}
+.arp-warn{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:6px;padding:8px 12px;margin-top:10px;font-size:.75rem;color:#ef4444}
+.arp-placeholder{color:#3d4658;font-size:.8rem;font-style:italic}
+
+/* ── SECTION HEADER ── */
+.section-header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.section-header .section-title{margin-bottom:0}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .hamburger{display:block}
+  .overlay.show{display:block}
+  .main{margin-left:0;padding:60px 16px 40px}
+  .cards-row{grid-template-columns:1fr 1fr}
+  .charts-grid{grid-template-columns:1fr}
+  .expand-content{grid-template-columns:1fr 1fr}
+}
+@media(max-width:480px){
+  .cards-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<!-- HAMBURGER -->
+<button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu">☰</button>
+<div class="overlay" id="overlay"></div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <h1><span class="shield">🛡️</span> GARUDA</h1>
+      <span class="sidebar-badge">v3.0</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a data-section="dashboard" class="active"><span class="nav-icon">◈</span> Dashboard</a>
+      <a data-section="scans"><span class="nav-icon">⊙</span> Scan History</a>
+      <a data-section="alerts" id="nav-alerts"><span class="nav-icon">⚑</span> Alerts<span class="nav-badge" id="alertsBadge" style="display:none"></span></a>
+      <a data-section="devices"><span class="nav-icon">▣</span> Known Devices</a>
+      <a data-section="traffic"><span class="nav-icon">⇅</span> Traffic</a>
+    </nav>
+    <div class="sidebar-footer">GARUDA Defense System</div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- ========== DASHBOARD ========== -->
+    <div class="section active" id="sec-dashboard">
+      <div class="section-header">
+        <h2 class="section-title">Dashboard</h2>
+        <button class="btn" id="pdfReportBtn" onclick="generatePDFReport()">🖨 Generate PDF Report</button>
+      </div>
+      <p class="section-sub">Real-time overview of your network posture</p>
+      <div id="dash-content">
+        <div class="loading"><div class="spinner"></div> Loading dashboard…</div>
+      </div>
+    </div>
+
+    <!-- ========== SCAN HISTORY ========== -->
+    <div class="section" id="sec-scans">
+      <h2 class="section-title">Scan History</h2>
+      <p class="section-sub">All recorded network scans</p>
+      <div id="scans-content">
+        <div class="loading"><div class="spinner"></div> Loading scan history…</div>
+      </div>
+    </div>
+
+    <!-- ========== ALERTS ========== -->
+    <div class="section" id="sec-alerts">
+      <h2 class="section-title">Alerts</h2>
+      <p class="section-sub">Security events and threat notifications</p>
+      <div id="alerts-content">
+        <div class="loading"><div class="spinner"></div> Loading alerts…</div>
+      </div>
+    </div>
+
+    <!-- ========== KNOWN DEVICES ========== -->
+    <div class="section" id="sec-devices">
+      <h2 class="section-title">Known Devices</h2>
+      <p class="section-sub">All devices ever seen on your network</p>
+      <div id="devices-content">
+        <div class="loading"><div class="spinner"></div> Loading devices…</div>
+      </div>
+    </div>
+
+    <!-- ========== TRAFFIC ========== -->
+    <div class="section" id="sec-traffic">
+      <h2 class="section-title">Traffic</h2>
+      <p class="section-sub">Network traffic analysis over time</p>
+      <div id="traffic-content">
+        <div class="loading"><div class="spinner"></div> Loading traffic data…</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   GARUDA HISTORY DASHBOARD — CLIENT
+   ═══════════════════════════════════════════════
+   FEATURES ADDED:
+   ✅ Feature 1 — Paginated Known Devices (20/page, numbered pages, search, capped banner)
+   ✅ Feature 2 — PDF Report Generation (fetches 4 endpoints, printable HTML, auto window.print)
+   ✅ Feature 3 — ARP Live Status Card in Dashboard (GET /api/arp/status, 30s refresh, 404 graceful)
+   ✅ Feature 4 — Alerts Badge on Sidebar (red badge, unacked count, hides if 0, 30s refresh)
+   ═══════════════════════════════════════════════ */
+const API = 'http://127.0.0.1:5000';
+
+// ── Helpers ──
+function fmtDate(iso) {
+  try {
+    const d = new Date(iso);
+    if (isNaN(d)) return iso || '—';
+    return d.toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true });
+  } catch { return iso || '—'; }
+}
+function fmtBytes(b) {
+  if (b == null) return '—';
+  if (b >= 1073741824) return (b / 1073741824).toFixed(2) + ' GB';
+  if (b >= 1048576) return (b / 1048576).toFixed(2) + ' MB';
+  if (b >= 1024) return (b / 1024).toFixed(2) + ' KB';
+  return b + ' B';
+}
+function riskClass(label) {
+  if (!label) return 'badge-unknown';
+  const l = label.toLowerCase();
+  if (l === 'critical') return 'badge-critical';
+  if (l === 'high') return 'badge-high';
+  if (l === 'medium') return 'badge-medium';
+  if (l === 'low' || l === 'secure') return 'badge-low';
+  return 'badge-unknown';
+}
+function riskColor(label) {
+  if (!label) return '#8b93a6';
+  const l = label.toLowerCase();
+  if (l === 'critical') return '#ef4444';
+  if (l === 'high') return '#f97316';
+  if (l === 'medium') return '#f59e0b';
+  return '#10b981';
+}
+function loadingHTML() { return '<div class="loading"><div class="spinner"></div> Loading…</div>'; }
+function errorHTML(msg, retryFn) {
+  const id = 'retry_' + Math.random().toString(36).slice(2,8);
+  setTimeout(() => { const b = document.getElementById(id); if (b) b.onclick = retryFn; }, 0);
+  return `<div class="error-state">⚠ ${msg}<p>Backend offline — run <code>python garuda_backend.py</code></p><br><button class="btn" id="${id}">Retry</button></div>`;
+}
+function emptyHTML(msg) { return `<div class="empty-state">${msg || 'No data available yet. Run a scan first.'}</div>`; }
+
+async function apiFetch(path) {
+  const res = await fetch(API + path);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+// ── Chart defaults ──
+Chart.defaults.color = '#8b93a6';
+Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
+Chart.defaults.font.family = "'Inter', sans-serif";
+Chart.defaults.font.size = 11;
+
+let chartInstances = {};
+function destroyChart(key) { if (chartInstances[key]) { chartInstances[key].destroy(); delete chartInstances[key]; } }
+
+// ══════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+const sections = document.querySelectorAll('.section');
+let currentSection = 'dashboard';
+
+navLinks.forEach(link => {
+  link.addEventListener('click', () => {
+    const sec = link.dataset.section;
+    if (sec === currentSection) return;
+    navLinks.forEach(l => l.classList.remove('active'));
+    link.classList.add('active');
+    sections.forEach(s => s.classList.remove('active'));
+    document.getElementById('sec-' + sec).classList.add('active');
+    currentSection = sec;
+    // Close mobile sidebar
+    sidebar.classList.remove('open');
+    overlay.classList.remove('show');
+    // Load data for section
+    loadSection(sec);
+  });
+});
+
+// Hamburger
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('overlay');
+document.getElementById('hamburgerBtn').addEventListener('click', () => {
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('show');
+});
+overlay.addEventListener('click', () => {
+  sidebar.classList.remove('open');
+  overlay.classList.remove('show');
+});
+
+function loadSection(sec) {
+  switch(sec) {
+    case 'dashboard': loadDashboard(); break;
+    case 'scans': loadScans(); break;
+    case 'alerts': loadAlerts(); break;
+    case 'devices': loadDevices(); break;
+    case 'traffic': loadTraffic(24); break;
+  }
+}
+
+// ══════════════════════════════════════════
+//  SECTION 1 — DASHBOARD
+// ══════════════════════════════════════════
+let dashInterval = null;
+
+// ── Feature 4: Sidebar Alert Badge ──
+async function updateAlertsBadge() {
+  try {
+    const data = await apiFetch('/api/dashboard');
+    const count = data.unacked_alerts ?? 0;
+    const badge = document.getElementById('alertsBadge');
+    if (badge) {
+      if (count > 0) { badge.textContent = count; badge.style.display = ''; }
+      else { badge.style.display = 'none'; }
+    }
+  } catch {}
+}
+
+// ── Feature 3: ARP Live Status ──
+async function loadArpStatus() {
+  const el = document.getElementById('arp-status-card');
+  if (!el) return;
+  try {
+    const res = await fetch(API + '/api/arp/status');
+    if (res.status === 404) { el.innerHTML = '<p class="arp-placeholder">ARP monitoring: coming soon</p>'; return; }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    const safe = !d.spoofing_detected;
+    let h = `<div class="arp-row">`;
+    h += `<span class="badge ${safe ? 'badge-low' : 'badge-critical'}">${safe ? 'ARP: Secure' : 'ARP: THREAT DETECTED'}</span>`;
+    h += `<span class="arp-item">Entries: <span>${d.total_entries ?? '—'}</span></span>`;
+    h += `<span class="arp-item">Gateway MAC: <span style="font-family:'JetBrains Mono',monospace">${d.gateway_mac || '—'}</span></span>`;
+    h += `<span class="arp-item">Checked: <span>${fmtDate(d.last_checked)}</span></span>`;
+    h += `</div>`;
+    if (d.suspicious_ips && d.suspicious_ips.length > 0) {
+      h += d.suspicious_ips.map(ip => `<div class="arp-warn">⚠ Suspicious: ${ip}</div>`).join('');
+    }
+    el.innerHTML = h;
+  } catch {
+    el.innerHTML = '<p class="arp-placeholder">ARP monitoring: coming soon</p>';
+  }
+}
+
+async function loadDashboard() {
+  const el = document.getElementById('dash-content');
+  el.innerHTML = loadingHTML();
+  try {
+    const data = await apiFetch('/api/dashboard');
+    renderDashboard(data, el);
+    loadArpStatus();
+    updateAlertsBadge();
+    if (dashInterval) clearInterval(dashInterval);
+    dashInterval = setInterval(async () => {
+      if (currentSection !== 'dashboard') { updateAlertsBadge(); return; }
+      try {
+        const d = await apiFetch('/api/dashboard');
+        renderDashboard(d, el);
+        loadArpStatus();
+        updateAlertsBadge();
+      } catch {}
+    }, 30000);
+  } catch (e) {
+    el.innerHTML = errorHTML(e.message, loadDashboard);
+  }
+}
+
+function renderDashboard(data, el) {
+  const totalScans = data.scans_last_24h ?? data.total_scans ?? 0;
+  const unacked = data.unacked_alerts ?? 0;
+  const knownDevices = data.total_known_devices ?? 0;
+  const riskScore = data.latest_scan?.risk_score ?? 0;
+  const riskLabel = data.latest_scan?.risk_label ?? 'UNKNOWN';
+  const latestScan = data.latest_scan || {};
+  const riskHistory = data.risk_trend || [];
+  const recentAlerts = data.recent_alerts || [];
+
+  const unackedColor = unacked > 0 ? '#ef4444' : '#10b981';
+  const scoreColor = riskColor(riskLabel);
+
+  let html = `
+    <div class="cards-row">
+      <div class="card"><div class="card-label">Total Scans (24h)</div><div class="card-value" style="color:#3b82f6">${totalScans}</div><div class="card-foot">Last 24 hours</div></div>
+      <div class="card"><div class="card-label">Unacknowledged Alerts</div><div class="card-value" style="color:${unackedColor}">${unacked}</div><div class="card-foot">${unacked > 0 ? 'Needs attention' : 'All clear'}</div></div>
+      <div class="card"><div class="card-label">Known Devices</div><div class="card-value" style="color:#a855f7">${knownDevices}</div><div class="card-foot">Ever seen on network</div></div>
+      <div class="card"><div class="card-label">Latest Risk Score</div><div class="card-value" style="color:${scoreColor}">${riskScore}<span style="font-size:.9rem;margin-left:6px">/100</span></div><div class="card-foot"><span class="badge ${riskClass(riskLabel)}">${riskLabel}</span></div></div>
+    </div>
+
+    <div class="arp-card"><h3>ARP Status</h3><div id="arp-status-card"><p class="arp-placeholder">Loading ARP status…</p></div></div>
+
+    <div class="charts-grid">
+      <div class="chart-box">
+        <h3>Risk Score Trend</h3>
+        <canvas id="riskTrendChart" height="200"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Recent Alerts</h3>
+        <div id="dash-recent-alerts"></div>
+      </div>
+    </div>
+
+    <div class="chart-box" style="margin-top:16px">
+      <h3>Latest Scan Info</h3>
+      <div class="info-grid" id="dash-latest-scan"></div>
+    </div>
+  `;
+  el.innerHTML = html;
+
+  // Risk trend chart
+  if (riskHistory.length > 0) {
+    const labels = riskHistory.map(r => fmtDate(r.timestamp || r.scan_timestamp));
+    const scores = riskHistory.map(r => r.risk_score ?? 0);
+    destroyChart('riskTrend');
+    const ctx = document.getElementById('riskTrendChart').getContext('2d');
+    chartInstances['riskTrend'] = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets: [{ label: 'Risk Score', data: scores, borderColor: scoreColor, backgroundColor: scoreColor + '18', fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: scoreColor, borderWidth: 2 }] },
+      options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.03)' } }, x: { display: true, ticks: { maxTicksLimit: 6, maxRotation: 0 }, grid: { display: false } } } }
+    });
+  } else {
+    document.getElementById('riskTrendChart').parentElement.innerHTML += '<div class="empty-state">No risk history yet</div>';
+  }
+
+  // Recent alerts
+  const alertsBox = document.getElementById('dash-recent-alerts');
+  if (recentAlerts.length === 0) {
+    alertsBox.innerHTML = emptyHTML('No recent alerts');
+  } else {
+    alertsBox.innerHTML = recentAlerts.slice(0, 5).map(a => `
+      <div class="alert-row ${a.acknowledged ? '' : 'unacked-highlight'}">
+        <span class="badge ${riskClass(a.severity)}">${a.severity || '—'}</span>
+        <span class="alert-title">${a.title || a.alert_type || '—'}</span>
+        <span class="alert-ts">${fmtDate(a.timestamp)}</span>
+        ${!a.acknowledged ? `<button class="btn btn-sm alert-ack-btn" onclick="ackAlert(${a.id},loadDashboard)">Ack</button>` : ''}
+      </div>
+    `).join('');
+  }
+
+  // Latest scan info
+  const scanBox = document.getElementById('dash-latest-scan');
+  if (!latestScan || Object.keys(latestScan).length === 0) {
+    scanBox.innerHTML = emptyHTML('No scans recorded yet');
+  } else {
+    const fields = [
+      ['SSID', latestScan.ssid || '—'],
+      ['Encryption', latestScan.encryption || '—'],
+      ['Gateway IP', latestScan.gateway_ip || '—'],
+      ['Local IP', latestScan.local_ip || '—'],
+      ['Device Count', latestScan.device_count ?? '—'],
+      ['Threat Level', latestScan.threat_level || '—'],
+    ];
+    scanBox.innerHTML = fields.map(([l, v]) => `<div class="info-item"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
+  }
+}
+
+async function ackAlert(id, callback) {
+  try {
+    await fetch(API + '/api/alerts/acknowledge/' + id, { method: 'POST' });
+    if (callback) callback();
+  } catch (e) {
+    console.error('Ack failed:', e);
+  }
+}
+
+// ══════════════════════════════════════════
+//  SECTION 2 — SCAN HISTORY
+// ══════════════════════════════════════════
+let expandedScanRow = null;
+
+async function loadScans() {
+  const el = document.getElementById('scans-content');
+  el.innerHTML = loadingHTML();
+  try {
+    const data = await apiFetch('/api/history/scans?limit=50');
+    const scans = Array.isArray(data) ? data : (data.scans || []);
+    if (scans.length === 0) { el.innerHTML = emptyHTML('No scans recorded yet. Run a full scan first.'); return; }
+
+    let html = `<div class="count">${scans.length} scan${scans.length !== 1 ? 's' : ''} recorded</div>`;
+    html += `<div class="table-wrap"><table><thead><tr>
+      <th>#</th><th>Timestamp</th><th>Network</th><th>Encryption</th><th>Devices</th><th>Risk Score</th><th>Risk Label</th><th>Threat Level</th>
+    </tr></thead><tbody>`;
+
+    scans.forEach((s, i) => {
+      const rid = 'scan_' + (s.id || i);
+      html += `<tr class="scan-row" data-rid="${rid}" style="cursor:pointer">
+        <td>${i + 1}</td>
+        <td>${fmtDate(s.timestamp)}</td>
+        <td>${s.ssid || '—'}</td>
+        <td>${s.encryption || '—'}</td>
+        <td>${s.device_count ?? '—'}</td>
+        <td style="font-family:'Inter',sans-serif;font-weight:600;color:${riskColor(s.risk_label)}">${s.risk_score ?? '—'}</td>
+        <td><span class="badge ${riskClass(s.risk_label)}">${s.risk_label || '—'}</span></td>
+        <td><span class="badge ${riskClass(s.threat_level)}">${s.threat_level || '—'}</span></td>
+      </tr>
+      <tr class="expand-row" id="${rid}" style="display:none">
+        <td colspan="8">
+          <div class="expand-content">
+            <div>Duration: <span>${s.duration || s.scan_duration || '—'}</span></div>
+            <div>Gateway IP: <span>${s.gateway_ip || '—'}</span></div>
+            <div>Local IP: <span>${s.local_ip || '—'}</span></div>
+            <div>Active: <span>${s.active_count ?? '—'}</span></div>
+            <div>Unknown: <span>${s.unknown_count ?? '—'}</span></div>
+          </div>
+        </td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+
+    // Row click to expand
+    el.querySelectorAll('.scan-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const rid = row.dataset.rid;
+        const expRow = document.getElementById(rid);
+        if (expandedScanRow && expandedScanRow !== expRow) expandedScanRow.style.display = 'none';
+        expRow.style.display = expRow.style.display === 'none' ? 'table-row' : 'none';
+        expandedScanRow = expRow.style.display === 'table-row' ? expRow : null;
+      });
+    });
+  } catch (e) {
+    el.innerHTML = errorHTML(e.message, loadScans);
+  }
+}
+
+// ══════════════════════════════════════════
+//  SECTION 3 — ALERTS
+// ══════════════════════════════════════════
+let allAlerts = [];
+let alertFilter = 'all';
+
+async function loadAlerts() {
+  const el = document.getElementById('alerts-content');
+  el.innerHTML = loadingHTML();
+  try {
+    const data = await apiFetch('/api/history/alerts?limit=50');
+    allAlerts = Array.isArray(data) ? data : (data.alerts || []);
+    renderAlerts(el);
+  } catch (e) {
+    el.innerHTML = errorHTML(e.message, loadAlerts);
+  }
+}
+
+function renderAlerts(el) {
+  if (!el) el = document.getElementById('alerts-content');
+  const alerts = allAlerts;
+
+  // Severity counts
+  const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+  alerts.forEach(a => { const s = (a.severity || '').toUpperCase(); if (counts[s] !== undefined) counts[s]++; });
+
+  let html = `<div class="pills">
+    <span class="pill badge-critical">CRITICAL: ${counts.CRITICAL}</span>
+    <span class="pill badge-high">HIGH: ${counts.HIGH}</span>
+    <span class="pill badge-medium">MEDIUM: ${counts.MEDIUM}</span>
+    <span class="pill badge-low">LOW: ${counts.LOW}</span>
+  </div>`;
+
+  html += `<div class="filter-bar">
+    <button class="filter-btn ${alertFilter === 'all' ? 'active' : ''}" onclick="setAlertFilter('all')">All</button>
+    <button class="filter-btn ${alertFilter === 'CRITICAL' ? 'active' : ''}" onclick="setAlertFilter('CRITICAL')">Critical</button>
+    <button class="filter-btn ${alertFilter === 'HIGH' ? 'active' : ''}" onclick="setAlertFilter('HIGH')">High</button>
+    <button class="filter-btn ${alertFilter === 'MEDIUM' ? 'active' : ''}" onclick="setAlertFilter('MEDIUM')">Medium</button>
+    <button class="filter-btn ${alertFilter === 'LOW' ? 'active' : ''}" onclick="setAlertFilter('LOW')">Low</button>
+    <button class="filter-btn ${alertFilter === 'unacked' ? 'active' : ''}" onclick="setAlertFilter('unacked')">Unacknowledged</button>
+  </div>`;
+
+  let filtered = alerts;
+  if (alertFilter === 'unacked') filtered = alerts.filter(a => !a.acknowledged);
+  else if (alertFilter !== 'all') filtered = alerts.filter(a => (a.severity || '').toUpperCase() === alertFilter);
+
+  if (filtered.length === 0) {
+    html += emptyHTML('No alerts matching this filter.');
+    el.innerHTML = html;
+    return;
+  }
+
+  html += `<div class="table-wrap"><table><thead><tr>
+    <th>Severity</th><th>Type</th><th>Title</th><th>IP</th><th>Timestamp</th><th>Status</th><th>Action</th>
+  </tr></thead><tbody>`;
+
+  filtered.forEach(a => {
+    const acked = a.acknowledged;
+    html += `<tr class="${acked ? '' : 'unacked-highlight'}">
+      <td><span class="badge ${riskClass(a.severity)}">${a.severity || '—'}</span></td>
+      <td>${a.alert_type || a.type || '—'}</td>
+      <td>${a.title || '—'}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:.75rem">${a.ip || a.source_ip || '—'}</td>
+      <td>${fmtDate(a.timestamp)}</td>
+      <td><span class="badge ${acked ? 'badge-acked' : 'badge-unacked'}">${acked ? 'Acked' : 'Unacked'}</span></td>
+      <td>${!acked ? `<button class="btn btn-sm" onclick="ackAlert(${a.id},loadAlerts)">Acknowledge</button>` : '<span style="color:#3d4658">—</span>'}</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+function setAlertFilter(f) {
+  alertFilter = f;
+  renderAlerts();
+}
+
+// ══════════════════════════════════════════
+//  SECTION 4 — KNOWN DEVICES (PAGINATED)
+// ══════════════════════════════════════════
+let allDevices = [];
+let devicePage = 1;
+let deviceQuery = '';
+let deviceCapped = false;
+let deviceTotalFromAPI = 0;
+const PAGE_SIZE = 20;
+
+async function loadDevices() {
+  const el = document.getElementById('devices-content');
+  el.innerHTML = loadingHTML();
+  try {
+    const data = await apiFetch('/api/history/devices');
+    if (Array.isArray(data)) {
+      allDevices = data;
+    } else {
+      allDevices = data.devices || [];
+      if (data.summary) { deviceCapped = !!data.summary.capped; deviceTotalFromAPI = data.summary.total || allDevices.length; }
+    }
+    devicePage = 1;
+    deviceQuery = '';
+    renderDevices(el);
+  } catch (e) {
+    el.innerHTML = errorHTML(e.message, loadDevices);
+  }
+}
+
+function getFilteredDevices() {
+  const q = deviceQuery.toLowerCase();
+  if (!q) return allDevices;
+  return allDevices.filter(d =>
+    (d.mac || '').toLowerCase().includes(q) ||
+    (d.vendor || '').toLowerCase().includes(q) ||
+    (d.last_ip || d.ip || '').toLowerCase().includes(q) ||
+    (d.hostname || '').toLowerCase().includes(q)
+  );
+}
+
+function buildPagination(totalItems, currentPage, totalPages) {
+  let h = '<div class="pagination">';
+  h += `<button class="page-btn" onclick="goDevicePage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>← Prev</button>`;
+  const pages = [];
+  if (totalPages <= 7) { for (let i = 1; i <= totalPages; i++) pages.push(i); }
+  else {
+    pages.push(1);
+    if (currentPage > 4) pages.push('…');
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (currentPage < totalPages - 3) pages.push('…');
+    pages.push(totalPages);
+  }
+  pages.forEach(p => {
+    if (p === '…') { h += '<span class="page-info">…</span>'; }
+    else { h += `<button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="goDevicePage(${p})">${p}</button>`; }
+  });
+  h += `<button class="page-btn" onclick="goDevicePage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>Next →</button>`;
+  h += `<span class="page-info">Page ${currentPage} of ${totalPages} · ${totalItems} devices</span>`;
+  h += '</div>';
+  return h;
+}
+
+function renderDevices(el) {
+  if (!el) el = document.getElementById('devices-content');
+  const filtered = getFilteredDevices();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  if (devicePage > totalPages) devicePage = totalPages;
+  const start = (devicePage - 1) * PAGE_SIZE;
+  const pageDevices = filtered.slice(start, start + PAGE_SIZE);
+  const maxSeen = Math.max(...allDevices.map(d => d.times_seen || 1), 1);
+
+  let html = `<div class="count">${allDevices.length} unique device${allDevices.length !== 1 ? 's' : ''} known</div>`;
+  if (deviceCapped) {
+    html += `<div class="network-banner large">⚠ Large network — showing ${allDevices.length} of ${deviceTotalFromAPI} devices</div>`;
+  }
+  html += `<div class="search-wrap"><input class="search-input" id="deviceSearch" type="text" placeholder="Search by MAC, vendor, IP, hostname…" value="${deviceQuery}"/></div>`;
+
+  if (filtered.length === 0) {
+    html += emptyHTML('No devices match your search.');
+    el.innerHTML = html;
+    bindDeviceSearch();
+    return;
+  }
+
+  html += buildPagination(filtered.length, devicePage, totalPages);
+  html += `<div class="table-wrap" id="devicesTableWrap"><table><thead><tr>
+    <th>MAC Address</th><th>Vendor</th><th>Hostname</th><th>First Seen</th><th>Last Seen</th><th>Times Seen</th><th>Last IP</th><th>Trust</th>
+  </tr></thead><tbody>`;
+
+  pageDevices.forEach(d => {
+    const trustVal = d.is_trusted ?? 0;
+    const trust = trustVal === 1 ? 'Trusted' : trustVal === 2 ? 'Blocked' : 'Unknown';
+    const trustCls = trust === 'Trusted' ? 'badge-low' : trust === 'Blocked' ? 'badge-critical' : 'badge-unknown';
+    const barW = Math.max(4, Math.round(((d.times_seen || 1) / maxSeen) * 100));
+    html += `<tr>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:.75rem">${d.mac || '—'}</td>
+      <td>${d.vendor || '—'}</td>
+      <td>${d.hostname || '<span style="color:#3d4658">—</span>'}</td>
+      <td>${fmtDate(d.first_seen)}</td>
+      <td>${fmtDate(d.last_seen)}</td>
+      <td><span class="times-bar" style="width:${barW}px"></span> ${d.times_seen ?? 1}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:.75rem">${d.last_ip || d.ip || '—'}</td>
+      <td><span class="badge ${trustCls}">${trust}</span></td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  html += buildPagination(filtered.length, devicePage, totalPages);
+  el.innerHTML = html;
+  bindDeviceSearch();
+}
+
+function goDevicePage(p) {
+  const filtered = getFilteredDevices();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  if (p < 1 || p > totalPages) return;
+  devicePage = p;
+  renderDevices();
+  const tw = document.getElementById('devicesTableWrap');
+  if (tw) tw.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function bindDeviceSearch() {
+  const inp = document.getElementById('deviceSearch');
+  if (!inp) return;
+  inp.addEventListener('input', () => {
+    deviceQuery = inp.value;
+    devicePage = 1;
+    renderDevices();
+  });
+}
+
+// ══════════════════════════════════════════
+//  SECTION 5 — TRAFFIC
+// ══════════════════════════════════════════
+let trafficHours = 24;
+
+async function loadTraffic(hours) {
+  trafficHours = hours || 24;
+  const el = document.getElementById('traffic-content');
+  el.innerHTML = loadingHTML();
+  try {
+    const data = await apiFetch('/api/history/traffic?hours=' + trafficHours);
+    renderTraffic(data, el);
+  } catch (e) {
+    el.innerHTML = errorHTML(e.message, () => loadTraffic(trafficHours));
+  }
+}
+
+function renderTraffic(data, el) {
+  const records = Array.isArray(data) ? data : (data.records || data.traffic || []);
+
+  let html = `<div class="range-selector">
+    ${[1,6,24,168].map(h => `<button class="filter-btn ${trafficHours === h ? 'active' : ''}" onclick="loadTraffic(${h})">${h < 24 ? h + 'h' : (h === 24 ? '24h' : '7d')}</button>`).join('')}
+  </div>`;
+
+  if (records.length === 0) {
+    html += emptyHTML('No traffic data for this time range. Run scans to collect traffic data.');
+    el.innerHTML = html;
+    return;
+  }
+
+  html += `<div class="charts-grid">
+    <div class="chart-box"><h3>Bytes Sent vs Received</h3><canvas id="bytesChart" height="220"></canvas></div>
+    <div class="chart-box"><h3>Packets Sent vs Received</h3><canvas id="packetsChart" height="220"></canvas></div>
+  </div>`;
+
+  // Stats
+  const totalSent = records.reduce((s, r) => s + (r.bytes_sent || 0), 0);
+  const totalRecv = records.reduce((s, r) => s + (r.bytes_recv || 0), 0);
+  const totalPkts = records.reduce((s, r) => s + (r.packets_sent || 0) + (r.packets_recv || 0), 0);
+  const totalErr = records.reduce((s, r) => s + (r.errin || 0) + (r.errout || 0), 0);
+  const totalPktsAll = records.reduce((s, r) => s + (r.packets_sent || 0) + (r.packets_recv || 0), 0) || 1;
+  const avgErr = ((totalErr / totalPktsAll) * 100).toFixed(4);
+
+  html += `<div class="stats-row">
+    <div class="stat-card"><div class="stat-label">Total Bytes Sent</div><div class="stat-value" style="color:#3b82f6">${fmtBytes(totalSent)}</div></div>
+    <div class="stat-card"><div class="stat-label">Total Bytes Received</div><div class="stat-value" style="color:#10b981">${fmtBytes(totalRecv)}</div></div>
+    <div class="stat-card"><div class="stat-label">Total Packets</div><div class="stat-value">${totalPkts.toLocaleString()}</div></div>
+    <div class="stat-card"><div class="stat-label">Avg Error Rate</div><div class="stat-value" style="color:${parseFloat(avgErr) > 1 ? '#ef4444' : '#10b981'}">${avgErr}%</div></div>
+  </div>`;
+
+  el.innerHTML = html;
+
+  // Bytes chart
+  const labels = records.map(r => fmtDate(r.timestamp));
+  destroyChart('bytes');
+  chartInstances['bytes'] = new Chart(document.getElementById('bytesChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Sent', data: records.map(r => r.bytes_sent || 0), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', fill: true, tension: .35, borderWidth: 2, pointRadius: 2 },
+        { label: 'Received', data: records.map(r => r.bytes_recv || 0), borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', fill: true, tension: .35, borderWidth: 2, pointRadius: 2 },
+      ]
+    },
+    options: { responsive: true, interaction: { mode: 'index', intersect: false }, plugins: { legend: { labels: { boxWidth: 10 } } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.03)' } }, x: { ticks: { maxTicksLimit: 6, maxRotation: 0 }, grid: { display: false } } } }
+  });
+
+  // Packets chart
+  destroyChart('packets');
+  chartInstances['packets'] = new Chart(document.getElementById('packetsChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Sent', data: records.map(r => r.packets_sent || 0), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', fill: true, tension: .35, borderWidth: 2, pointRadius: 2 },
+        { label: 'Received', data: records.map(r => r.packets_recv || 0), borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', fill: true, tension: .35, borderWidth: 2, pointRadius: 2 },
+      ]
+    },
+    options: { responsive: true, interaction: { mode: 'index', intersect: false }, plugins: { legend: { labels: { boxWidth: 10 } } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.03)' } }, x: { ticks: { maxTicksLimit: 6, maxRotation: 0 }, grid: { display: false } } } }
+  });
+}
+
+// ══════════════════════════════════════════
+//  FEATURE 2 — PDF REPORT GENERATION
+// ══════════════════════════════════════════
+async function generatePDFReport() {
+  const btn = document.getElementById('pdfReportBtn');
+  const origText = btn.innerHTML;
+  btn.innerHTML = '<div class="spinner" style="display:inline-block;width:14px;height:14px;vertical-align:middle;margin-right:6px"></div> Generating…';
+  btn.disabled = true;
+  try {
+    const [dash, scansData, alertsData, devicesData] = await Promise.all([
+      apiFetch('/api/dashboard'),
+      apiFetch('/api/history/scans?limit=10'),
+      apiFetch('/api/history/alerts?limit=20'),
+      apiFetch('/api/history/devices'),
+    ]);
+    const scans = Array.isArray(scansData) ? scansData : (scansData.scans || []);
+    const alerts = Array.isArray(alertsData) ? alertsData : (alertsData.alerts || []);
+    const devices = Array.isArray(devicesData) ? devicesData : (devicesData.devices || []);
+    const ls = dash.latest_scan || {};
+    const trend = dash.risk_trend || [];
+    const now = new Date().toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true });
+
+    let h = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>GARUDA Report</title><style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{background:#0d1117;color:#eef0f7;font-family:'Inter',sans-serif;font-size:12px;padding:30px}
+      h1,h2,h3{font-family:'Inter',sans-serif}
+      h1{font-size:20px;margin-bottom:4px}
+      h2{font-size:14px;color:#3b82f6;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:6px;margin:20px 0 10px}
+      .meta{color:#8b93a6;font-size:11px;margin-bottom:18px}
+      table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px}
+      th{text-align:left;padding:6px 8px;color:#8b93a6;border-bottom:1px solid rgba(255,255,255,.1);font-size:10px;text-transform:uppercase}
+      td{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.04)}
+      .summary{display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+      .scard{background:#1c2128;border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:12px;flex:1;min-width:120px}
+      .scard .lbl{font-size:9px;color:#8b93a6;text-transform:uppercase}
+      .scard .val{font-family:'Inter',sans-serif;font-size:18px;font-weight:700;margin-top:2px}
+      .badge{padding:1px 7px;border-radius:3px;font-size:10px;font-weight:500}
+      .b-c{background:rgba(239,68,68,.15);color:#ef4444}.b-h{background:rgba(249,115,22,.15);color:#f97316}
+      .b-m{background:rgba(245,158,11,.15);color:#f59e0b}.b-l{background:rgba(16,185,129,.15);color:#10b981}
+      @media print{body{background:#0d1117;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+    </style></head><body>`;
+    h += `<h1>🛡️ GARUDA Network Defense Report</h1><p class="meta">Generated: ${now}</p>`;
+    h += `<h2>Summary</h2><div class="summary">`;
+    h += `<div class="scard"><div class="lbl">Scans (24h)</div><div class="val" style="color:#3b82f6">${dash.scans_last_24h ?? 0}</div></div>`;
+    h += `<div class="scard"><div class="lbl">Risk Score</div><div class="val" style="color:${riskColor(ls.risk_label)}">${ls.risk_score ?? 0}</div></div>`;
+    h += `<div class="scard"><div class="lbl">Known Devices</div><div class="val" style="color:#a855f7">${dash.total_known_devices ?? 0}</div></div>`;
+    h += `<div class="scard"><div class="lbl">Unacked Alerts</div><div class="val" style="color:${(dash.unacked_alerts??0)>0?'#ef4444':'#10b981'}">${dash.unacked_alerts ?? 0}</div></div>`;
+    h += `</div>`;
+
+    if (trend.length > 0) {
+      h += `<h2>Risk Trend</h2><table><tr><th>Timestamp</th><th>Risk Score</th><th>Label</th></tr>`;
+      trend.forEach(r => {
+        const bc = (r.risk_label||'').toLowerCase()==='critical'?'b-c':(r.risk_label||'').toLowerCase()==='high'?'b-h':(r.risk_label||'').toLowerCase()==='medium'?'b-m':'b-l';
+        h += `<tr><td>${fmtDate(r.timestamp)}</td><td>${r.risk_score ?? 0}</td><td><span class="badge ${bc}">${r.risk_label||'—'}</span></td></tr>`;
+      });
+      h += `</table>`;
+    }
+
+    if (alerts.length > 0) {
+      h += `<h2>Recent Alerts (${alerts.length})</h2><table><tr><th>Severity</th><th>Type</th><th>Title</th><th>IP</th><th>Timestamp</th><th>Status</th></tr>`;
+      alerts.forEach(a => {
+        const bc = (a.severity||'').toLowerCase()==='critical'?'b-c':(a.severity||'').toLowerCase()==='high'?'b-h':(a.severity||'').toLowerCase()==='medium'?'b-m':'b-l';
+        h += `<tr><td><span class="badge ${bc}">${a.severity||'—'}</span></td><td>${a.alert_type||a.type||'—'}</td><td>${a.title||'—'}</td><td>${a.ip||'—'}</td><td>${fmtDate(a.timestamp)}</td><td>${a.acknowledged?'Acked':'Unacked'}</td></tr>`;
+      });
+      h += `</table>`;
+    }
+
+    if (devices.length > 0) {
+      h += `<h2>Known Devices (${devices.length})</h2><table><tr><th>MAC</th><th>Vendor</th><th>Hostname</th><th>First Seen</th><th>Last Seen</th><th>Times Seen</th></tr>`;
+      devices.slice(0, 50).forEach(d => {
+        h += `<tr><td>${d.mac||'—'}</td><td>${d.vendor||'—'}</td><td>${d.hostname||'—'}</td><td>${fmtDate(d.first_seen)}</td><td>${fmtDate(d.last_seen)}</td><td>${d.times_seen??1}</td></tr>`;
+      });
+      if (devices.length > 50) h += `<tr><td colspan="6" style="color:#8b93a6;text-align:center">…and ${devices.length - 50} more</td></tr>`;
+      h += `</table>`;
+    }
+    h += `</body></html>`;
+
+    const win = window.open('', '_blank');
+    win.document.write(h);
+    win.document.close();
+    setTimeout(() => win.print(), 600);
+  } catch (e) {
+    alert('Report generation failed: ' + e.message);
+  } finally {
+    btn.innerHTML = origText;
+    btn.disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+loadDashboard();
+updateAlertsBadge();
+</script>
+</body>
+</html>
