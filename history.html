@@ -47,12 +47,16 @@ h1,h2,h3,h4,h5,h6{font-family:'Inter',sans-serif;font-weight:600;letter-spacing:
 .section{display:none;animation:fadeIn .3s ease}
 .section.active{display:block}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-.section-title{font-size:1.6rem;font-weight:700;margin-bottom:4px}
+.section-title{font-size:1.3rem;font-weight:600;margin-bottom:4px;font-family:'Inter',sans-serif;letter-spacing:-0.01em}
 .section-sub{color:#8b93a6;font-size:.8rem;margin-bottom:24px}
 
 /* ── CARDS ROW ── */
 .cards-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px}
-.card{background:#161b22;border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:20px;transition:border-color .15s}
+.card{background:#161b22;border:1px solid rgba(255,255,255,.05);border-left:3px solid rgba(255,255,255,.05);border-radius:10px;padding:20px;transition:border-color .15s}
+.cards-row .card:nth-child(1){border-left-color:#3b82f6}
+.cards-row .card:nth-child(2){border-left-color:#ef4444}
+.cards-row .card:nth-child(3){border-left-color:#a855f7}
+.cards-row .card:nth-child(4){border-left-color:#f59e0b}
 .card:hover{border-color:rgba(255,255,255,.1)}
 .card-label{font-size:.7rem;color:#8b93a6;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
 .card-value{font-family:'Inter',sans-serif;font-size:1.8rem;font-weight:700;line-height:1.2}
@@ -489,7 +493,7 @@ function renderDashboard(data, el) {
     const ctx = document.getElementById('riskTrendChart').getContext('2d');
     chartInstances['riskTrend'] = new Chart(ctx, {
       type: 'line',
-      data: { labels, datasets: [{ label: 'Risk Score', data: scores, borderColor: scoreColor, backgroundColor: scoreColor + '18', fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: scoreColor, borderWidth: 2 }] },
+      data: { labels, datasets: [{ label: 'Risk Score', data: scores, borderColor: '#1f6feb', backgroundColor: 'rgba(31,111,235,0.08)', fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: '#1f6feb', borderWidth: 2 }] },
       options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.03)' } }, x: { display: true, ticks: { maxTicksLimit: 6, maxRotation: 0 }, grid: { display: false } } } }
     });
   } else {
@@ -706,7 +710,6 @@ let allDevices = [];
 let allScans = [];
 let scanPage = 1;
 const SCAN_PAGE_SIZE = 20;
-let expandedScanRow = null;
 let devicePage = 1;
 let deviceQuery = '';
 let deviceCapped = false;

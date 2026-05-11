@@ -129,11 +129,18 @@ body{font-family:var(--font-ui);background:var(--bg);color:var(--t0);min-height:
 /* TOPOLOGY */
 .topo-container{position:relative;background:radial-gradient(circle,#1c2128 1px,transparent 1px);background-size:28px 28px;background-color:#0d1117;border-radius:var(--radius);border:1px solid var(--b0);overflow:hidden}
 @keyframes pulse-ring{0%{opacity:0.6;r:14}100%{opacity:0;r:22}}
-.topo-svg{width:100%;height:500px;display:block}
+@keyframes glow-pulse{0%,100%{opacity:0.5}50%{opacity:1}}
+.topo-svg{width:100%;height:500px;display:block;cursor:grab}
+.topo-svg.dragging{cursor:grabbing}
+.topo-svg.panning{cursor:move}
 .topo-controls{position:absolute;top:12px;right:12px;display:flex;gap:4px;flex-direction:column}
 .topo-controls button{width:32px;height:32px;background:var(--s1);border:1px solid var(--b0);border-radius:4px;color:var(--t1);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all 0.15s}
 .topo-controls button:hover{background:var(--s2);color:var(--t0)}
 .topo-node-count{position:absolute;top:12px;left:12px;font-size:11px;color:var(--t2);background:var(--s1);border:1px solid var(--b0);padding:4px 10px;border-radius:4px}
+.topo-search{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;background:var(--s1);border:1px solid var(--b0);border-radius:6px;padding:4px 10px;z-index:5}
+.topo-search input{background:transparent;border:none;outline:none;color:var(--t0);font-family:var(--font-mono);font-size:11px;width:160px}
+.topo-search input::placeholder{color:var(--t2)}
+.topo-search .search-icon{color:var(--t2);font-size:12px}
 .topo-layout-btns{position:absolute;bottom:12px;left:12px;display:flex;gap:4px}
 .topo-legend-bar{position:absolute;bottom:12px;right:12px;display:flex;gap:12px;font-size:10px;color:var(--t2);background:rgba(13,17,23,0.85);padding:6px 10px;border-radius:4px}
 .topo-legend-bar .leg-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
@@ -186,6 +193,7 @@ body{font-family:var(--font-ui);background:var(--bg);color:var(--t0);min-height:
 <body>
 <div id="topo-tooltip">
   <h4 id="tt-ip">—</h4>
+  <div class="tt-row"><span class="tt-key">Name</span><span class="tt-val" id="tt-name">—</span></div>
   <div class="tt-row"><span class="tt-key">Vendor</span><span class="tt-val" id="tt-vendor">—</span></div>
   <div class="tt-row"><span class="tt-key">MAC</span><span class="tt-val" id="tt-mac">—</span></div>
   <div class="tt-row"><span class="tt-key">Status</span><span class="tt-val" id="tt-status">—</span></div>
@@ -343,7 +351,7 @@ body{font-family:var(--font-ui);background:var(--bg);color:var(--t0);min-height:
     <div class="panel" id="scanResultsPanel" style="padding:0;overflow:hidden">
       <table class="data-table" id="deviceTable">
         <thead><tr>
-          <th onclick="sortTable(0)">IP</th><th onclick="sortTable(1)">Hostname</th>
+          <th onclick="sortTable(0)">IP</th><th onclick="sortTable(1)">Device Name</th>
           <th onclick="sortTable(2)">MAC</th><th onclick="sortTable(3)">Vendor</th>
           <th onclick="sortTable(4)">Status</th><th onclick="sortTable(5)">Open Ports</th>
           <th onclick="sortTable(6)">Detection</th>
@@ -365,6 +373,7 @@ body{font-family:var(--font-ui);background:var(--bg);color:var(--t0);min-height:
     <div class="topo-container">
       <svg class="topo-svg" id="topo-svg"></svg>
       <div class="topo-node-count" id="topoCount">0 nodes</div>
+      <div class="topo-search"><span class="search-icon">⌕</span><input type="text" id="topoSearch" placeholder="Search IP, name, or vendor…" oninput="topoFilterNodes(this.value)"/></div>
       <div class="topo-controls">
         <button onclick="topoZoom(1.3)" title="Zoom in">＋</button>
         <button onclick="topoZoom(0.7)" title="Zoom out">－</button>
@@ -388,6 +397,7 @@ body{font-family:var(--font-ui);background:var(--bg);color:var(--t0);min-height:
         <button class="btn-secondary" onclick="closeNodeDetail()" style="font-size:11px;padding:2px 10px">✕ Close</button>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
+        <div class="info-row"><span class="info-key">Name</span><span class="info-val" id="nd-name">—</span></div>
         <div class="info-row"><span class="info-key">Type</span><span class="info-val" id="nd-type">—</span></div>
         <div class="info-row"><span class="info-key">Vendor</span><span class="info-val" id="nd-vendor">—</span></div>
         <div class="info-row"><span class="info-key">MAC</span><span class="info-val" id="nd-mac">—</span></div>
@@ -482,7 +492,20 @@ let portFilter = 'all';
 let allPortRows = [];
 let topoScale = 1, topoPanX = 0, topoPanY = 0;
 let topoCurrentLayout = 'force';
+let trafficRange = '1H';
+const TRAFFIC_RANGE_POINTS = { '1H': 20, '6H': 72, '24H': 288, '7D': 800 };
+const MAX_TRAFFIC_POINTS = 1000;
 let trafficHistory = {labels:[], bytesSent:[], bytesRecv:[], pktSent:[], pktRecv:[]};
+
+function getDeviceDisplayName(device) {
+  if (!device) return '—';
+  const raw = device.display_name || device.hostname || '';
+  const trimmed = String(raw).trim();
+  if (trimmed) return trimmed;
+  if (device.type === 'GATEWAY') return 'Gateway';
+  if (device.type === 'THIS_DEVICE') return 'This Device';
+  return '—';
+}
 
 // Navigation
 function switchPage(page) {
@@ -643,7 +666,7 @@ function updateDeviceTable(data) {
     const ports = portData[d.ip] || [];
     const portStr = ports.length > 0 ? ports.map(p => `<span class="port-tag${RISKY_PORTS.has(p)?' risky':''}">${p}</span>`).join('') : '<span style="color:var(--t2)">—</span>';
     const statusCls = d.status === 'ACTIVE' ? 'text-success' : 'text-warn';
-    return `<tr><td class="mono text-accent">${d.ip}</td><td>${d.hostname||'—'}</td><td class="mono">${d.mac||'—'}</td><td>${d.vendor||'Unknown'}</td><td class="${statusCls}">${d.status||'—'}</td><td>${portStr}</td><td>${d.detection_method||'—'}</td></tr>`;
+    return `<tr><td class="mono text-accent">${d.ip}</td><td>${getDeviceDisplayName(d)}</td><td class="mono">${d.mac||'—'}</td><td>${d.vendor||'Unknown'}</td><td class="${statusCls}">${d.status||'—'}</td><td>${portStr}</td><td>${d.detection_method||'—'}</td></tr>`;
   }).join('');
 
   const active = devices.filter(d => d.status === 'ACTIVE').length;
@@ -748,13 +771,20 @@ function updateTraffic(t) {
   trafficHistory.bytesRecv.push(t.bytes_recv_raw||0);
   trafficHistory.pktSent.push(t.packets_sent_raw||0);
   trafficHistory.pktRecv.push(t.packets_recv_raw||0);
-  if (trafficHistory.labels.length > 20) {
+  if (trafficHistory.labels.length > MAX_TRAFFIC_POINTS) {
     Object.values(trafficHistory).forEach(arr => { if (Array.isArray(arr)) arr.shift(); });
   }
   renderCharts();
 }
 
 function renderCharts() {
+  const maxPoints = TRAFFIC_RANGE_POINTS[trafficRange] || TRAFFIC_RANGE_POINTS['1H'];
+  const labels = trafficHistory.labels.slice(-maxPoints);
+  const bytesSent = trafficHistory.bytesSent.slice(-maxPoints);
+  const bytesRecv = trafficHistory.bytesRecv.slice(-maxPoints);
+  const pktSent = trafficHistory.pktSent.slice(-maxPoints);
+  const pktRecv = trafficHistory.pktRecv.slice(-maxPoints);
+
   const fmtBytes = v => {
     if (v >= 1073741824) return (v/1073741824).toFixed(1)+' GB';
     if (v >= 1048576) return (v/1048576).toFixed(1)+' MB';
@@ -766,22 +796,24 @@ function renderCharts() {
   
   const ctx1 = document.getElementById('bytesChart').getContext('2d');
   if (bytesChart) bytesChart.destroy();
-  bytesChart = new Chart(ctx1, {type:'line', data:{labels:trafficHistory.labels,datasets:[
-    {label:'Sent',data:trafficHistory.bytesSent,borderColor:'#1f6feb',backgroundColor:'rgba(31,111,235,0.1)',fill:true,tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5},
-    {label:'Received',data:trafficHistory.bytesRecv,borderColor:'#2ea043',backgroundColor:'rgba(46,160,67,0.1)',fill:true,tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5}
+  bytesChart = new Chart(ctx1, {type:'line', data:{labels,datasets:[
+    {label:'Sent',data:bytesSent,borderColor:'#1f6feb',backgroundColor:'rgba(31,111,235,0.1)',fill:true,tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5},
+    {label:'Received',data:bytesRecv,borderColor:'#2ea043',backgroundColor:'rgba(46,160,67,0.1)',fill:true,tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5}
   ]}, options:bytesOpts});
 
   const ctx2 = document.getElementById('packetsChart').getContext('2d');
   if (packetsChart) packetsChart.destroy();
-  packetsChart = new Chart(ctx2, {type:'line', data:{labels:trafficHistory.labels,datasets:[
-    {label:'Sent',data:trafficHistory.pktSent,borderColor:'#d29922',backgroundColor:'transparent',tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5},
-    {label:'Received',data:trafficHistory.pktRecv,borderColor:'#8b5cf6',backgroundColor:'transparent',tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5}
+  packetsChart = new Chart(ctx2, {type:'line', data:{labels,datasets:[
+    {label:'Sent',data:pktSent,borderColor:'#d29922',backgroundColor:'transparent',tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5},
+    {label:'Received',data:pktRecv,borderColor:'#8b5cf6',backgroundColor:'transparent',tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5}
   ]}, options:pktOpts});
 }
 
 function setTimeRange(range, btn) {
+  trafficRange = range;
   document.querySelectorAll('.time-range-btns button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  renderCharts();
 }
 
 // Live traffic polling
@@ -793,11 +825,24 @@ function startTrafficPolling() {
   }, 5000);
 }
 
-// 2D SVG Topology
+// ══════════════════════════════════════════
+//  2D SVG TOPOLOGY — INTERACTIVE
+// ══════════════════════════════════════════
+let topoNodes = [];      // {device, pos, r, fill, circle, text, rings:[], edge}
+let topoSelectedIdx = -1;
+let topoSearchQuery = '';
+let topoDragIdx = -1;
+let topoDragOff = {x:0, y:0};
+let topoPanning = false;
+let topoPanStart = {x:0, y:0};
+let topoVB = {x:0, y:0, w:800, h:500}; // viewBox state
+
 function buildTopology(data) {
   const svg = document.getElementById('topo-svg');
   const W = svg.clientWidth || 800, H = svg.clientHeight || 500;
   svg.innerHTML = '';
+  topoVB = {x:0, y:0, w:W, h:H};
+  topoScale = 1;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
 
   const devices = data.connected_devices || [];
@@ -805,29 +850,23 @@ function buildTopology(data) {
   const localIp = data.local_ip;
   const portData = data.port_scan || {};
   const allDevices = [{ip:gateway,mac:'\u2014',vendor:'Router/Gateway',status:'ACTIVE',type:'GATEWAY'}, ...devices.map(d => ({...d,type:d.ip===localIp?'THIS_DEVICE':'NODE'}))];
-  
+
   document.getElementById('topoCount').textContent = allDevices.length + ' nodes';
 
   const positions = calcPositions(allDevices, W, H, topoCurrentLayout);
+  topoNodes = [];
 
-  // Edges
+  // Edge group
   const edgeGroup = document.createElementNS('http://www.w3.org/2000/svg','g');
-  const gwPos = positions[0];
-  for (let i = 1; i < positions.length; i++) {
-    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-    line.setAttribute('x1',gwPos.x); line.setAttribute('y1',gwPos.y);
-    line.setAttribute('x2',positions[i].x); line.setAttribute('y2',positions[i].y);
-    const hasRisky = (portData[allDevices[i].ip]||[]).some(p => RISKY_PORTS.has(p));
-    line.setAttribute('stroke', hasRisky ? 'rgba(218,54,51,0.4)' : 'rgba(139,148,158,0.2)');
-    line.setAttribute('stroke-width', hasRisky ? '2' : '1.5');
-    edgeGroup.appendChild(line);
-  }
+  edgeGroup.id = 'topo-edges';
   svg.appendChild(edgeGroup);
 
-  // Nodes
+  // Node group
   const nodeGroup = document.createElementNS('http://www.w3.org/2000/svg','g');
+  nodeGroup.id = 'topo-nodes';
+
   allDevices.forEach((d, i) => {
-    const pos = positions[i];
+    const pos = {...positions[i]};
     const ports = portData[d.ip] || [];
     const hasRisky = ports.some(p => RISKY_PORTS.has(p));
     let r = d.type === 'GATEWAY' ? 20 : d.type === 'THIS_DEVICE' ? 14 : hasRisky ? 11 : 9;
@@ -836,12 +875,27 @@ function buildTopology(data) {
     else if (d.type === 'THIS_DEVICE') fill = '#2ea043';
     else if (hasRisky) fill = '#da3633';
 
+    const nodeData = {device:d, pos, r, fill, ports, hasRisky, rings:[], edge:null, circle:null, text:null, selectRing:null};
+
+    // Edge from gateway to this node
+    if (i > 0) {
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', positions[0].x); line.setAttribute('y1', positions[0].y);
+      line.setAttribute('x2', pos.x); line.setAttribute('y2', pos.y);
+      line.setAttribute('stroke', hasRisky ? 'rgba(218,54,51,0.4)' : 'rgba(139,148,158,0.2)');
+      line.setAttribute('stroke-width', hasRisky ? '2' : '1.5');
+      line.style.transition = 'x1 0.05s,y1 0.05s,x2 0.05s,y2 0.05s';
+      edgeGroup.appendChild(line);
+      nodeData.edge = line;
+    }
+
     // Outer ring for gateway
     if (d.type === 'GATEWAY') {
       const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
       ring.setAttribute('cx',pos.x); ring.setAttribute('cy',pos.y); ring.setAttribute('r',28);
       ring.setAttribute('fill','none'); ring.setAttribute('stroke','#1f6feb'); ring.setAttribute('stroke-width','1.5'); ring.setAttribute('opacity','0.25');
       nodeGroup.appendChild(ring);
+      nodeData.rings.push(ring);
     }
     // Pulsing ring for risky
     if (hasRisky && d.type !== 'GATEWAY') {
@@ -850,54 +904,219 @@ function buildTopology(data) {
       pr.setAttribute('fill','none'); pr.setAttribute('stroke','#da3633'); pr.setAttribute('stroke-width','1');
       pr.style.animation = 'pulse-ring 2s infinite';
       nodeGroup.appendChild(pr);
+      nodeData.rings.push(pr);
     }
 
+    // Selection glow ring (hidden initially)
+    const selRing = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    selRing.setAttribute('cx',pos.x); selRing.setAttribute('cy',pos.y); selRing.setAttribute('r', r + 8);
+    selRing.setAttribute('fill','none'); selRing.setAttribute('stroke', fill); selRing.setAttribute('stroke-width','2');
+    selRing.setAttribute('opacity','0'); selRing.style.transition = 'opacity 0.2s';
+    selRing.style.filter = `drop-shadow(0 0 6px ${fill})`;
+    nodeGroup.appendChild(selRing);
+    nodeData.selectRing = selRing;
+
+    // Main circle
     const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
     circle.setAttribute('cx',pos.x); circle.setAttribute('cy',pos.y); circle.setAttribute('r',r);
     circle.setAttribute('fill',fill); circle.setAttribute('opacity','0.85');
-    circle.style.cursor = 'pointer';
-    circle.style.transition = 'r 0.15s';
+    circle.style.cursor = 'pointer'; circle.style.transition = 'opacity 0.2s';
+    circle.dataset.idx = i;
+
+    // Hover tooltip
     circle.addEventListener('mouseenter', e => {
+      if (topoDragIdx >= 0) return;
       circle.setAttribute('r', r * 1.3);
       const tip = document.getElementById('topo-tooltip');
       document.getElementById('tt-ip').textContent = d.ip;
+      document.getElementById('tt-name').textContent = getDeviceDisplayName(d);
       document.getElementById('tt-vendor').textContent = d.vendor || 'Unknown';
       document.getElementById('tt-mac').textContent = d.mac || '\u2014';
       document.getElementById('tt-status').textContent = d.status || '\u2014';
       document.getElementById('tt-type').textContent = d.type;
       document.getElementById('tt-ports').textContent = ports.length > 0 ? ports.join(', ') : 'None';
-      tip.style.left = (e.clientX + 12) + 'px';
-      tip.style.top = (e.clientY - 10) + 'px';
-      tip.style.opacity = '1';
+      tip.style.left = (e.clientX + 12) + 'px'; tip.style.top = (e.clientY - 10) + 'px'; tip.style.opacity = '1';
     });
     circle.addEventListener('mouseleave', () => {
+      if (topoDragIdx >= 0) return;
       circle.setAttribute('r', r);
       document.getElementById('topo-tooltip').style.opacity = '0';
     });
     circle.addEventListener('mousemove', e => {
+      if (topoDragIdx >= 0) return;
       const tip = document.getElementById('topo-tooltip');
-      tip.style.left = (e.clientX + 12) + 'px';
-      tip.style.top = (e.clientY - 10) + 'px';
+      tip.style.left = (e.clientX + 12) + 'px'; tip.style.top = (e.clientY - 10) + 'px';
     });
-    circle.addEventListener('click', () => {
-      showNodeDetail(d, ports);
-    });
-    nodeGroup.appendChild(circle);
 
-    // IP labels for ALL nodes
+    nodeGroup.appendChild(circle);
+    nodeData.circle = circle;
+
+    // IP label
     const text = document.createElementNS('http://www.w3.org/2000/svg','text');
     text.setAttribute('x',pos.x); text.setAttribute('y',pos.y + r + 14);
     text.setAttribute('text-anchor','middle'); text.setAttribute('fill','#8b949e');
     text.setAttribute('font-size','9'); text.setAttribute('font-family','JetBrains Mono');
+    text.style.pointerEvents = 'none'; text.style.transition = 'opacity 0.2s';
     const label = d.ip ? d.ip.split('.').pop() : '?';
     text.textContent = d.type === 'GATEWAY' ? 'GW' : d.type === 'THIS_DEVICE' ? 'YOU' : label;
     nodeGroup.appendChild(text);
+    nodeData.text = text;
+
+    topoNodes.push(nodeData);
   });
   svg.appendChild(nodeGroup);
+
+  // ── Drag-to-move nodes ──
+  svg.addEventListener('mousedown', e => {
+    const idx = e.target.dataset?.idx;
+    if (idx !== undefined) {
+      topoDragIdx = parseInt(idx);
+      const pt = svgPoint(svg, e);
+      topoDragOff = {x: pt.x - topoNodes[topoDragIdx].pos.x, y: pt.y - topoNodes[topoDragIdx].pos.y};
+      svg.classList.add('dragging');
+      document.getElementById('topo-tooltip').style.opacity = '0';
+      e.preventDefault();
+    } else if (e.target === svg || e.target.tagName === 'line') {
+      // Pan on background drag
+      topoPanning = true;
+      topoPanStart = {x: e.clientX, y: e.clientY};
+      svg.classList.add('panning');
+      e.preventDefault();
+    }
+  });
+
+  svg.addEventListener('mousemove', e => {
+    if (topoDragIdx >= 0) {
+      const pt = svgPoint(svg, e);
+      const nd = topoNodes[topoDragIdx];
+      nd.pos.x = pt.x - topoDragOff.x;
+      nd.pos.y = pt.y - topoDragOff.y;
+      updateNodePosition(topoDragIdx);
+      e.preventDefault();
+    } else if (topoPanning) {
+      const dx = (e.clientX - topoPanStart.x) * (topoVB.w / svg.clientWidth);
+      const dy = (e.clientY - topoPanStart.y) * (topoVB.h / svg.clientHeight);
+      topoVB.x -= dx; topoVB.y -= dy;
+      topoPanStart = {x: e.clientX, y: e.clientY};
+      svg.setAttribute('viewBox', `${topoVB.x} ${topoVB.y} ${topoVB.w} ${topoVB.h}`);
+    }
+  });
+
+  svg.addEventListener('mouseup', e => {
+    if (topoDragIdx >= 0) {
+      // Click-select if barely moved
+      const nd = topoNodes[topoDragIdx];
+      selectTopoNode(topoDragIdx);
+      topoDragIdx = -1;
+      svg.classList.remove('dragging');
+    }
+    if (topoPanning) {
+      topoPanning = false;
+      svg.classList.remove('panning');
+    }
+  });
+
+  svg.addEventListener('mouseleave', () => {
+    topoDragIdx = -1; topoPanning = false;
+    svg.classList.remove('dragging','panning');
+    document.getElementById('topo-tooltip').style.opacity = '0';
+  });
+
+  // ── Scroll-to-zoom ──
+  svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 0.9 : 1.1;
+    const rect = svg.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) / rect.width;
+    const my = (e.clientY - rect.top) / rect.height;
+    const newW = topoVB.w * factor, newH = topoVB.h * factor;
+    topoVB.x += (topoVB.w - newW) * mx;
+    topoVB.y += (topoVB.h - newH) * my;
+    topoVB.w = newW; topoVB.h = newH;
+    topoScale = (svg.clientWidth || 800) / topoVB.w;
+    svg.setAttribute('viewBox', `${topoVB.x} ${topoVB.y} ${topoVB.w} ${topoVB.h}`);
+  }, {passive: false});
+
+  // Deselect on background click
+  svg.addEventListener('click', e => {
+    if (e.target === svg) { selectTopoNode(-1); }
+  });
+
+  // Apply any existing search filter
+  if (topoSearchQuery) topoFilterNodes(topoSearchQuery);
+}
+
+function svgPoint(svg, e) {
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+
+function updateNodePosition(idx) {
+  const nd = topoNodes[idx];
+  const {x, y} = nd.pos;
+  nd.circle.setAttribute('cx', x); nd.circle.setAttribute('cy', y);
+  nd.text.setAttribute('x', x); nd.text.setAttribute('y', y + nd.r + 14);
+  nd.selectRing.setAttribute('cx', x); nd.selectRing.setAttribute('cy', y);
+  nd.rings.forEach(ring => { ring.setAttribute('cx', x); ring.setAttribute('cy', y); });
+  // Update edges
+  if (nd.edge) {
+    nd.edge.setAttribute('x2', x); nd.edge.setAttribute('y2', y);
+  }
+  // If this is the gateway (idx 0), update all edges from it
+  if (idx === 0) {
+    topoNodes.forEach((n, i) => {
+      if (i > 0 && n.edge) { n.edge.setAttribute('x1', x); n.edge.setAttribute('y1', y); }
+    });
+  }
+}
+
+function selectTopoNode(idx) {
+  // Deselect previous
+  if (topoSelectedIdx >= 0 && topoSelectedIdx < topoNodes.length) {
+    topoNodes[topoSelectedIdx].selectRing.setAttribute('opacity', '0');
+  }
+  topoSelectedIdx = idx;
+  if (idx >= 0 && idx < topoNodes.length) {
+    const nd = topoNodes[idx];
+    nd.selectRing.setAttribute('opacity', '0.7');
+    nd.selectRing.style.animation = 'glow-pulse 1.5s infinite';
+    showNodeDetail(nd.device, nd.ports);
+  } else {
+    closeNodeDetail();
+  }
+}
+
+function topoFilterNodes(query) {
+  topoSearchQuery = query;
+  const q = query.toLowerCase().trim();
+  topoNodes.forEach(nd => {
+    if (!q) {
+      nd.circle.setAttribute('opacity', '0.85');
+      nd.text.setAttribute('opacity', '1');
+      nd.rings.forEach(r => r.setAttribute('opacity', r._origOpacity || '0.25'));
+      return;
+    }
+    const match = (nd.device.ip || '').toLowerCase().includes(q) ||
+                  getDeviceDisplayName(nd.device).toLowerCase().includes(q) ||
+                  (nd.device.vendor || '').toLowerCase().includes(q) ||
+                  (nd.device.mac || '').toLowerCase().includes(q) ||
+                  ((nd.device.hostname || nd.device.display_name || '').toLowerCase().includes(q));
+    nd.circle.setAttribute('opacity', match ? '1' : '0.15');
+    nd.text.setAttribute('opacity', match ? '1' : '0.15');
+    if (match) {
+      nd.selectRing.setAttribute('opacity', '0.5');
+      nd.selectRing.style.animation = 'glow-pulse 1s infinite';
+    } else {
+      nd.selectRing.setAttribute('opacity', '0');
+      nd.selectRing.style.animation = '';
+    }
+  });
 }
 
 function showNodeDetail(d, ports) {
   document.getElementById('nd-ip').textContent = d.ip || '\u2014';
+  document.getElementById('nd-name').textContent = getDeviceDisplayName(d);
   document.getElementById('nd-type').textContent = d.type || '\u2014';
   document.getElementById('nd-vendor').textContent = d.vendor || 'Unknown';
   document.getElementById('nd-mac').textContent = d.mac || '\u2014';
@@ -927,7 +1146,6 @@ function calcPositions(devices, W, H, layout) {
       const spacingY = (H - 80) / Math.max(Math.ceil(n/cols), 1);
       return {x: 40 + col * spacingX + spacingX/2, y: 40 + row * spacingY + spacingY/2};
     } else {
-      // Force-like: fibonacci spiral
       const phi = Math.acos(1 - 2*(i)/(n+1));
       const theta = Math.PI * (1 + Math.sqrt(5)) * i;
       const r = Math.min(W, H) * 0.35;
@@ -944,17 +1162,20 @@ function setTopoLayout(layout) {
 }
 
 function topoZoom(factor) {
-  topoScale *= factor;
   const svg = document.getElementById('topo-svg');
-  const W = svg.clientWidth, H = svg.clientHeight;
-  const nw = W/topoScale, nh = H/topoScale;
-  const ox = (W - nw)/2, oy = (H - nh)/2;
-  svg.setAttribute('viewBox', `${ox} ${oy} ${nw} ${nh}`);
+  const newW = topoVB.w / factor, newH = topoVB.h / factor;
+  topoVB.x += (topoVB.w - newW) / 2;
+  topoVB.y += (topoVB.h - newH) / 2;
+  topoVB.w = newW; topoVB.h = newH;
+  topoScale = (svg.clientWidth || 800) / topoVB.w;
+  svg.setAttribute('viewBox', `${topoVB.x} ${topoVB.y} ${topoVB.w} ${topoVB.h}`);
 }
 function topoReset() {
   topoScale = 1;
   const svg = document.getElementById('topo-svg');
-  svg.setAttribute('viewBox', `0 0 ${svg.clientWidth} ${svg.clientHeight}`);
+  const W = svg.clientWidth || 800, H = svg.clientHeight || 500;
+  topoVB = {x:0, y:0, w:W, h:H};
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
 }
 
 function sortTable(colIdx) {
