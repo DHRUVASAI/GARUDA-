@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GARUDA — Network Defense System</title>
+<title>GARUDA v4 — Network Defense</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
@@ -12,55 +12,83 @@
    Clean, professional look - No neon colors
    ═══════════════════════════════════════ */
 :root {
-  --bg:       #0f1419;
-  --s1:       #1a2332;
-  --s2:       #212d3b;
+  --bg:       #0c1017;
+  --s1:       rgba(22, 30, 42, 0.72);
+  --s2:       rgba(26, 36, 52, 0.85);
   --s3:       #2a3a4d;
   --b0:       rgba(255,255,255,0.06);
   --b1:       rgba(255,255,255,0.10);
   --b2:       rgba(255,255,255,0.15);
-  --t0:       #f7f9fb;
-  --t1:       #8899a6;
-  --t2:       #5c6e7e;
+  --t0:       #f0f4f8;
+  --t1:       #94a3b8;
+  --t2:       #64748b;
+  --glass:    rgba(15, 20, 28, 0.55);
+  --ease-ui:  cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 220ms;
+  --dur-mid:  300ms;
   color-scheme: dark;
 }
 
 body.light-theme {
-  --bg:       #f5f7fa;
-  --s1:       #ffffff;
-  --s2:       #f0f3f8;
-  --s3:       #e5ecf5;
-  --t0:       #1a2332;
-  --t1:       #6b7d8c;
-  --t2:       #8899a6;
+  --bg:       #f1f5f9;
+  --s1:       rgba(255,255,255,0.92);
+  --s2:       #f8fafc;
+  --s3:       #e2e8f0;
+  --glass:    rgba(255,255,255,0.75);
+  --t0:       #0f172a;
+  --t1:       #475569;
+  --t2:       #64748b;
   color-scheme: light;
 }
+body.light-theme th { background: rgba(255,255,255,0.95); }
 
 :root {
-  --accent:   #4a90a4;
-  --accent2:  #3d7a8c;
-  --success:  #5cb85c;
-  --warn:     #d4a04a;
-  --danger:   #c9544d;
-  --critical: #b84040;
-  --purple:   #8b7eb8;
-  --font-display: 'Inter', 'Oxanium', sans-serif;
-  --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
-  --r: 8px;
+  --accent:   #22d3ee;
+  --accent2:  #06b6d4;
+  --accent-dim: rgba(34, 211, 238, 0.12);
+  --success:  #34d399;
+  --success-dim: rgba(52, 211, 153, 0.12);
+  --warn:     #fbbf24;
+  --warn-dim: rgba(251, 191, 36, 0.14);
+  --danger:   #f87171;
+  --critical: #ef4444;
+  --purple:   #a78bfa;
+  --font-display: 'Inter', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Consolas', monospace;
+  --r: 10px;
   --sidebar-w: 248px;
   --topbar-h: 52px;
+  --lh-tight: 1.2;
+  --lh-body:  1.55;
+  --ls-caps:  0.12em;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 13px; scroll-behavior: smooth; }
+html { font-size: 14px; scroll-behavior: smooth; }
 body {
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: var(--lh-body);
+  letter-spacing: 0.01em;
   background: var(--bg);
   color: var(--t0);
   min-height: 100vh;
   display: flex;
   overflow-x: hidden;
 }
+h1, .h1 { font-family: var(--font-display); font-size: 1.75rem; font-weight: 800; line-height: var(--lh-tight); letter-spacing: -0.02em; color: var(--t0); }
+h2, .section-title { font-family: var(--font-display); font-size: 1.35rem; font-weight: 700; line-height: var(--lh-tight); letter-spacing: -0.015em; }
+.caption, .metric-label, .panel-title, .nav-group-label { letter-spacing: var(--ls-caps); }
+.mono, .net-info-value, td.mono { letter-spacing: 0.02em; }
+
+/* ── TOGGLE SWITCH ── */
+.toggle-switch { position: relative; display: inline-block; width: 44px; height: 22px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; cursor: pointer; inset: 0; background-color: var(--s3); transition: .3s; border-radius: 34px; }
+.toggle-slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: #fff; transition: .3s; border-radius: 50%; }
+input:checked + .toggle-slider { background-color: var(--accent); }
+input:focus + .toggle-slider { box-shadow: 0 0 1px var(--accent); }
+input:checked + .toggle-slider:before { transform: translateX(22px); }
 
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -102,11 +130,14 @@ body::after {
   height: 100vh;
   position: fixed;
   left: 0; top: 0;
-  background: var(--s1);
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
   border-right: 1px solid var(--b0);
   display: flex;
   flex-direction: column;
   z-index: 100;
+  transition: transform var(--dur-mid) var(--ease-ui), box-shadow var(--dur-mid) var(--ease-ui);
 }
 
 .sidebar-logo {
@@ -152,11 +183,11 @@ body::after {
   font-family: var(--font-display);
   font-size: 12px; font-weight: 500;
   border-left: 2px solid transparent;
-  transition: all 0.15s;
+  transition: color var(--dur-fast) var(--ease-ui), background var(--dur-fast) var(--ease-ui), border-color var(--dur-fast) var(--ease-ui), transform var(--dur-fast) var(--ease-ui);
   position: relative;
   text-decoration: none;
 }
-.nav-item:hover { color: var(--t0); background: rgba(255,255,255,0.03); border-left-color: rgba(255,255,255,0.1); }
+.nav-item:hover { color: var(--t0); background: rgba(255,255,255,0.04); border-left-color: rgba(255,255,255,0.12); transform: translateX(2px); }
 .nav-item.active {
   color: var(--t0);
   border-left-color: var(--accent);
@@ -170,7 +201,8 @@ body::after {
   background: var(--accent);
   border-radius: 2px 0 0 2px;
 }
-.nav-item svg { width: 15px; height: 15px; flex-shrink: 0; opacity: 0.7; transition: opacity 0.15s; }
+.nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.72; transition: opacity var(--dur-fast) var(--ease-ui), transform var(--dur-fast) var(--ease-ui); }
+.nav-item:hover svg { opacity: 1; transform: scale(1.04); }
 .nav-item.active svg { opacity: 1; }
 .nav-badge {
   margin-left: auto;
@@ -183,6 +215,11 @@ body::after {
   border-radius: 8px;
   min-width: 18px;
   text-align: center;
+  transition: transform var(--dur-fast) var(--ease-ui), box-shadow var(--dur-mid) var(--ease-ui);
+}
+@keyframes badgePop {
+  from { opacity: 0; transform: scale(0.55); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 .sidebar-footer {
@@ -202,14 +239,17 @@ body::after {
   position: fixed;
   top: 0; left: var(--sidebar-w); right: 0;
   height: var(--topbar-h);
-  background: rgba(26,35,50,0.9);
-  backdrop-filter: blur(12px);
+  background: var(--glass);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
   border-bottom: 1px solid var(--b0);
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 24px;
   z-index: 90;
+  transition: left var(--dur-mid) var(--ease-ui);
 }
-.topbar-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 12px; font-family: var(--font-display); }
+.topbar-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 12px; font-family: var(--font-display); min-width: 0; }
+.topbar-left { display: flex; align-items: center; flex: 1; min-width: 0; gap: 0; }
 .topbar-breadcrumb .parent { color: var(--t2); }
 .topbar-breadcrumb .sep { color: var(--t2); font-size: 10px; }
 .topbar-breadcrumb .current { color: var(--t0); font-weight: 600; }
@@ -223,9 +263,13 @@ body::after {
   font-size: 11px; font-family: var(--font-display);
   color: var(--t1);
 }
-.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--t2); transition: all 0.3s; }
-.status-dot.on { background: var(--success); }
-.status-dot.off { background: var(--danger); }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--t2); transition: background-color var(--dur-mid) var(--ease-ui), box-shadow var(--dur-mid) var(--ease-ui), transform var(--dur-mid) var(--ease-ui); }
+.status-dot.on { background: var(--success); box-shadow: 0 0 0 3px var(--success-dim); }
+.status-dot.off { background: var(--danger); animation: threatDotPulse 2s ease-in-out infinite; }
+@keyframes threatDotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(248,113,113,0.35); }
+  50% { opacity: 0.85; transform: scale(1.05); box-shadow: 0 0 12px 2px rgba(248,113,113,0.25); }
+}
 .last-scan-txt { font-size: 10px; color: var(--t2); font-family: var(--font-display); }
 
 /* SCAN BUTTON — clean style */
@@ -235,16 +279,17 @@ body::after {
   font-size: 11px; font-weight: 600;
   letter-spacing: 0.05em;
   padding: 0 18px; height: 34px;
-  background: var(--accent);
-  color: #fff;
+  background: linear-gradient(165deg, var(--accent) 0%, var(--accent2) 100%);
+  color: #0a0f14;
   border: none; border-radius: var(--r);
   cursor: pointer;
   display: flex; align-items: center; gap: 7px;
   overflow: hidden;
-  transition: all 0.2s;
+  transition: transform var(--dur-fast) var(--ease-ui), box-shadow var(--dur-fast) var(--ease-ui), filter var(--dur-fast) var(--ease-ui), opacity var(--dur-fast) var(--ease-ui);
+  box-shadow: 0 2px 12px rgba(34, 211, 238, 0.22);
 }
-.btn-scan:hover { background: var(--accent2); transform: translateY(-1px); }
-.btn-scan:disabled { background: var(--s3); color: var(--t2); cursor: not-allowed; transform: none; opacity: 0.6; }
+.btn-scan:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 4px 18px rgba(34, 211, 238, 0.28); }
+.btn-scan:disabled { background: var(--s3); color: var(--t2); cursor: not-allowed; transform: none; opacity: 0.55; box-shadow: none; filter: none; }
 
 /* Theme toggle */
 .theme-toggle {
@@ -274,40 +319,63 @@ body::after {
   min-height: calc(100vh - var(--topbar-h));
   position: relative;
   z-index: 1;
+  transition: margin-left var(--dur-mid) var(--ease-ui);
 }
 
 /* ══════════════════════════════════════
    PAGE TRANSITIONS
    ══════════════════════════════════════ */
-.page { display: none; }
-.page.active { display: block; animation: pageIn 0.3s ease; }
-@keyframes pageIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.page { display: none; opacity: 0; }
+.page.active { display: block; opacity: 1; animation: pageFadeIn var(--dur-mid) var(--ease-ui) both; }
+@keyframes pageFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
-/* Staggered children */
-.page.active > * { animation: itemIn 0.35s ease both; }
-.page.active > *:nth-child(1) { animation-delay: 0.02s; }
-.page.active > *:nth-child(2) { animation-delay: 0.07s; }
-.page.active > *:nth-child(3) { animation-delay: 0.12s; }
-.page.active > *:nth-child(4) { animation-delay: 0.17s; }
-.page.active > *:nth-child(5) { animation-delay: 0.22s; }
-@keyframes itemIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+/* Staggered children — transform/opacity only */
+.page.active > .metric-row .metric-card,
+.page.active > .grid-2 .panel,
+.page.active > .traffic-panel,
+.page.active > .net-info-bar { animation: cardRise 0.4s var(--ease-ui) both; }
+.page.active > .metric-row .metric-card:nth-child(1) { animation-delay: 0.04s; }
+.page.active > .metric-row .metric-card:nth-child(2) { animation-delay: 0.1s; }
+.page.active > .metric-row .metric-card:nth-child(3) { animation-delay: 0.16s; }
+.page.active > .metric-row .metric-card:nth-child(4) { animation-delay: 0.22s; }
+.page.active > .grid-2 .panel:nth-child(1) { animation-delay: 0.12s; }
+.page.active > .grid-2 .panel:nth-child(2) { animation-delay: 0.18s; }
+.page.active > .traffic-panel { animation-delay: 0.08s; }
+.page.active > .net-info-bar { animation-delay: 0.02s; }
+@keyframes cardRise {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 /* ══════════════════════════════════════
    METRIC CARDS
    ══════════════════════════════════════ */
 .metric-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 20px; }
 .metric-card {
-  background: var(--s1);
+  background: var(--glass);
+  backdrop-filter: blur(12px) saturate(130%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
   border: 1px solid var(--b0);
   border-top: 2px solid var(--b0);
   border-radius: var(--r);
   padding: 18px 16px 14px;
   position: relative;
   overflow: hidden;
-  transition: border-color 0.2s, transform 0.2s;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  transition: border-color var(--dur-mid) var(--ease-ui), box-shadow var(--dur-mid) var(--ease-ui), transform var(--dur-mid) var(--ease-ui);
   cursor: default;
 }
-.metric-card:hover { transform: translateY(-2px); border-color: var(--b1); }
+.metric-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(145deg, rgba(255,255,255,0.04) 0%, transparent 45%);
+  pointer-events: none;
+  opacity: 0.9;
+}
+.metric-card:hover { transform: translateY(-3px); border-color: var(--b1); box-shadow: 0 8px 28px rgba(0,0,0,0.18); }
 .metric-card:nth-child(1) { border-top-color: var(--accent); }
 .metric-card:nth-child(2) { border-top-color: var(--success); }
 .metric-card:nth-child(3) { border-top-color: var(--danger); }
@@ -316,18 +384,23 @@ body::after {
 .metric-value { font-family: var(--font-display); font-size: 28px; font-weight: 800; line-height: 1; color: var(--t0); }
 .metric-sub { font-size: 10px; color: var(--t1); margin-top: 8px; font-family: var(--font-display); }
 .risk-bar-container { height: 4px; background: var(--s3); border-radius: 2px; overflow: hidden; margin-top: 10px; }
-.risk-bar-fill { height: 100%; border-radius: 2px; transition: width 0.8s cubic-bezier(0.34,1.56,0.64,1); }
+.risk-bar-fill { height: 100%; border-radius: 2px; transition: width 0.85s cubic-bezier(0.34,1.56,0.64,1), background-color var(--dur-mid) var(--ease-ui); }
 
 /* ══════════════════════════════════════
    PANELS
    ══════════════════════════════════════ */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
 .panel {
-  background: var(--s1);
+  background: var(--glass);
+  backdrop-filter: blur(12px) saturate(130%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
   border: 1px solid var(--b0);
   border-radius: var(--r);
   padding: 18px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  transition: border-color var(--dur-mid) var(--ease-ui), box-shadow var(--dur-mid) var(--ease-ui);
 }
+.panel:hover { border-color: var(--b1); }
 .panel-title {
   font-size: 9px; color: var(--t2);
   text-transform: uppercase; letter-spacing: 0.1em;
@@ -340,17 +413,18 @@ body::after {
 .info-row:last-child { border-bottom: none; }
 .info-key { color: var(--t2); font-family: var(--font-display); }
 .info-val { color: var(--t0); font-family: var(--font-mono); font-size: 11px; }
-.threat-item { display: flex; align-items: center; gap: 8px; padding: 9px 0; font-size: 11px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.threat-item { display: flex; align-items: center; gap: 8px; padding: 9px 0; font-size: 11px; border-bottom: 1px solid rgba(255,255,255,0.03); transition: background-color var(--dur-mid) var(--ease-ui), transform var(--dur-fast) var(--ease-ui); border-radius: 6px; margin: 0 -6px; padding-left: 6px; padding-right: 6px; }
+.threat-item:hover { background: rgba(255,255,255,0.03); transform: translateX(2px); }
 .threat-item:last-child { border-bottom: none; }
 .threat-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
 
 /* ══════════════════════════════════════
    INLINE ERROR / OFFLINE BAR
    ══════════════════════════════════════ */
-.inline-error { display: none; padding: 10px 14px; background: rgba(201,84,77,0.1); border: 1px solid rgba(201,84,77,0.25); border-radius: var(--r); font-size: 11px; color: var(--danger); margin-bottom: 16px; align-items: center; gap: 8px; font-family: var(--font-display); }
-.inline-error.show { display: flex; animation: slideDown 0.3s ease; }
-@keyframes slideDown { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
-.inline-error code { padding: 2px 6px; background: rgba(201,84,77,0.15); border-radius: 3px; font-family: var(--font-mono); font-size: 10px; }
+.inline-error { display: none; padding: 12px 16px; background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.28); border-radius: var(--r); font-size: 11px; color: var(--danger); margin-bottom: 16px; align-items: center; gap: 10px; font-family: var(--font-display); }
+.inline-error.show { display: flex; animation: errorBannerIn 0.32s var(--ease-ui) both; }
+@keyframes errorBannerIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+.inline-error code { padding: 2px 6px; background: rgba(248,113,113,0.12); border-radius: 3px; font-family: var(--font-mono); font-size: 10px; }
 
 /* ══════════════════════════════════════
    NETWORK INFO BAR
@@ -358,11 +432,14 @@ body::after {
 .net-info-bar {
   display: flex; gap: 24px;
   padding: 12px 16px;
-  background: var(--s1);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--b0);
   border-radius: var(--r);
   margin-bottom: 14px;
   flex-wrap: wrap; align-items: center;
+  transition: border-color var(--dur-mid) var(--ease-ui);
 }
 .net-info-item { display: flex; flex-direction: column; gap: 2px; }
 .net-info-label { font-size: 9px; color: var(--t2); text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--font-display); }
@@ -371,22 +448,27 @@ body::after {
 /* ══════════════════════════════════════
    BADGES
    ══════════════════════════════════════ */
-.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 9px; font-weight: 600; letter-spacing: 0.04em; font-family: var(--font-display); }
-.badge-success { background: rgba(92,184,92,0.15); color: var(--success); }
-.badge-warn    { background: rgba(212,160,74,0.15);  color: var(--warn); }
-.badge-danger  { background: rgba(201,84,77,0.15);   color: var(--danger); }
-.badge-critical{ background: rgba(184,64,64,0.18);   color: var(--critical); }
-.badge-medium  { background: rgba(212,160,74,0.15);  color: var(--warn); }
-.badge-high    { background: rgba(201,84,77,0.15);   color: var(--danger); }
-.badge-low     { background: rgba(92,184,92,0.15);  color: var(--success); }
-.badge-unknown { background: rgba(92,110,126,0.2);    color: var(--t1); }
-.badge-acked   { background: rgba(92,184,92,0.12);   color: var(--success); }
-.badge-unacked { background: rgba(201,84,77,0.12);    color: var(--danger); }
+.badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 9px; font-weight: 600; letter-spacing: 0.04em; font-family: var(--font-display); transition: transform var(--dur-fast) var(--ease-ui), box-shadow var(--dur-fast) var(--ease-ui); }
+.badge[title]:hover { transform: translateY(-1px); }
+.badge-success { background: var(--success-dim); color: var(--success); }
+.badge-warn    { background: var(--warn-dim);  color: #d97706; }
+.badge-danger  { background: rgba(248,113,113,0.15);   color: var(--danger); }
+.badge-critical{ background: rgba(239,68,68,0.18);   color: var(--critical); animation: threatBadgePulse 2.4s ease-in-out infinite; box-shadow: 0 0 0 0 rgba(239,68,68,0.25); }
+.badge-medium  { background: var(--warn-dim);  color: #b45309; }
+.badge-high    { background: rgba(248,113,113,0.15);   color: var(--danger); }
+.badge-low     { background: var(--success-dim);  color: var(--success); }
+.badge-unknown { background: rgba(148,163,184,0.18);    color: var(--t1); }
+.badge-acked   { background: var(--success-dim);   color: var(--success); }
+.badge-unacked { background: rgba(248,113,113,0.12);    color: var(--danger); }
+@keyframes threatBadgePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.2); }
+  50% { box-shadow: 0 0 14px 2px rgba(239,68,68,0.35); }
+}
 
 /* ══════════════════════════════════════
    TABLES
    ══════════════════════════════════════ */
-.table-wrap { overflow-x: auto; border: 1px solid var(--b0); border-radius: var(--r); background: var(--s1); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--b0); border-radius: var(--r); background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 table { width: 100%; border-collapse: collapse; font-size: 11px; }
 th {
   text-align: left; color: var(--t2);
@@ -394,13 +476,74 @@ th {
   padding: 10px 14px;
   border-bottom: 1px solid var(--b0);
   font-family: var(--font-display); font-weight: 600;
-  position: sticky; top: 0; background: var(--s1);
+  position: sticky; top: 0; background: rgba(15, 20, 28, 0.92); backdrop-filter: blur(6px);
   cursor: pointer; user-select: none;
 }
 th:hover { color: var(--t1); }
 td { padding: 8px 14px; border-bottom: 1px solid rgba(255,255,255,0.025); vertical-align: middle; }
 tr:hover td { background: rgba(255,255,255,0.03); }
-tr { transition: background 0.1s; }
+tr { transition: opacity var(--dur-fast) var(--ease-ui); }
+tbody tr.device-row {
+  transition: background-color var(--dur-mid) var(--ease-ui), box-shadow var(--dur-mid) var(--ease-ui);
+  animation: deviceRowIn 0.42s var(--ease-ui) both;
+  animation-delay: var(--dr, 0s);
+}
+@keyframes deviceRowIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+tbody tr.device-row:hover td {
+  background: rgba(34, 211, 238, 0.04);
+}
+tbody tr.device-row:hover {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.copy-cell {
+  cursor: pointer;
+  position: relative;
+  border-radius: 4px;
+  transition: background-color var(--dur-fast) var(--ease-ui), color var(--dur-fast) var(--ease-ui);
+}
+.copy-cell:hover { background: var(--accent-dim); color: var(--accent); }
+.copy-cell::after {
+  content: attr(data-hint);
+  position: absolute;
+  left: 0; bottom: 100%;
+  margin-bottom: 6px;
+  padding: 4px 8px;
+  font-size: 9px;
+  font-family: var(--font-display);
+  color: var(--t0);
+  background: var(--s3);
+  border: 1px solid var(--b1);
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity var(--dur-fast) var(--ease-ui), transform var(--dur-fast) var(--ease-ui);
+  z-index: 5;
+}
+.copy-cell:hover::after { opacity: 1; transform: translateY(0); }
+.toast-copy {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  padding: 10px 18px;
+  background: var(--s3);
+  border: 1px solid var(--b1);
+  border-radius: var(--r);
+  font-size: 11px;
+  font-family: var(--font-display);
+  color: var(--t0);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 2000;
+  transition: opacity var(--dur-mid) var(--ease-ui), transform var(--dur-mid) var(--ease-ui);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+}
+.toast-copy.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .mono { font-family: var(--font-mono); font-size: 10px; }
 .text-accent  { color: var(--accent); }
 .text-success { color: var(--success); }
@@ -420,7 +563,7 @@ tr { transition: background 0.1s; }
    PORT TAGS
    ══════════════════════════════════════ */
 .port-tag { font-family: var(--font-mono); font-size: 9px; padding: 2px 6px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--t1); display: inline-block; margin: 1px; }
-.port-tag.risky { background: rgba(201,84,77,0.1); border-color: rgba(201,84,77,0.25); color: var(--danger); }
+.port-tag.risky { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.28); color: var(--danger); }
 
 /* ══════════════════════════════════════
    TOPOLOGY
@@ -435,6 +578,14 @@ tr { transition: background 0.1s; }
   overflow: hidden;
 }
 .topo-svg { width: 100%; height: 520px; display: block; cursor: grab; }
+@keyframes pulse-ring {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.08); }
+}
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.45; filter: drop-shadow(0 0 2px rgba(248,113,113,0.4)); }
+  50% { opacity: 0.95; filter: drop-shadow(0 0 8px rgba(248,113,113,0.55)); }
+}
 .topo-svg.dragging { cursor: grabbing; }
 .topo-controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 4px; flex-direction: column; }
 .topo-controls button { width: 30px; height: 30px; background: var(--s1); border: 1px solid var(--b0); border-radius: 4px; color: var(--t1); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; transition: all 0.15s; font-family: var(--font-mono); }
@@ -464,33 +615,86 @@ tr { transition: background 0.1s; }
 /* ══════════════════════════════════════
    CHARTS
    ══════════════════════════════════════ */
-.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
-.chart-wrap { position: relative; height: 200px; }
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px; }
+.chart-wrap {
+  position: relative;
+  height: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(34,211,238,0.03) 0%, transparent 40%);
+  transition: box-shadow var(--dur-mid) var(--ease-ui);
+}
+.chart-wrap:focus-within,
+.traffic-panel:hover .chart-wrap { box-shadow: 0 0 0 1px rgba(34,211,238,0.12); }
+.traffic-panel {
+  background: var(--glass);
+  backdrop-filter: blur(12px) saturate(130%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
+  border: 1px solid var(--b0);
+  border-radius: var(--r);
+  padding: 18px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+}
+.traffic-panel .panel-title { margin-bottom: 10px; }
+.traffic-hint { font-size: 10px; color: var(--t2); margin: -2px 0 14px; font-family: var(--font-display); line-height: 1.5; letter-spacing: 0.02em; }
 .time-range-btns { display: flex; gap: 0; margin-bottom: 12px; }
-.time-range-btns button { font-family: var(--font-display); font-size: 10px; padding: 5px 12px; background: var(--s2); border: 1px solid var(--b0); color: var(--t2); cursor: pointer; transition: all 0.15s; }
-.time-range-btns button:first-child { border-radius: 4px 0 0 4px; }
-.time-range-btns button:last-child { border-radius: 0 4px 4px 0; }
-.time-range-btns button.active { background: rgba(255,255,255,0.08); color: var(--t0); border-color: var(--b1); }
+.time-range-btns button {
+  font-family: var(--font-display);
+  font-size: 10px;
+  padding: 6px 14px;
+  background: var(--s2);
+  border: 1px solid var(--b0);
+  color: var(--t2);
+  cursor: pointer;
+  transition: color var(--dur-mid) var(--ease-ui), background var(--dur-mid) var(--ease-ui), border-color var(--dur-mid) var(--ease-ui), transform var(--dur-fast) var(--ease-ui);
+}
+.time-range-btns button:hover { color: var(--t0); background: rgba(255,255,255,0.05); }
+.time-range-btns button:first-child { border-radius: 6px 0 0 6px; }
+.time-range-btns button:last-child { border-radius: 0 6px 6px 0; }
+.time-range-btns button.active { background: var(--accent-dim); color: var(--accent); border-color: rgba(34,211,238,0.35); }
 .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-top: 16px; }
-.stat-card { background: var(--s2); border: 1px solid var(--b0); border-radius: var(--r); padding: 14px 16px; }
+.stat-card { background: var(--glass); backdrop-filter: blur(8px); border: 1px solid var(--b0); border-radius: var(--r); padding: 14px 16px; transition: border-color var(--dur-mid) var(--ease-ui); }
+.stat-card:hover { border-color: var(--b1); }
 .stat-label { font-size: 9px; color: var(--t2); text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--font-display); }
-.stat-value { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; margin-top: 4px; }
+.stat-value { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; margin-top: 4px; transition: color var(--dur-mid) var(--ease-ui); }
 
 /* ══════════════════════════════════════
    SKELETON
    ══════════════════════════════════════ */
-.skeleton { background: linear-gradient(90deg, var(--s2) 25%, var(--s3) 50%, var(--s2) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; }
+.skeleton { background: linear-gradient(90deg, var(--s2) 25%, var(--s3) 50%, var(--s2) 75%); background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite; border-radius: 6px; }
 @keyframes shimmer { 0% { background-position:200% 0; } 100% { background-position:-200% 0; } }
+.skeleton-dash { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.skeleton-dash .sk-card { height: 96px; border-radius: var(--r); }
+.skeleton-dash .sk-line { height: 12px; margin-bottom: 8px; border-radius: 4px; }
+.skeleton-dash .sk-chart { height: 200px; border-radius: var(--r); margin-top: 8px; }
 
 /* ══════════════════════════════════════
    EMPTY / ERROR / LOADING
    ══════════════════════════════════════ */
-.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; color: var(--t2); text-align: center; }
-.empty-state svg { width: 44px; height: 44px; margin-bottom: 14px; opacity: 0.2; }
-.empty-state p { font-size: 12px; max-width: 280px; line-height: 1.5; font-family: var(--font-display); }
-.loading { display: flex; align-items: center; justify-content: center; padding: 48px; color: var(--t2); font-size: 11px; gap: 10px; font-family: var(--font-display); }
-.spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.1); border-top-color: var(--t0); border-radius: 50%; animation: spin 0.7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 52px 24px; color: var(--t2); text-align: center; animation: emptyFade 0.45s var(--ease-ui) both; }
+@keyframes emptyFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.empty-state .empty-illu {
+  width: 72px; height: 72px; margin-bottom: 18px;
+  color: var(--accent);
+  opacity: 0.35;
+  animation: emptyIlluFloat 4s ease-in-out infinite;
+}
+@keyframes emptyIlluFloat { 0%, 100% { transform: translateY(0); opacity: 0.32; } 50% { transform: translateY(-4px); opacity: 0.45; } }
+.empty-state svg:not(.empty-illu) { width: 48px; height: 48px; margin-bottom: 14px; opacity: 0.22; }
+.empty-state h3 { font-family: var(--font-display); font-size: 14px; font-weight: 600; color: var(--t1); margin-bottom: 8px; }
+.empty-state p { font-size: 12px; max-width: 320px; line-height: 1.55; font-family: var(--font-display); color: var(--t2); }
+.loading { display: flex; align-items: center; justify-content: center; padding: 48px; color: var(--t2); font-size: 12px; gap: 12px; font-family: var(--font-display); }
+.spinner {
+  width: 20px; height: 20px;
+  border: 2px solid rgba(255,255,255,0.08);
+  border-top-color: var(--accent);
+  border-right-color: rgba(34,211,238,0.35);
+  border-radius: 50%;
+  animation: spinDash 0.85s linear infinite;
+}
+@keyframes spinDash { to { transform: rotate(360deg); } }
+.spinner--scan { width: 22px; height: 22px; border-width: 3px; border-top-color: var(--accent); animation-duration: 0.65s; }
 .error-state { text-align: center; padding: 48px; color: var(--danger); font-size: 12px; font-family: var(--font-display); }
 .error-state p { color: var(--t1); margin-top: 6px; font-size: 11px; }
 
@@ -501,30 +705,52 @@ tr { transition: background 0.1s; }
 .section-title { font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; color: var(--t0); letter-spacing: -0.01em; }
 .section-sub { font-size: 10px; color: var(--t2); font-family: var(--font-display); margin-bottom: 20px; }
 .cards-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 14px; margin-bottom: 20px; }
-.card { background: var(--s1); border: 1px solid var(--b0); border-top: 2px solid var(--b0); border-radius: var(--r); padding: 18px; transition: all 0.2s; }
-.card:hover { transform: translateY(-1px); border-color: var(--b1); }
+.card {
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--b0);
+  border-top: 2px solid var(--b0);
+  border-radius: var(--r);
+  padding: 18px;
+  transition: border-color var(--dur-mid) var(--ease-ui), box-shadow var(--dur-mid) var(--ease-ui), transform var(--dur-mid) var(--ease-ui);
+  animation: cardRise 0.4s var(--ease-ui) both;
+}
+.cards-row .card:nth-child(1) { animation-delay: 0.05s; }
+.cards-row .card:nth-child(2) { animation-delay: 0.1s; }
+.cards-row .card:nth-child(3) { animation-delay: 0.15s; }
+.cards-row .card:nth-child(4) { animation-delay: 0.2s; }
+.card:hover { transform: translateY(-2px); border-color: var(--b1); box-shadow: 0 6px 22px rgba(0,0,0,0.14); }
 .card-label { font-size: 9px; color: var(--t2); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; font-family: var(--font-display); font-weight: 500; }
 .card-value { font-family: var(--font-display); font-size: 2rem; font-weight: 800; line-height: 1.1; }
 .card-foot { font-size: 10px; color: var(--t2); margin-top: 6px; font-family: var(--font-display); }
-.chart-box { background: var(--s1); border: 1px solid var(--b0); border-radius: var(--r); padding: 18px; }
+.chart-box { background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--b0); border-radius: var(--r); padding: 18px; }
 .chart-box h3 { font-size: 10px; margin-bottom: 14px; font-weight: 600; font-family: var(--font-display); color: var(--t1); text-transform: uppercase; letter-spacing: 0.08em; }
 .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
-.arp-card { background: var(--s1); border: 1px solid var(--b0); border-radius: var(--r); padding: 18px; margin-bottom: 18px; }
+.arp-card { background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--b0); border-radius: var(--r); padding: 18px; margin-bottom: 18px; }
 .arp-card h3 { font-size: 10px; margin-bottom: 12px; font-weight: 600; font-family: var(--font-display); color: var(--t1); text-transform: uppercase; letter-spacing: 0.08em; }
 .arp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: 11px; font-family: var(--font-display); }
 .arp-item { color: var(--t2); }
 .arp-item span { color: var(--t0); font-weight: 500; font-family: var(--font-mono); }
-.arp-warn { background: rgba(201,84,77,0.08); border: 1px solid rgba(201,84,77,0.2); border-radius: 5px; padding: 8px 12px; margin-top: 8px; font-size: 10px; color: var(--danger); font-family: var(--font-display); }
+.arp-warn { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.22); border-radius: 5px; padding: 8px 12px; margin-top: 8px; font-size: 10px; color: var(--danger); font-family: var(--font-display); }
 .arp-placeholder { color: var(--t2); font-size: 11px; font-style: italic; font-family: var(--font-display); }
 .info-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 10px; margin-top: 14px; }
 .info-item { background: var(--s2); border: 1px solid var(--b0); border-radius: var(--r); padding: 12px 14px; }
 .info-item .ilabel { font-size: 9px; color: var(--t2); text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--font-display); }
 .info-item .ivalue { font-family: var(--font-display); font-size: 0.95rem; font-weight: 600; margin-top: 2px; }
-.alert-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid rgba(255,255,255,0.025); font-size: 11px; transition: background 0.1s; font-family: var(--font-display); }
-.alert-row:hover { background: rgba(255,255,255,0.015); }
+.alert-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid rgba(255,255,255,0.025); font-size: 11px; transition: background-color var(--dur-mid) var(--ease-ui); font-family: var(--font-display); }
+.alert-row:hover { background: rgba(255,255,255,0.04); }
+
+.unacked-highlight {
+  border-left: 3px solid var(--danger) !important;
+  animation: unackedPulse 2.8s ease-in-out infinite;
+}
+@keyframes unackedPulse {
+  0%, 100% { background: rgba(248,113,113,0.02); }
+  50% { background: rgba(248,113,113,0.06); }
+}
 .alert-title { flex: 1; color: var(--t0); }
 .alert-ts { color: var(--t2); font-size: 10px; min-width: 120px; text-align: right; font-family: var(--font-mono); }
-.unacked-highlight { border-left: 2px solid var(--danger) !important; }
 .filter-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
 .filter-btn { background: var(--s2); border: 1px solid var(--b0); color: var(--t1); padding: 5px 12px; border-radius: 5px; font-size: 10px; font-family: var(--font-display); cursor: pointer; transition: all 0.15s; }
 .filter-btn:hover { border-color: var(--b1); color: var(--t0); }
@@ -559,24 +785,76 @@ tr { transition: background 0.1s; }
 /* ══════════════════════════════════════
    COUNT-UP NUMBER ANIMATION
    ══════════════════════════════════════ */
-.count-up { transition: all 0.3s; }
+.count-up { transition: color var(--dur-mid) var(--ease-ui), opacity var(--dur-mid) var(--ease-ui); }
+
+/* ══════════════════════════════════════
+   MOBILE NAV
+   ══════════════════════════════════════ */
+.nav-hamburger {
+  display: none;
+  width: 40px; height: 40px;
+  align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: var(--s2);
+  border: 1px solid var(--b0);
+  border-radius: var(--r);
+  color: var(--t0);
+  cursor: pointer;
+  margin-right: 12px;
+  transition: background-color var(--dur-fast) var(--ease-ui), border-color var(--dur-fast) var(--ease-ui), transform var(--dur-fast) var(--ease-ui);
+}
+.nav-hamburger:hover { background: var(--s3); border-color: var(--b1); }
+.nav-hamburger svg { width: 20px; height: 20px; }
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 95;
+  opacity: 0;
+  transition: opacity var(--dur-mid) var(--ease-ui);
+  pointer-events: none;
+}
+.sidebar-backdrop.show {
+  display: block;
+  opacity: 1;
+  pointer-events: auto;
+}
 
 /* ══════════════════════════════════════
    RESPONSIVE
    ══════════════════════════════════════ */
 @media (max-width: 768px) {
+  :root { --sidebar-w: 0px; }
+  .nav-hamburger { display: flex; }
+  .sidebar {
+    width: min(288px, 86vw);
+    transform: translateX(-100%);
+    box-shadow: none;
+    z-index: 110;
+  }
+  body.sidebar-open .sidebar {
+    transform: translateX(0);
+    box-shadow: 12px 0 40px rgba(0,0,0,0.4);
+  }
+  .topbar { left: 0; padding-left: 12px; padding-right: 12px; }
+  .main { margin-left: 0; padding: 16px 14px; }
+  .topbar-breadcrumb { min-width: 0; flex: 1; }
+  .topbar-right .last-scan-txt { display: none; }
+  .topbar-right { gap: 8px; }
   .metric-row { grid-template-columns: 1fr 1fr; }
   .grid-2, .charts-grid, .chart-grid { grid-template-columns: 1fr; }
   .cards-row { grid-template-columns: 1fr 1fr; }
+  .stats-row { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 480px) {
-  .metric-row, .cards-row { grid-template-columns: 1fr; }
+  .metric-row, .cards-row, .stats-row { grid-template-columns: 1fr; }
 }
 </style>
 </head>
 <body>
 
-
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()" aria-hidden="true"></div>
 
 <!-- ════════ SIDEBAR ════════ -->
 <aside class="sidebar">
@@ -585,7 +863,7 @@ tr { transition: background 0.1s; }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
     </div>
     <div>
-      <div class="logo-text">GARUDA<span class="logo-ver">v3</span></div>
+      <div class="logo-text">GARUDA<span class="logo-ver">v4</span></div>
     </div>
     <div class="logo-pulse"></div>
   </div>
@@ -616,6 +894,12 @@ tr { transition: background 0.1s; }
       <span class="nav-badge" id="alertsBadge" style="display:none">0</span>
     </div>
 
+    <div class="nav-group-label">System</div>
+    <div class="nav-item" data-page="settings" onclick="switchPage('settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Settings
+    </div>
+
   </nav>
 
   <div class="sidebar-footer">GARUDA DEFENSE SYSTEM &nbsp;·&nbsp; <span id="footer-ts">—</span></div>
@@ -623,10 +907,15 @@ tr { transition: background 0.1s; }
 
 <!-- ════════ TOPBAR ════════ -->
 <header class="topbar">
-  <div class="topbar-breadcrumb">
-    <span class="parent">GARUDA</span>
-    <span class="sep">›</span>
-    <span class="current" id="pageTitle">Overview</span>
+  <div class="topbar-left">
+    <button type="button" class="nav-hamburger" id="navHamburger" onclick="toggleSidebar()" aria-label="Open navigation menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="topbar-breadcrumb">
+      <span class="parent">GARUDA</span>
+      <span class="sep">›</span>
+      <span class="current" id="pageTitle">Overview</span>
+    </div>
   </div>
   <div class="topbar-right">
     <div class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
@@ -689,10 +978,38 @@ tr { transition: background 0.1s; }
         <div class="panel-title">Recent Threat Indicators</div>
         <div id="ov-threats">
           <div class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <svg class="empty-illu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <h3>All clear</h3>
             <p>No threats detected yet. Run a scan to analyze your network.</p>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div class="traffic-panel" id="trafficPanel">
+      <div class="panel-title">Live traffic</div>
+      <p class="traffic-hint">Samples every 5 seconds · hover charts for exact values</p>
+      <div class="time-range-btns" role="group" aria-label="Chart time range">
+        <button type="button" class="active" onclick="setTimeRange('1H',this)">1H</button>
+        <button type="button" onclick="setTimeRange('6H',this)">6H</button>
+        <button type="button" onclick="setTimeRange('24H',this)">24H</button>
+        <button type="button" onclick="setTimeRange('7D',this)">7D</button>
+      </div>
+      <div class="chart-grid">
+        <div>
+          <div class="panel-title" style="margin-bottom:10px;font-size:9px">Bytes</div>
+          <div class="chart-wrap"><canvas id="bytesChart" aria-label="Bytes sent and received"></canvas></div>
+        </div>
+        <div>
+          <div class="panel-title" style="margin-bottom:10px;font-size:9px">Packets</div>
+          <div class="chart-wrap"><canvas id="packetsChart" aria-label="Packets sent and received"></canvas></div>
+        </div>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-label">Bytes sent</div><div class="stat-value" id="tf-bs" style="font-size:16px;color:var(--accent)">—</div></div>
+        <div class="stat-card"><div class="stat-label">Bytes received</div><div class="stat-value" id="tf-br" style="font-size:16px;color:var(--success)">—</div></div>
+        <div class="stat-card"><div class="stat-label">Total packets</div><div class="stat-value" id="tf-tp" style="font-size:16px">—</div></div>
+        <div class="stat-card"><div class="stat-label">Error rate</div><div class="stat-value" id="tf-er" style="font-size:16px;color:var(--danger)">—</div></div>
       </div>
     </div>
 
@@ -729,7 +1046,7 @@ tr { transition: background 0.1s; }
           <th onclick="sortTable(6)">Detection</th>
         </tr></thead>
         <tbody id="deviceTableBody">
-          <tr><td colspan="7"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><p>Run a network scan to discover devices</p></div></td></tr>
+          <tr><td colspan="7"><div class="empty-state"><svg class="empty-illu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><h3>No scan data</h3><p>Run a network scan to discover devices on your LAN. Use <strong>Run Scan</strong> in the header or open Network Scan.</p></div></td></tr>
         </tbody>
       </table>
     </div>
@@ -769,9 +1086,67 @@ tr { transition: background 0.1s; }
     <div id="alerts-content"><div class="loading"><div class="spinner"></div> Loading…</div></div>
   </div>
 
+  <!-- ══ SETTINGS ══ -->
+  <div class="page" id="page-settings">
+    <h2 class="section-title" style="margin-bottom:6px">System Settings</h2>
+    <p class="section-sub">Configure performance and sensitivity</p>
+    
+    <div class="panel" style="margin-top:20px; max-width: 500px;">
+      <div class="panel-title">Scanner Sensitivity</div>
+      <div style="display:flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+        <div>
+          <div style="font-weight: 600; font-size: 14px;">High Sensitivity Mode</div>
+          <div style="font-size: 11px; color: var(--t1); margin-top: 2px;">Reduces polling interval to 2 seconds</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="sensitivityToggle" onchange="toggleSensitivity()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div id="sensitivityWarning" class="network-banner" style="margin-top: 15px; display: none; background: var(--warn-dim); border-color: var(--warn); color: var(--warn);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px; height:14px; margin-right:8px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <strong>Warning:</strong> Higher CPU and network usage.
+      </div>
+    </div>
+  </div>
+
 </main>
 
+<div id="copyToast" class="toast-copy" role="status" aria-live="polite"></div>
+
 <script>
+// shared utils
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function escAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function showToast(msg, type='info', duration=3500) {
+  let c = document.getElementById('garuda-toasts');
+  if (!c) {
+    c = document.createElement('div');
+    c.id = 'garuda-toasts';
+    c.style.cssText = 'position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:10px;z-index:99999;pointer-events:none;align-items:flex-end;';
+    document.body.appendChild(c);
+  }
+  const t = document.createElement('div');
+  const s = getComputedStyle(document.documentElement);
+  const accent = s.getPropertyValue('--accent').trim() || '#3b82f6';
+  const success = s.getPropertyValue('--success').trim() || '#10b981';
+  const warn = s.getPropertyValue('--warn').trim() || '#f59e0b';
+  const danger = s.getPropertyValue('--danger').trim() || '#ef4444';
+  const bg = type === 'error' ? danger : type === 'warn' ? warn : type === 'success' ? success : accent;
+  t.style.cssText = `background:rgba(15,20,28,0.95);color:#fff;border-left:4px solid ${bg};padding:12px 16px;border-radius:6px;font-family:system-ui,sans-serif;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,0.3);opacity:0;transform:translateY(20px);transition:opacity 0.3s ease, transform 0.3s ease;pointer-events:auto;max-width:300px;word-wrap:break-word;`;
+  t.innerHTML = escHtml(msg);
+  c.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateY(0)'; });
+  setTimeout(() => {
+    t.style.opacity = '0'; t.style.transform = 'translateY(20px)';
+    setTimeout(() => t.remove(), 300);
+  }, duration);
+}
+
 /* ═══════════════════════════════════════════════════
    GARUDA UNIFIED CLIENT — Combined index + history
    ═══════════════════════════════════════════════════ */
@@ -801,6 +1176,7 @@ let expandedScanRow = null, trafficHours = 24;
 let chartInstances = {};
 // Theme & caching
 let isDarkTheme = localStorage.getItem('garudaTheme') !== 'light';
+let pollIntervalSec = 5;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 // ══════════════════════════════════════════
@@ -857,16 +1233,97 @@ function getDeviceDisplayName(d) {
   return 'Unknown Device';
 }
 function loadingHTML() { return '<div class="loading"><div class="spinner"></div> Loading…</div>'; }
+function dashboardSkeletonHTML() {
+  return `<div class="skeleton-dash" aria-busy="true">
+    <div class="skeleton sk-card"></div><div class="skeleton sk-card"></div><div class="skeleton sk-card"></div><div class="skeleton sk-card"></div>
+    <div class="skeleton sk-chart" style="grid-column:1/-1"></div>
+    <div style="grid-column:1/-1;display:grid;gap:8px"><div class="skeleton sk-line" style="width:55%"></div><div class="skeleton sk-line" style="width:38%"></div></div>
+  </div>`;
+}
 function errorHTML(msg, fn) {
   const id='r'+Math.random().toString(36).slice(2,7);
   setTimeout(()=>{const b=document.getElementById(id);if(b)b.onclick=fn;},0);
   return `<div class="error-state">⚠ ${msg}<p>Backend offline — run <code>python garuda_backend.py</code></p><br><button class="btn" id="${id}">Retry</button></div>`;
 }
-function emptyHTML(msg) { return `<div class="empty-state"><p>${msg||'No data yet.'}</p></div>`; }
+let apiToastTimer = null;
+function showApiToast(msg) {
+  let el = document.getElementById('garuda-api-toast');
+  if(!el) {
+    el = document.createElement('div');
+    el.id = 'garuda-api-toast';
+    el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:12px 18px;background:#0f172a;color:#fecaca;border-radius:10px;font:14px sans-serif;z-index:100000;max-width:90%;box-shadow:0 4px 24px rgba(0,0,0,.4);opacity:0;transition:opacity .25s, transform .25s;transform:translateX(-50%) translateY(20px);';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg || 'Request failed';
+  el.style.opacity = '1';
+  el.style.transform = 'translateX(-50%) translateY(0)';
+  clearTimeout(apiToastTimer);
+  apiToastTimer = setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(-50%) translateY(20px)';
+  }, 4500);
+}
+
+function emptyHTML(msg) {
+  const illu = '<svg class="empty-illu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6v6H9z"/></svg>';
+  return `<div class="empty-state">${illu}<h3>Nothing here yet</h3><p>${msg||'No data yet.'}</p></div>`;
+}
+let copyToastTimer = null;
+function showCopyToast(text) {
+  const el = document.getElementById('copyToast');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(copyToastTimer);
+  copyToastTimer = setTimeout(() => { el.classList.remove('show'); }, 1800);
+}
+function bindDeviceRowCopy(tbody) {
+  if (!tbody) return;
+  tbody.querySelectorAll('.copy-cell[data-copy]').forEach(cell => {
+    cell.addEventListener('click', e => {
+      e.stopPropagation();
+      const v = cell.getAttribute('data-copy');
+      if (!v || v === '—') return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(v).then(() => showCopyToast('Copied to clipboard')).catch(() => showCopyToast('Copy failed'));
+      } else {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = v;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          showCopyToast('Copied to clipboard');
+        } catch { showCopyToast('Copy failed'); }
+      }
+    });
+  });
+}
+function toggleSidebar() {
+  document.body.classList.toggle('sidebar-open');
+  const bd = document.getElementById('sidebarBackdrop');
+  if (bd) bd.classList.toggle('show', document.body.classList.contains('sidebar-open'));
+}
+function closeSidebar() {
+  document.body.classList.remove('sidebar-open');
+  const bd = document.getElementById('sidebarBackdrop');
+  if (bd) bd.classList.remove('show');
+}
 async function apiFetch(path) {
   const res = await fetch(API+path);
-  if(!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  let body = {};
+  try { body = await res.json(); } catch (_) {}
+  if (body && typeof body.success === 'boolean') {
+    if (!body.success) {
+      const err = body.error || ('HTTP ' + res.status);
+      showToast(err, 'error');
+      throw new Error(err);
+    }
+    return body.data;
+  }
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return body;
 }
 function destroyChart(k) { if(chartInstances[k]){chartInstances[k].destroy();delete chartInstances[k];} }
 
@@ -899,10 +1356,11 @@ const PAGE_TITLES = {
   overview:'Overview', scan:'Network Scan', topology:'Topology',
   threats:'Threat Analysis', ports:'Port Scanner', 'live-traffic':'Live Traffic',
   dashboard:'Dashboard', 'scan-history':'Scan History', alerts:'Alerts',
-  'known-devices':'Known Devices', settings:'Settings'
+  'known-devices':'Known Devices', settings:'Settings', settings:'Settings'
 };
 
 function switchPage(page) {
+  closeSidebar();
   if(page===currentPage) return;
   currentPage = page;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -926,13 +1384,23 @@ function loadPageData(page) {
 function checkHealth() {
   fetch(`${API}/api/health`)
     .then(r=>r.json())
-    .then(data => {
-      setOnline(true);
-      // Auto-scan on first connection if no scan data exists
-      if (!scanData && !localStorage.getItem('garudaAutoScanDone')) {
-        localStorage.setItem('garudaAutoScanDone', 'true');
-        setTimeout(autoScan, 2000); // Give UI time to load
-      }
+    .then(body => {
+      const data = (body && body.data !== undefined) ? body.data : body;
+      const ok = (body && body.success === true) || (data && data.status === 'OPERATIONAL');
+      if (ok) {
+        setOnline(true);
+        if (data && data.ui_poll_interval) {
+          const newInt = localStorage.getItem('garudaSensitivity') === 'high' ? 2 : data.ui_poll_interval;
+          if (newInt !== pollIntervalSec) {
+            pollIntervalSec = newInt;
+            startTrafficPolling();
+          }
+        }
+        if (!scanData && !localStorage.getItem('garudaAutoScanDone')) {
+          localStorage.setItem('garudaAutoScanDone', 'true');
+          setTimeout(autoScan, 2000);
+        }
+      } else setOnline(false);
     })
     .catch(()=>setOnline(false));
 }
@@ -940,9 +1408,13 @@ function setOnline(on) {
   document.getElementById('sDot').className='status-dot '+(on?'on':'off');
   document.getElementById('sStat').textContent=on?'Connected':'Offline';
   document.getElementById('offBar').classList.toggle('show',!on);
-  document.getElementById('cfg-api').textContent=API;
-  document.getElementById('cfg-status').textContent=on?'Connected':'Offline';
-  document.getElementById('cfg-status').style.color=on?'var(--success)':'var(--danger)';
+  const cfgApi = document.getElementById('cfg-api');
+  if(cfgApi) cfgApi.textContent=API;
+  const cfgStatus = document.getElementById('cfg-status');
+  if(cfgStatus) {
+    cfgStatus.textContent=on?'Connected':'Offline';
+    cfgStatus.style.color=on?'var(--success)':'var(--danger)';
+  }
   
   // Load initial network data immediately when connected
   if (on) {
@@ -986,13 +1458,14 @@ async function loadInitialData() {
     // Load basic network info immediately
     const netResponse = await fetch(`${API}/api/scan/connected`);
     if (netResponse.ok) {
-      const netData = await netResponse.json();
+      const rawNet = await netResponse.json();
+      const netData = (rawNet && rawNet.data !== undefined) ? rawNet.data : rawNet;
       const net = netData.connected_network || {};
       
       // Update network info immediately
       document.getElementById('ov-ssid').textContent = net.ssid || '—';
       document.getElementById('ov-enc').textContent = net.encryption || '—';
-      document.getElementById('ov-gw').textContent = net.gateway || netData.gateway || '—';
+      document.getElementById('ov-gw').textContent = netData.gateway || '—';
       document.getElementById('ov-sig').textContent = net.signal || '—';
       document.getElementById('ov-ch').textContent = net.channel || '—';
       
@@ -1024,8 +1497,9 @@ async function loadInitialData() {
     // Load traffic data immediately
     const trafficResponse = await fetch(`${API}/api/traffic/live`);
     if (trafficResponse.ok) {
-      const trafficData = await trafficResponse.json();
-      renderCharts(); // Initialize charts with current data
+      const rawT = await trafficResponse.json();
+      const trafficData = (rawT && rawT.data !== undefined) ? rawT.data : rawT;
+      updateTrafficLive(trafficData);
     }
   } catch (error) {
     console.log('[INITIAL-DATA] Failed to load:', error);
@@ -1050,7 +1524,7 @@ function startScan() {
   // Show loading indicator
   const devTable=document.getElementById('deviceTableBody');
   const origContent=devTable.innerHTML;
-  devTable.innerHTML='<tr><td colspan="7"><div class="loading"><div class="spinner"></div> Network scan in progress…</div></td></tr>';
+  devTable.innerHTML='<tr><td colspan="7"><div class="loading"><div class="spinner spinner--scan"></div> Network scan in progress…</div></td></tr>';
   
   // Direct call to fetch scan data without progress animation
   fetchScanData().catch(e => {
@@ -1059,8 +1533,12 @@ function startScan() {
 }
 function fetchScanData() {
   return fetch(`${API}/api/scan/full`,{method:'POST',headers:{'Content-Type':'application/json'},mode:'cors'})
-    .then(r=>r.json()).then(d=>{scanData=d;lastScanTs=Date.now();updateAll(d);finishScan(); return d;})
-    .catch(e=>{console.error(e);finishScan(); throw e;});
+    .then(r=>r.json()).then(body=>{
+      if(body&&body.success===false) throw new Error(body.error||'Scan failed');
+      const d=(body&&body.data!==undefined)?body.data:body;
+      scanData=d;lastScanTs=Date.now();updateAll(d);finishScan(); return d;
+    })
+    .catch(e=>{console.error(e);showToast(e.message||'Scan failed');finishScan(); throw e;});
 }
 function finishScan() {
   const scanBtn=document.getElementById('scanBtn');
@@ -1123,7 +1601,7 @@ function updateAll(data) {
   if(pred.attack_predictions&&pred.attack_predictions.length>0) {
     threatsDiv.innerHTML=pred.attack_predictions.slice(0,6).map(a=>{
       const dc={Critical:'var(--critical)',High:'var(--danger)',Medium:'var(--warn)',Low:'var(--success)'}[a.severity]||'var(--t2)';
-      return `<div class="threat-item"><div class="threat-dot" style="background:${dc};box-shadow:0 0 4px ${dc}40"></div><span style="flex:1;font-family:var(--font-display)">${a.type}</span><span class="sev-${(a.severity||'').toLowerCase()}">${a.severity}</span></div>`;
+      return `<div class="threat-item"><div class="threat-dot" style="background:${dc};box-shadow:0 0 4px ${dc}40"></div><span style="flex:1;font-family:var(--font-display)">${escAttr(a.type)}</span><span class="sev-${(a.severity||'').toLowerCase()}" title="${escAttr(a.severity||'')}: ${escAttr(a.type||'')}">${escAttr(a.severity)}</span></div>`;
     }).join('');
   } else {
     threatsDiv.innerHTML='<div class="threat-item"><div class="threat-dot" style="background:var(--success)"></div><span style="font-family:var(--font-display)">No significant threats detected</span></div>';
@@ -1148,15 +1626,22 @@ function updateDeviceTable(data) {
   const devices=data.connected_devices||[];
   const portData=data.port_scan||{};
   const tbody=document.getElementById('deviceTableBody');
-  if(devices.length===0){tbody.innerHTML='<tr><td colspan="7" style="padding:24px;color:var(--t2);text-align:center;font-family:var(--font-display)">No devices discovered</td></tr>';return;}
-  tbody.innerHTML=devices.map(d=>{
+  if(devices.length===0){
+    tbody.innerHTML='<tr><td colspan="7"><div class="empty-state"><svg class="empty-illu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><h3>No devices yet</h3><p>Run a full network scan from the toolbar or the Network Scan page to populate this table.</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML=devices.map((d,i)=>{
     const ports=portData[d.ip]||[];
     const portStr=ports.length>0?ports.map(p=>`<span class="port-tag${RISKY_PORTS.has(p)?' risky':''}">${p}</span>`).join(''):'<span style="color:var(--t2)">—</span>';
     const sC=d.status==='ACTIVE'?'text-success':'text-warn';
     const vendorOk=d.vendor&&d.vendor!=='Unknown Vendor'&&d.vendor!=='Randomized MAC'&&d.vendor!=='Unknown';
-    const vDisplay=vendorOk?d.vendor:(getDeviceDisplayName(d)!=='—'?`<span style="color:var(--t1)">${getDeviceDisplayName(d)}</span>`:'<span style="color:var(--t2)">—</span>');
-    return `<tr style="animation:itemIn 0.3s ease both"><td class="mono text-accent">${d.ip}</td><td style="font-family:var(--font-display)">${getDeviceDisplayName(d)}</td><td class="mono">${d.mac||'—'}</td><td>${vDisplay}</td><td class="${sC}" style="font-family:var(--font-display)">${d.status||'—'}</td><td>${portStr}</td><td style="font-family:var(--font-display);font-size:10px">${d.detection_method||'—'}</td></tr>`;
+    const vDisplay=vendorOk?('<span style="font-family:var(--font-display)">'+escAttr(d.vendor)+'</span>'):(getDeviceDisplayName(d)!=='—'?'<span style="color:var(--t1)">'+escAttr(getDeviceDisplayName(d))+'</span>':'<span style="color:var(--t2)">—</span>');
+    const ip = d.ip||'';
+    const mac = d.mac||'';
+    const delay = Math.min(i,14)*0.035;
+    return `<tr class="device-row" style="--dr:${delay}s"><td class="mono text-accent copy-cell" data-copy="${escAttr(ip)}" data-hint="Copy IP">${escAttr(ip)||'—'}</td><td style="font-family:var(--font-display)">${escAttr(getDeviceDisplayName(d))}</td><td class="mono copy-cell" data-copy="${escAttr(mac)}" data-hint="Copy MAC">${escAttr(mac)||'—'}</td><td>${vDisplay}</td><td class="${sC}" style="font-family:var(--font-display)">${escAttr(d.status||'—')}</td><td>${portStr}</td><td style="font-family:var(--font-display);font-size:10px">${escAttr(d.detection_method||'—')}</td></tr>`;
   }).join('');
+  bindDeviceRowCopy(tbody);
   const active=devices.filter(d=>d.status==='ACTIVE').length;
   const arpOnly=devices.filter(d=>d.detection_method==='ARP_ONLY').length;
   const unknown=devices.filter(d=>!d.vendor||d.vendor==='Unknown'||d.vendor==='Unknown Vendor').length;
@@ -1226,69 +1711,148 @@ function updateThreatAnalysis(pred) {
   document.getElementById('riskMeta').textContent=pred.risk_label?`Overall: ${pred.risk_label} — Score: ${pred.risk_score||0}/100`:'';
   const tbody=document.getElementById('attackTableBody');
   if(pred.attack_predictions&&pred.attack_predictions.length>0) {
-    tbody.innerHTML=pred.attack_predictions.map(a=>`<tr><td style="font-family:var(--font-display)">${a.type}</td><td class="mono">${a.probability}%</td><td class="sev-${(a.severity||'').toLowerCase()}">${a.severity}</td><td style="font-family:var(--font-display)">${a.affected_devices||'—'}</td><td style="font-size:10px;color:var(--t1);font-family:var(--font-display)">${a.description||'—'}</td></tr>`).join('');
+    tbody.innerHTML=pred.attack_predictions.map(a=>`<tr><td style="font-family:var(--font-display)">${escHtml(a.type)}</td><td class="mono">${escHtml(a.probability)}%</td><td class="sev-${(a.severity||'').toLowerCase()}">${escHtml(a.severity)}</td><td style="font-family:var(--font-display)">${escHtml(a.affected_devices||'—')}</td><td style="font-size:10px;color:var(--t1);font-family:var(--font-display)">${escHtml(a.description||'—')}</td></tr>`).join('');
   }
 }
 
 // ══════════════════════════════════════════
 //  TRAFFIC (LIVE)
 // ══════════════════════════════════════════
-function updateTrafficLive(t) {
+function updateTrafficLive(payload) {
+  if (!payload) return;
+  const t = payload.current ? payload.current : payload;
   const formatBytes = (b) => {
     if(b==null || b===undefined) return '0 B';
-    const bytes = typeof b === 'string' ? parseInt(b) : b;
+    const bytes = typeof b === 'string' ? parseInt(b,10) : b;
     if(bytes>=1073741824) return (bytes/1073741824).toFixed(2)+' GB';
     if(bytes>=1048576) return (bytes/1048576).toFixed(2)+' MB';
     if(bytes>=1024) return (bytes/1024).toFixed(2)+' KB';
     return bytes+' B';
   };
-  // Try multiple field names that API might use
-  const bs = t.bytes_sent_raw || t.bytes_sent || t.sent || 0;
-  const br = t.bytes_recv_raw || t.bytes_received || t.received || 0;
-  document.getElementById('tf-bs').textContent=formatBytes(bs);
-  document.getElementById('tf-br').textContent=formatBytes(br);
-  const ps = t.packets_sent_raw || t.packets_sent || 0;
-  const pr = t.packets_recv_raw || t.packets_received || 0;
+  const bs = t.bytes_sent_raw ?? t.bytes_sent ?? t.sent ?? 0;
+  const br = t.bytes_recv_raw ?? t.bytes_received ?? t.received ?? 0;
+  const elBs = document.getElementById('tf-bs');
+  const elBr = document.getElementById('tf-br');
+  const elTp = document.getElementById('tf-tp');
+  const elEr = document.getElementById('tf-er');
+  if (elBs) elBs.textContent = formatBytes(bs);
+  if (elBr) elBr.textContent = formatBytes(br);
+  const ps = t.packets_sent_raw ?? t.packets_sent ?? 0;
+  const pr = t.packets_recv_raw ?? t.packets_received ?? 0;
   const pkt=(ps||0)+(pr||0);
-  document.getElementById('tf-tp').textContent=pkt>0?pkt.toLocaleString():'0';
+  if (elTp) elTp.textContent = pkt>0 ? pkt.toLocaleString() : '0';
   const err=(t.errin||0)+(t.errout||0);
-  document.getElementById('tf-er').textContent=pkt>0?((err/pkt)*100).toFixed(3)+'%':'0%';
-  const now=new Date().toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'});
+  if (elEr) elEr.textContent = pkt>0 ? ((err/pkt)*100).toFixed(3)+'%' : '0%';
+  const now=new Date().toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const nBs = Number(bs)||0, nBr = Number(br)||0, nPs = Number(ps)||0, nPr = Number(pr)||0;
   trafficHistory.labels.push(now);
-  trafficHistory.bytesSent.push(parseFloat(bs)||0);
-  trafficHistory.bytesRecv.push(parseFloat(br)||0);
-  trafficHistory.pktSent.push(parseFloat(ps)||0);
-  trafficHistory.pktRecv.push(parseFloat(pr)||0);
+  trafficHistory.bytesSent.push(nBs);
+  trafficHistory.bytesRecv.push(nBr);
+  trafficHistory.pktSent.push(nPs);
+  trafficHistory.pktRecv.push(nPr);
   if(trafficHistory.labels.length>MAX_TRAFFIC_POINTS) Object.values(trafficHistory).forEach(a=>{if(Array.isArray(a))a.shift();});
   renderCharts();
 }
 function renderCharts() {
-  const mp=TRAFFIC_RANGE_POINTS[trafficRange]||20;
-  const labels=trafficHistory.labels.slice(-mp);
-  const fB=v=>{if(v>=1073741824)return(v/1073741824).toFixed(1)+' GB';if(v>=1048576)return(v/1048576).toFixed(1)+' MB';if(v>=1024)return(v/1024).toFixed(1)+' KB';return v+' B';};
-  const base={responsive:true,maintainAspectRatio:false,animation:{duration:300},plugins:{legend:{display:true,position:'bottom',labels:{color:'var(--t1)',font:{size:10,family:'Inter'},boxWidth:10}}},scales:{x:{ticks:{color:'var(--t2)',font:{size:9,family:'JetBrains Mono'}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'var(--t2)',font:{size:9,family:'JetBrains Mono'},maxTicksLimit:5},grid:{color:'rgba(255,255,255,0.04)'}}}};
-  const bOpts=JSON.parse(JSON.stringify(base));
-  bOpts.plugins.tooltip={callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fB(ctx.raw)}`}};
-  bOpts.scales.y.ticks.callback=function(v){return fB(v);};
-  bOpts.interaction={intersect:false,mode:'index'};
-  const ctx1Elem=document.getElementById('bytesChart');
-  if(!ctx1Elem) { console.warn('bytesChart canvas not found'); return; }
-  ctx1Elem.style.display='block'; ctx1Elem.style.height='200px'; ctx1Elem.style.width='100%';
-  const ctx1=ctx1Elem.getContext('2d');
-  try { if(bytesChart) bytesChart.destroy(); } catch(e) {}
-  try { bytesChart=new Chart(ctx1,{type:'line',data:{labels,datasets:[
-    {label:'Sent',data:trafficHistory.bytesSent.slice(-mp),borderColor:'var(--accent)',backgroundColor:'rgba(74,144,164,0.1)',fill:true,tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5},
-    {label:'Received',data:trafficHistory.bytesRecv.slice(-mp),borderColor:'var(--success)',backgroundColor:'rgba(92,184,92,0.1)',fill:true,tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5}
-  ]},options:bOpts}); } catch(err) { console.error('Bytes chart error:', err); return; }
-  const ctx2Elem=document.getElementById('packetsChart');
-  if(!ctx2Elem) { console.warn('packetsChart canvas not found'); return; }
-  ctx2Elem.style.display='block'; ctx2Elem.style.height='200px'; ctx2Elem.style.width='100%';
-  const ctx2=ctx2Elem.getContext('2d');
-  try { if(packetsChart) packetsChart.destroy(); } catch(e) {}
-  try { packetsChart=new Chart(ctx2,{type:'line',data:{labels,datasets:[
-    {label:'Sent',data:trafficHistory.pktSent.slice(-mp),borderColor:'var(--warn)',backgroundColor:'transparent',tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5},
-    {label:'Received',data:trafficHistory.pktRecv.slice(-mp),borderColor:'var(--purple)',backgroundColor:'transparent',tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5}
-  ]},options:base}); } catch(err) { console.error('Packets chart error:', err); return; }
+  const mp = TRAFFIC_RANGE_POINTS[trafficRange] || 20;
+  const labels = trafficHistory.labels.slice(-mp);
+  const dataBs = trafficHistory.bytesSent.slice(-mp);
+  const dataBr = trafficHistory.bytesRecv.slice(-mp);
+  const dataPs = trafficHistory.pktSent.slice(-mp);
+  const dataPr = trafficHistory.pktRecv.slice(-mp);
+  const fB = v => {
+    const n = Number(v) || 0;
+    if (n >= 1073741824) return (n / 1073741824).toFixed(1) + ' GB';
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+    if (n >= 1024) return (n / 1024).toFixed(1) + ' KB';
+    return n + ' B';
+  };
+  const anim = { duration: 420 };
+  const scales = {
+    x: { ticks: { color: '#64748b', font: { size: 9, family: 'JetBrains Mono' } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+    y: { ticks: { color: '#64748b', font: { size: 9, family: 'JetBrains Mono' }, maxTicksLimit: 6 }, grid: { color: 'rgba(255,255,255,0.04)' } }
+  };
+  const legend = { display: true, position: 'bottom', labels: { color: '#94a3b8', font: { size: 10, family: 'Inter' }, boxWidth: 10 } };
+  const ctx1Elem = document.getElementById('bytesChart');
+  const ctx2Elem = document.getElementById('packetsChart');
+  if (!ctx1Elem || !ctx2Elem) return;
+  if (labels.length === 0) return;
+  ctx1Elem.style.display = 'block';
+  ctx1Elem.style.height = '200px';
+  ctx1Elem.style.width = '100%';
+  ctx2Elem.style.display = 'block';
+  ctx2Elem.style.height = '200px';
+  ctx2Elem.style.width = '100%';
+
+  const bytesOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: anim,
+    interaction: { intersect: false, mode: 'index' },
+    plugins: {
+      legend,
+      tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fB(ctx.raw)}` } }
+    },
+    scales: {
+      ...scales,
+      y: { ...scales.y, ticks: { ...scales.y.ticks, callback: v => fB(v) } }
+    }
+  };
+
+  const pktOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: anim,
+    interaction: { intersect: false, mode: 'index' },
+    plugins: { legend },
+    scales
+  };
+
+  try {
+    if (bytesChart && bytesChart.canvas === ctx1Elem) {
+      bytesChart.data.labels = labels;
+      bytesChart.data.datasets[0].data = dataBs;
+      bytesChart.data.datasets[1].data = dataBr;
+      bytesChart.options.animation = anim;
+      bytesChart.update();
+    } else {
+      if (bytesChart) { try { bytesChart.destroy(); } catch (e) {} }
+      bytesChart = new Chart(ctx1Elem.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Sent', data: dataBs, borderColor: '#22d3ee', backgroundColor: 'rgba(34,211,238,0.1)', fill: true, tension: 0.48, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 },
+            { label: 'Received', data: dataBr, borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.09)', fill: true, tension: 0.48, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 }
+          ]
+        },
+        options: bytesOpts
+      });
+    }
+  } catch (err) { console.error('Bytes chart error:', err); }
+
+  try {
+    if (packetsChart && packetsChart.canvas === ctx2Elem) {
+      packetsChart.data.labels = labels;
+      packetsChart.data.datasets[0].data = dataPs;
+      packetsChart.data.datasets[1].data = dataPr;
+      packetsChart.options.animation = anim;
+      packetsChart.update();
+    } else {
+      if (packetsChart) { try { packetsChart.destroy(); } catch (e) {} }
+      packetsChart = new Chart(ctx2Elem.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Sent', data: dataPs, borderColor: '#fbbf24', backgroundColor: 'transparent', tension: 0.48, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 },
+            { label: 'Received', data: dataPr, borderColor: '#a78bfa', backgroundColor: 'transparent', tension: 0.48, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 }
+          ]
+        },
+        options: pktOpts
+      });
+    }
+  } catch (err) { console.error('Packets chart error:', err); }
 }
 function setTimeRange(range,btn) {
   trafficRange=range;
@@ -1298,9 +1862,12 @@ function setTimeRange(range,btn) {
 }
 function startTrafficPolling() {
   if(trafficTimer) clearInterval(trafficTimer);
-  // Load initial data immediately
-  fetch(`${API}/api/traffic/live`).then(r=>r.json()).then(t=>updateTrafficLive(t)).catch(()=>{});
-  trafficTimer=setInterval(()=>fetch(`${API}/api/traffic/live`).then(r=>r.json()).then(t=>updateTrafficLive(t)).catch(()=>{}),5000);
+  const apply = (raw) => {
+    const b = raw && raw.data !== undefined ? raw.data : raw;
+    if (b) updateTrafficLive(b);
+  };
+  fetch(`${API}/api/traffic/live`).then(r=>r.json()).then(apply).catch(()=>{});
+  trafficTimer=setInterval(()=>fetch(`${API}/api/traffic/live`).then(r=>r.json()).then(apply).catch(()=>{}), pollIntervalSec * 1000);
 }
 
 // ══════════════════════════════════════════
@@ -1474,14 +2041,25 @@ async function updateAlertsBadge() {
 }
 async function loadArpStatus() {
   const el=document.getElementById('arp-status-card');if(!el)return;
-  try{const res=await fetch(API+'/api/arp/status');if(res.status===404){el.innerHTML='<p class="arp-placeholder">ARP monitoring: coming soon</p>';return;}if(!res.ok)throw new Error('HTTP '+res.status);const d=await res.json();const safe=!d.spoofing_detected;let h=`<div class="arp-row"><span class="badge ${safe?'badge-low':'badge-critical'}">${safe?'ARP: Secure':'ARP: THREAT DETECTED'}</span><span class="arp-item">Entries: <span>${d.total_entries??'—'}</span></span><span class="arp-item">Gateway MAC: <span>${d.gateway_mac||'—'}</span></span><span class="arp-item">Checked: <span>${fmtDate(d.last_checked)}</span></span></div>`;if(d.suspicious_ips&&d.suspicious_ips.length>0)h+=d.suspicious_ips.map(ip=>`<div class="arp-warn">⚠ Suspicious: ${ip}</div>`).join('');el.innerHTML=h;}catch{el.innerHTML='<p class="arp-placeholder">ARP monitoring: coming soon</p>';}
+  try{
+    const res=await fetch(API+'/api/arp/status');
+    if(res.status===404){el.innerHTML='<p class="arp-placeholder">ARP monitoring: coming soon</p>';return;}
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const raw=await res.json();
+    const d=(raw&&raw.data!==undefined)?raw.data:raw;
+    const safe=!d.spoofing_detected;
+    let h=`<div class="arp-row"><span class="badge ${safe?'badge-low':'badge-critical'}">${safe?'ARP: Secure':'ARP: THREAT DETECTED'}</span><span class="arp-item">Entries: <span>${d.total_entries??'—'}</span></span><span class="arp-item">Gateway MAC: <span>${escHtml(d.gateway_mac||'—')}</span></span><span class="arp-item">Checked: <span>${fmtDate(d.last_checked)}</span></span></div>`;
+    if(d.suspicious_ips&&d.suspicious_ips.length>0)h+=d.suspicious_ips.map(ip=>`<div class="arp-warn">⚠ Suspicious: ${escHtml(ip)}</div>`).join('');
+    el.innerHTML=h;
+  }catch{el.innerHTML='<p class="arp-placeholder">ARP monitoring: coming soon</p>';}
 }
 async function loadDashboard() {
-  const el=document.getElementById('dash-content');el.innerHTML=loadingHTML();
-  try{const data=await apiFetch('/api/dashboard');renderDashboard(data,el);loadArpStatus();updateAlertsBadge();
-  if(dashInterval)clearInterval(dashInterval);
-  dashInterval=setInterval(async()=>{if(currentPage!=='overview'){updateAlertsBadge();return;}try{const d=await apiFetch('/api/dashboard');renderDashboard(d,el);loadArpStatus();updateAlertsBadge();}catch{}},30000);}
-  catch(e){el.innerHTML=errorHTML(e.message,loadDashboard);}
+  const el=document.getElementById('dash-content');el.innerHTML=dashboardSkeletonHTML();
+  try{
+    const data=await apiFetch('/api/dashboard');renderDashboard(data,el);loadArpStatus();updateAlertsBadge();
+    if(dashInterval)clearInterval(dashInterval);
+    dashInterval=setInterval(async()=>{if(currentPage!=='overview'){updateAlertsBadge();return;}try{const d=await apiFetch('/api/dashboard');renderDashboard(d,el);loadArpStatus();updateAlertsBadge();}catch{}},30000);
+  }catch(e){showToast(e.message||'Dashboard failed');el.innerHTML=errorHTML(e.message,loadDashboard);}
 }
 function renderDashboard(data,el){
   const totalScans=data.scans_last_24h??data.total_scans??0;
@@ -1511,16 +2089,16 @@ function renderDashboard(data,el){
     const labels=riskHistory.map(r=>fmtDate(r.timestamp||r.scan_timestamp));
     const scores=riskHistory.map(r=>r.risk_score??0);
     destroyChart('riskTrend');
-    chartInstances['riskTrend']=new Chart(document.getElementById('riskTrendChart').getContext('2d'),{type:'line',data:{labels,datasets:[{label:'Risk Score',data:scores,borderColor:'var(--accent)',backgroundColor:'rgba(74,144,164,0.1)',fill:true,tension:.35,pointRadius:3,pointBackgroundColor:'var(--accent)',borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{min:0,max:100,grid:{color:'rgba(255,255,255,0.04)'}},x:{display:true,ticks:{maxTicksLimit:6,maxRotation:0},grid:{display:false}}}}});
+    chartInstances['riskTrend']=new Chart(document.getElementById('riskTrendChart').getContext('2d'),{type:'line',data:{labels,datasets:[{label:'Risk Score',data:scores,borderColor:'#22d3ee',backgroundColor:'rgba(34,211,238,0.1)',fill:true,tension:.42,pointRadius:3,pointBackgroundColor:'#22d3ee',borderWidth:2}]},options:{responsive:true,animation:{duration:500},plugins:{legend:{display:false}},scales:{y:{min:0,max:100,grid:{color:'rgba(255,255,255,0.04)'}},x:{display:true,ticks:{maxTicksLimit:6,maxRotation:0},grid:{display:false}}}}});
   }
   const ab=document.getElementById('dash-recent-alerts');
   if(recentAlerts.length===0){ab.innerHTML=emptyHTML('No recent alerts');}
-  else{ab.innerHTML=recentAlerts.slice(0,5).map(a=>`<div class="alert-row ${a.acknowledged?'':'unacked-highlight'}"><span class="badge ${riskClass(a.severity)}">${a.severity||'—'}</span><span class="alert-title">${a.title||a.alert_type||'—'}</span><span class="alert-ts">${fmtDate(a.timestamp)}</span>${!a.acknowledged?`<button class="btn btn-sm" onclick="ackAlert(${a.id},loadDashboard)">Ack</button>`:''}</div>`).join('');}
+  else{ab.innerHTML=recentAlerts.slice(0,5).map(a=>`<div class="alert-row ${a.acknowledged?'':'unacked-highlight'}"><span class="badge ${riskClass(a.severity)}" title="${escAttr([a.severity,a.alert_type||a.type,a.title].filter(Boolean).join(' · '))}">${escHtml(a.severity||'—')}</span><span class="alert-title">${escHtml(a.title||a.alert_type||'—')}</span><span class="alert-ts">${fmtDate(a.timestamp)}</span>${!a.acknowledged?`<button class="btn btn-sm" onclick="ackAlert(${a.id},loadDashboard)">Ack</button>`:''}</div>`).join('');}
   const sb=document.getElementById('dash-latest-scan');
   if(!latestScan||Object.keys(latestScan).length===0){sb.innerHTML=emptyHTML('No scans yet');}
   else{const fields=[['SSID',latestScan.ssid||'—'],['Encryption',latestScan.encryption||'—'],['Gateway',latestScan.gateway_ip||'—'],['Local IP',latestScan.local_ip||'—'],['Devices',latestScan.device_count??'—'],['Threat Level',latestScan.threat_level||'—']];sb.innerHTML=fields.map(([l,v])=>`<div class="info-item"><div class="ilabel">${l}</div><div class="ivalue">${v}</div></div>`).join('');}
 }
-async function ackAlert(id,cb){try{await fetch(API+'/api/alerts/acknowledge/'+id,{method:'POST'});if(cb)cb();}catch(e){console.error(e);}}
+async function ackAlert(id,cb){try{const res=await fetch(API+'/api/alerts/acknowledge/'+id,{method:'POST'});const b=await res.json().catch(()=>({}));if(!res.ok||b.success===false)throw new Error(b.error||'Acknowledge failed');if(cb)cb();}catch(e){showToast(e.message||'Ack failed');console.error(e);}}
 
 // ══════════════════════════════════════════
 //  HISTORY — SCAN HISTORY (paginated)
@@ -1668,8 +2246,12 @@ function getCache(key) {
   try { const item = localStorage.getItem('garuda_' + key); if(!item) return null; const {data, ts} = JSON.parse(item); if(Date.now() - ts > CACHE_DURATION) { localStorage.removeItem('garuda_' + key); return null; } return data; } catch(e) { return null; }
 }
 function updateCacheStatus() {
-  const keys = 0; for(let i=0;i<localStorage.length;i++) { if(localStorage.key(i).startsWith('garuda_')) keys++; }
-  document.getElementById('cacheStatus').textContent = keys + ' item' + (keys!==1?'s':'') + ' cached';
+  let keys = 0; 
+  try {
+    for(let i=0;i<localStorage.length;i++) { if(localStorage.key(i).startsWith('garuda_')) keys++; }
+    const el = document.getElementById('cacheStatus');
+    if(el) el.textContent = keys + ' item' + (keys!==1?'s':'') + ' cached';
+  } catch(e) {}
 }
 
 // ══════════════════════════════════════════
@@ -1680,11 +2262,13 @@ function toggleTheme() {
   localStorage.setItem('garudaTheme', isDarkTheme ? 'dark' : 'light');
   document.body.classList.toggle('light-theme');
   document.getElementById('themeToggle').classList.toggle('light');
-  document.getElementById('themeLabel').textContent = isDarkTheme ? 'Dark' : 'Light';
+  const tl = document.getElementById('themeLabel');
+  if (tl) tl.textContent = isDarkTheme ? 'Dark' : 'Light';
 }
 function initTheme() {
   if(!isDarkTheme) { document.body.classList.add('light-theme'); document.getElementById('themeToggle').classList.add('light'); }
-  document.getElementById('themeLabel').textContent = isDarkTheme ? 'Dark' : 'Light';
+  const tl = document.getElementById('themeLabel');
+  if (tl) tl.textContent = isDarkTheme ? 'Dark' : 'Light';
 }
 
 // ══════════════════════════════════════════
@@ -1741,7 +2325,7 @@ async function generateJSONReport() {
     ]);
     const report = {
       generated: new Date().toISOString(),
-      version: '3.1',
+      version: '4.0',
       dashboard: dash,
       scans: Array.isArray(scans) ? scans : (scans.scans || []),
       alerts: Array.isArray(alerts) ? alerts : (alerts.alerts || []),
@@ -1773,7 +2357,7 @@ async function generatePDFReport(){
     const ls=dash.latest_scan||{};const trend=dash.risk_trend||[];
     const now=new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
     let h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>GARUDA Report</title><style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');*{margin:0;padding:0;box-sizing:border-box}body{background:#0f1419;color:#f7f9fb;font-family:'Inter',sans-serif;font-size:12px;padding:30px}h1,h2,h3{font-family:'Inter',sans-serif}h1{font-size:22px;font-weight:700;margin-bottom:4px;letter-spacing:-0.01em}h2{font-size:13px;color:#4a90a4;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:6px;margin:20px 0 10px;text-transform:uppercase;letter-spacing:0.06em}.meta{color:#5c6e7e;font-size:10px;margin-bottom:20px;font-family:'JetBrains Mono',monospace}table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:12px}th{text-align:left;padding:6px 8px;color:#5c6e7e;border-bottom:1px solid rgba(255,255,255,0.08);font-size:9px;text-transform:uppercase;letter-spacing:0.08em}td{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,0.03);font-family:'JetBrains Mono',monospace;font-size:10px}.summary{display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap}.scard{background:#1a2332;border:1px solid rgba(255,255,255,0.06);border-top:2px solid #4a90a4;border-radius:5px;padding:12px;flex:1;min-width:110px}.scard .lbl{font-size:8px;color:#5c6e7e;text-transform:uppercase;letter-spacing:0.1em}.scard .val{font-family:'Inter',sans-serif;font-size:20px;font-weight:700;margin-top:2px}.badge{padding:1px 7px;border-radius:4px;font-size:9px;font-weight:600}.b-c{background:rgba(184,64,64,0.15);color:#b84040}.b-h{background:rgba(201,84,77,0.15);color:#c9544d}.b-m{background:rgba(212,160,74,0.15);color:#d4a04a}.b-l{background:rgba(92,184,92,0.15);color:#5cb85c}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>`;
-    h+=`<h1>🛡️ GARUDA Network Defense Report</h1><p class="meta">Generated: ${now} &nbsp;|&nbsp; Powered by GARUDA v3</p>`;
+    h+=`<h1>🛡️ GARUDA Network Defense Report</h1><p class="meta">Generated: ${now} &nbsp;|&nbsp; Powered by GARUDA v4</p>`;
     h+=`<h2>Summary</h2><div class="summary"><div class="scard"><div class="lbl">Scans (24h)</div><div class="val" style="color:#4a90a4">${dash.scans_last_24h??0}</div></div><div class="scard"><div class="lbl">Risk Score</div><div class="val" style="color:${riskColor(ls.risk_label)}">${ls.risk_score??0}</div></div><div class="scard"><div class="lbl">Known Devices</div><div class="val" style="color:#8a7fba">${dash.total_known_devices??0}</div></div><div class="scard"><div class="lbl">Unacked Alerts</div><div class="val" style="color:${(dash.unacked_alerts??0)>0?'#c9544d':'#5cb85c'}">${dash.unacked_alerts??0}</div></div></div>`;
     if(trend.length>0){h+=`<h2>Risk Trend</h2><table><tr><th>Timestamp</th><th>Risk Score</th><th>Label</th></tr>`;trend.forEach(r=>{const bc=(r.risk_label||'').toLowerCase()==='critical'?'b-c':(r.risk_label||'').toLowerCase()==='high'?'b-h':(r.risk_label||'').toLowerCase()==='medium'?'b-m':'b-l';h+=`<tr><td>${fmtDate(r.timestamp)}</td><td>${r.risk_score??0}</td><td><span class="badge ${bc}">${r.risk_label||'—'}</span></td></tr>`;});h+='</table>';}
     if(alerts.length>0){h+=`<h2>Recent Alerts (${alerts.length})</h2><table><tr><th>Severity</th><th>Type</th><th>Title</th><th>IP</th><th>Timestamp</th><th>Status</th></tr>`;alerts.forEach(a=>{const bc=(a.severity||'').toLowerCase()==='critical'?'b-c':(a.severity||'').toLowerCase()==='high'?'b-h':(a.severity||'').toLowerCase()==='medium'?'b-m':'b-l';h+=`<tr><td><span class="badge ${bc}">${a.severity||'—'}</span></td><td>${a.alert_type||a.type||'—'}</td><td>${a.title||'—'}</td><td>${a.ip||'—'}</td><td>${fmtDate(a.timestamp)}</td><td>${a.acknowledged?'Acked':'Unacked'}</td></tr>`;});h+='</table>';}
@@ -1787,10 +2371,12 @@ async function generatePDFReport(){
 // ══════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════
-Chart.defaults.color='#5c6e7e';
-Chart.defaults.borderColor='rgba(255,255,255,0.05)';
-Chart.defaults.font.family="'JetBrains Mono', monospace";
-Chart.defaults.font.size=10;
+if(window.Chart) {
+  Chart.defaults.color='#64748b';
+  Chart.defaults.borderColor='rgba(255,255,255,0.06)';
+  Chart.defaults.font.family="'Inter', system-ui, sans-serif";
+  Chart.defaults.font.size=10;
+}
 
 document.getElementById('scanTimeout')?.addEventListener('input',function(){document.getElementById('scanTimeoutVal').textContent=this.value+'s';});
 
@@ -1811,8 +2397,27 @@ window.addEventListener('DOMContentLoaded',()=>{
   setInterval(updateFooterClock,1000);
   updateFooterClock();
   updateAlertsBadge();
+  
+  // Initial sensitivity setup
+  if (localStorage.getItem('garudaSensitivity') === 'high') {
+    document.getElementById('sensitivityToggle').checked = true;
+    document.getElementById('sensitivityWarning').style.display = 'flex';
+    pollIntervalSec = 2;
+  }
+  
+  startTrafficPolling();
   switchPage('overview');
 });
+
+function toggleSensitivity() {
+  const isHigh = document.getElementById('sensitivityToggle').checked;
+  localStorage.setItem('garudaSensitivity', isHigh ? 'high' : 'normal');
+  document.getElementById('sensitivityWarning').style.display = isHigh ? 'flex' : 'none';
+  
+  // Re-fetch health to get the base interval if we're going back to normal
+  checkHealth(); 
+  showToast(isHigh ? 'High Sensitivity Mode Enabled' : 'Sensitivity reset to default', isHigh ? 'warn' : 'success');
+}
 </script>
 </body>
 </html>

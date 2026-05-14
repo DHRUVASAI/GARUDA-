@@ -10,37 +10,55 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
+
+:root {
+  --bg: var(--bg);
+  --bg-card: var(--bg-card);
+  --bg-secondary: var(--bg-secondary);
+  --text-primary: var(--text-primary);
+  --text-secondary: var(--text-secondary);
+  --text-muted: var(--text-muted);
+  --accent: var(--accent);
+  --danger: var(--danger);
+  --warn: var(--warn);
+  --success: var(--success);
+  --purple: var(--purple);
+  --critical: var(--danger);
+  --b0: rgba(255,255,255,0.05);
+  --b1: rgba(255,255,255,0.1);
+}
+
 /* ── RESET & BASE ── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:14px;scroll-behavior:smooth}
-body{background:#0d1117;color:#eef0f7;font-family:'Inter',sans-serif;line-height:1.6;overflow-x:hidden}
+body{background:var(--bg);color:var(--text-primary);font-family:'Inter',sans-serif;line-height:1.6;overflow-x:hidden}
 h1,h2,h3,h4,h5,h6{font-family:'Inter',sans-serif;font-weight:600;letter-spacing:-.02em}
 
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar{width:6px;height:6px}
-::-webkit-scrollbar-track{background:#0d1117}
-::-webkit-scrollbar-thumb{background:#3d4658;border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:#8b93a6}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--text-muted);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-secondary)}
 
 /* ── LAYOUT ── */
 .layout{display:flex;min-height:100vh}
-.sidebar{width:220px;background:#0d1117;border-right:1px solid rgba(255,255,255,.05);position:fixed;top:0;left:0;height:100vh;display:flex;flex-direction:column;z-index:100;transition:transform .25s ease}
+.sidebar{width:220px;background:var(--bg);border-right:1px solid rgba(255,255,255,.05);position:fixed;top:0;left:0;height:100vh;display:flex;flex-direction:column;z-index:100;transition:transform .25s ease}
 .main{margin-left:220px;flex:1;padding:28px 32px 60px;min-height:100vh}
 
 /* ── SIDEBAR ── */
 .sidebar-logo{padding:24px 20px 8px;border-bottom:1px solid rgba(255,255,255,.05)}
-.sidebar-logo h1{font-size:1.15rem;font-weight:700;display:flex;align-items:center;gap:8px;color:#eef0f7}
+.sidebar-logo h1{font-size:1.15rem;font-weight:700;display:flex;align-items:center;gap:8px;color:var(--text-primary)}
 .sidebar-logo h1 span.shield{font-size:1.3rem}
-.sidebar-badge{display:inline-block;background:rgba(59,130,246,.12);color:#3b82f6;font-family:'JetBrains Mono',monospace;font-size:.65rem;padding:2px 8px;border-radius:4px;margin-top:6px;letter-spacing:.04em}
+.sidebar-badge{display:inline-block;background:rgba(59,130,246,.12);color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:.65rem;padding:2px 8px;border-radius:4px;margin-top:6px;letter-spacing:.04em}
 .sidebar-nav{flex:1;padding:16px 0}
-.sidebar-nav a{display:flex;align-items:center;gap:10px;padding:10px 20px;color:#8b93a6;text-decoration:none;font-size:.85rem;border-left:3px solid transparent;transition:all .15s ease;cursor:pointer}
-.sidebar-nav a:hover{color:#eef0f7;background:rgba(255,255,255,.02)}
-.sidebar-nav a.active{color:#eef0f7;border-left-color:#3b82f6;background:rgba(59,130,246,.06)}
+.sidebar-nav a{display:flex;align-items:center;gap:10px;padding:10px 20px;color:var(--text-secondary);text-decoration:none;font-size:.85rem;border-left:3px solid transparent;transition:all .15s ease;cursor:pointer}
+.sidebar-nav a:hover{color:var(--text-primary);background:rgba(255,255,255,.02)}
+.sidebar-nav a.active{color:var(--text-primary);border-left-color:var(--accent);background:rgba(59,130,246,.06)}
 .sidebar-nav a .nav-icon{font-size:1rem;width:20px;text-align:center}
-.sidebar-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,.05);font-size:.7rem;color:#3d4658}
+.sidebar-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,.05);font-size:.7rem;color:var(--text-muted)}
 
 /* ── HAMBURGER ── */
-.hamburger{display:none;position:fixed;top:14px;left:14px;z-index:200;background:#0d1117;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 10px;cursor:pointer;color:#eef0f7;font-size:1.2rem;line-height:1}
+.hamburger{display:none;position:fixed;top:14px;left:14px;z-index:200;background:var(--bg);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 10px;cursor:pointer;color:var(--text-primary);font-size:1.2rem;line-height:1}
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:90}
 
 /* ── SECTION ── */
@@ -48,68 +66,68 @@ h1,h2,h3,h4,h5,h6{font-family:'Inter',sans-serif;font-weight:600;letter-spacing:
 .section.active{display:block}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .section-title{font-size:1.3rem;font-weight:600;margin-bottom:4px;font-family:'Inter',sans-serif;letter-spacing:-0.01em}
-.section-sub{color:#8b93a6;font-size:.8rem;margin-bottom:24px}
+.section-sub{color:var(--text-secondary);font-size:.8rem;margin-bottom:24px}
 
 /* ── CARDS ROW ── */
 .cards-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px}
-.card{background:#161b22;border:1px solid rgba(255,255,255,.05);border-left:3px solid rgba(255,255,255,.05);border-radius:10px;padding:20px;transition:border-color .15s}
-.cards-row .card:nth-child(1){border-left-color:#3b82f6}
-.cards-row .card:nth-child(2){border-left-color:#ef4444}
-.cards-row .card:nth-child(3){border-left-color:#a855f7}
-.cards-row .card:nth-child(4){border-left-color:#f59e0b}
+.card{background:var(--bg-card);border:1px solid rgba(255,255,255,.05);border-left:3px solid rgba(255,255,255,.05);border-radius:10px;padding:20px;transition:border-color .15s}
+.cards-row .card:nth-child(1){border-left-color:var(--accent)}
+.cards-row .card:nth-child(2){border-left-color:var(--danger)}
+.cards-row .card:nth-child(3){border-left-color:var(--purple)}
+.cards-row .card:nth-child(4){border-left-color:var(--warn)}
 .card:hover{border-color:rgba(255,255,255,.1)}
-.card-label{font-size:.7rem;color:#8b93a6;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.card-label{font-size:.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
 .card-value{font-family:'Inter',sans-serif;font-size:1.8rem;font-weight:700;line-height:1.2}
-.card-foot{font-size:.65rem;color:#3d4658;margin-top:6px}
+.card-foot{font-size:.65rem;color:var(--text-muted);margin-top:6px}
 
 /* ── TABLE ── */
-.table-wrap{overflow-x:auto;border:1px solid rgba(255,255,255,.05);border-radius:10px;background:#161b22}
+.table-wrap{overflow-x:auto;border:1px solid rgba(255,255,255,.05);border-radius:10px;background:var(--bg-card)}
 table{width:100%;border-collapse:collapse;font-size:.8rem}
-th{text-align:left;padding:12px 14px;color:#8b93a6;font-weight:500;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(255,255,255,.05);position:sticky;top:0;background:#161b22}
+th{text-align:left;padding:12px 14px;color:var(--text-secondary);font-weight:500;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(255,255,255,.05);position:sticky;top:0;background:var(--bg-card)}
 td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.03)}
 tr:nth-child(even) td{background:rgba(255,255,255,.01)}
 tr:hover td{background:rgba(59,130,246,.04)}
-.expand-row td{background:#1c2128!important;padding:8px 14px 14px}
-.expand-content{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;font-size:.75rem;color:#8b93a6}
-.expand-content span{color:#eef0f7;font-weight:500}
+.expand-row td{background:var(--bg-secondary)!important;padding:8px 14px 14px}
+.expand-content{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;font-size:.75rem;color:var(--text-secondary)}
+.expand-content span{color:var(--text-primary);font-weight:500}
 
 /* ── BADGES ── */
 .badge{display:inline-block;padding:2px 10px;border-radius:4px;font-size:.7rem;font-weight:500;letter-spacing:.03em}
-.badge-critical{background:rgba(239,68,68,.12);color:#ef4444}
-.badge-high{background:rgba(249,115,22,.12);color:#f97316}
-.badge-medium{background:rgba(245,158,11,.12);color:#f59e0b}
-.badge-low{background:rgba(16,185,129,.12);color:#10b981}
-.badge-secure{background:rgba(16,185,129,.12);color:#10b981}
-.badge-unknown{background:rgba(61,70,88,.25);color:#8b93a6}
-.badge-acked{background:rgba(16,185,129,.1);color:#10b981}
-.badge-unacked{background:rgba(239,68,68,.1);color:#ef4444}
+.badge-critical{background:rgba(239,68,68,.12);color:var(--danger)}
+.badge-high{background:rgba(249,115,22,.12);color:var(--warn)}
+.badge-medium{background:rgba(245,158,11,.12);color:var(--warn)}
+.badge-low{background:rgba(16,185,129,.12);color:var(--success)}
+.badge-secure{background:rgba(16,185,129,.12);color:var(--success)}
+.badge-unknown{background:rgba(61,70,88,.25);color:var(--text-secondary)}
+.badge-acked{background:rgba(16,185,129,.1);color:var(--success)}
+.badge-unacked{background:rgba(239,68,68,.1);color:var(--danger)}
 
 /* ── FILTER BAR ── */
 .filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
-.filter-btn{background:#1c2128;border:1px solid rgba(255,255,255,.05);color:#8b93a6;padding:6px 14px;border-radius:6px;font-size:.75rem;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s}
-.filter-btn:hover{border-color:rgba(255,255,255,.1);color:#eef0f7}
-.filter-btn.active{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.3);color:#3b82f6}
+.filter-btn{background:var(--bg-secondary);border:1px solid rgba(255,255,255,.05);color:var(--text-secondary);padding:6px 14px;border-radius:6px;font-size:.75rem;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s}
+.filter-btn:hover{border-color:rgba(255,255,255,.1);color:var(--text-primary)}
+.filter-btn.active{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.3);color:var(--accent)}
 
 /* ── SEARCH ── */
 .search-wrap{margin-bottom:18px}
-.search-input{width:100%;max-width:420px;background:#1c2128;border:1px solid rgba(255,255,255,.05);color:#eef0f7;padding:10px 14px;border-radius:8px;font-size:.8rem;font-family:'Inter',sans-serif;outline:none;transition:border-color .15s}
+.search-input{width:100%;max-width:420px;background:var(--bg-secondary);border:1px solid rgba(255,255,255,.05);color:var(--text-primary);padding:10px 14px;border-radius:8px;font-size:.8rem;font-family:'Inter',sans-serif;outline:none;transition:border-color .15s}
 .search-input:focus{border-color:rgba(59,130,246,.4)}
-.search-input::placeholder{color:#3d4658}
+.search-input::placeholder{color:var(--text-muted)}
 
 /* ── ACTION BUTTON ── */
-.btn{background:rgba(59,130,246,.12);color:#3b82f6;border:1px solid rgba(59,130,246,.2);padding:5px 12px;border-radius:5px;font-size:.7rem;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s}
+.btn{background:rgba(59,130,246,.12);color:var(--accent);border:1px solid rgba(59,130,246,.2);padding:5px 12px;border-radius:5px;font-size:.7rem;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s}
 .btn:hover{background:rgba(59,130,246,.2)}
 .btn-sm{padding:3px 9px;font-size:.65rem}
 
 /* ── CHART WRAPPER ── */
-.chart-box{background:#161b22;border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:20px}
+.chart-box{background:var(--bg-card);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:20px}
 .chart-box h3{font-size:.9rem;margin-bottom:14px;font-weight:600}
 .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
 
 /* ── STATS ROW ── */
 .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:20px}
-.stat-card{background:#1c2128;border:1px solid rgba(255,255,255,.05);border-radius:8px;padding:14px 16px}
-.stat-label{font-size:.65rem;color:#8b93a6;text-transform:uppercase;letter-spacing:.05em}
+.stat-card{background:var(--bg-secondary);border:1px solid rgba(255,255,255,.05);border-radius:8px;padding:14px 16px}
+.stat-label{font-size:.65rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em}
 .stat-value{font-family:'Inter',sans-serif;font-size:1.15rem;font-weight:600;margin-top:2px}
 
 /* ── PILLS ── */
@@ -117,27 +135,27 @@ tr:hover td{background:rgba(59,130,246,.04)}
 .pill{padding:3px 10px;border-radius:12px;font-size:.7rem;font-weight:500}
 
 /* ── TRUST BAR ── */
-.times-bar{display:inline-block;height:6px;border-radius:3px;background:#3b82f6;min-width:4px;max-width:100px}
+.times-bar{display:inline-block;height:6px;border-radius:3px;background:var(--accent);min-width:4px;max-width:100px}
 
 /* ── LOADING / ERROR / EMPTY ── */
-.loading{display:flex;align-items:center;justify-content:center;padding:48px 20px;color:#8b93a6;font-size:.85rem;gap:10px}
-.spinner{width:18px;height:18px;border:2px solid rgba(59,130,246,.2);border-top-color:#3b82f6;border-radius:50%;animation:spin .7s linear infinite}
+.loading{display:flex;align-items:center;justify-content:center;padding:48px 20px;color:var(--text-secondary);font-size:.85rem;gap:10px}
+.spinner{width:18px;height:18px;border:2px solid rgba(59,130,246,.2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.error-state{text-align:center;padding:48px 20px;color:#ef4444;font-size:.85rem}
-.error-state p{color:#8b93a6;margin-top:6px;font-size:.75rem}
-.empty-state{text-align:center;padding:48px 20px;color:#3d4658;font-size:.85rem}
+.error-state{text-align:center;padding:48px 20px;color:var(--danger);font-size:.85rem}
+.error-state p{color:var(--text-secondary);margin-top:6px;font-size:.75rem}
+.empty-state{text-align:center;padding:48px 20px;color:var(--text-muted);font-size:.85rem}
 
 /* ── LATEST SCAN INFO ── */
 .info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:16px}
-.info-item{background:#1c2128;border:1px solid rgba(255,255,255,.05);border-radius:8px;padding:14px 16px}
-.info-item .label{font-size:.65rem;color:#8b93a6;text-transform:uppercase;letter-spacing:.04em}
+.info-item{background:var(--bg-secondary);border:1px solid rgba(255,255,255,.05);border-radius:8px;padding:14px 16px}
+.info-item .label{font-size:.65rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.04em}
 .info-item .value{font-family:'Inter',sans-serif;font-size:1rem;font-weight:600;margin-top:2px}
 
 /* ── ALERT ROW COMPACT ── */
 .alert-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.03);font-size:.8rem;transition:background .15s}
 .alert-row:hover{background:rgba(255,255,255,.02)}
-.alert-row .alert-title{flex:1;color:#eef0f7}
-.alert-row .alert-ts{color:#3d4658;font-size:.7rem;min-width:120px;text-align:right}
+.alert-row .alert-title{flex:1;color:var(--text-primary)}
+.alert-row .alert-ts{color:var(--text-muted);font-size:.7rem;min-width:120px;text-align:right}
 .alert-row .alert-ack-btn{margin-left:8px}
 .unacked-highlight{background:rgba(239,68,68,.03)!important}
 
@@ -145,29 +163,29 @@ tr:hover td{background:rgba(59,130,246,.04)}
 .range-selector{display:flex;gap:6px;margin-bottom:18px}
 
 /* ── COUNT BADGE ── */
-.count{font-family:'Inter',sans-serif;font-weight:600;color:#eef0f7;font-size:.9rem;margin-bottom:14px}
+.count{font-family:'Inter',sans-serif;font-weight:600;color:var(--text-primary);font-size:.9rem;margin-bottom:14px}
 
 /* ── PAGINATION ── */
 .pagination{display:flex;align-items:center;gap:6px;margin-top:14px;flex-wrap:wrap}
-.page-btn{background:#1c2128;border:1px solid rgba(255,255,255,.05);color:#8b93a6;padding:5px 11px;border-radius:5px;font-size:.75rem;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s;min-width:34px;text-align:center}
-.page-btn:hover{border-color:rgba(255,255,255,.1);color:#eef0f7}
-.page-btn.active{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.3);color:#3b82f6}
+.page-btn{background:var(--bg-secondary);border:1px solid rgba(255,255,255,.05);color:var(--text-secondary);padding:5px 11px;border-radius:5px;font-size:.75rem;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s;min-width:34px;text-align:center}
+.page-btn:hover{border-color:rgba(255,255,255,.1);color:var(--text-primary)}
+.page-btn.active{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.3);color:var(--accent)}
 .page-btn:disabled{opacity:.35;cursor:not-allowed}
-.page-info{font-size:.75rem;color:#3d4658;margin-left:6px}
+.page-info{font-size:.75rem;color:var(--text-muted);margin-left:6px}
 .network-banner{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:7px;font-size:.8rem;margin-bottom:14px;border:1px solid}
-.network-banner.large{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.2);color:#f59e0b}
+.network-banner.large{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.2);color:var(--warn)}
 
 /* ── NAV BADGE ── */
-.nav-badge{background:#ef4444;color:white;font-family:'Inter',sans-serif;font-weight:700;font-size:.6rem;padding:1px 6px;border-radius:10px;margin-left:auto;min-width:18px;text-align:center}
+.nav-badge{background:var(--danger);color:white;font-family:'Inter',sans-serif;font-weight:700;font-size:.6rem;padding:1px 6px;border-radius:10px;margin-left:auto;min-width:18px;text-align:center}
 
 /* ── ARP CARD ── */
-.arp-card{background:#161b22;border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:20px;margin-bottom:20px;grid-column:1/-1}
+.arp-card{background:var(--bg-card);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:20px;margin-bottom:20px;grid-column:1/-1}
 .arp-card h3{font-size:.9rem;margin-bottom:12px;font-weight:600}
 .arp-row{display:flex;flex-wrap:wrap;align-items:center;gap:14px;font-size:.8rem}
-.arp-row .arp-item{color:#8b93a6}
-.arp-row .arp-item span{color:#eef0f7;font-weight:500}
-.arp-warn{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:6px;padding:8px 12px;margin-top:10px;font-size:.75rem;color:#ef4444}
-.arp-placeholder{color:#3d4658;font-size:.8rem;font-style:italic}
+.arp-row .arp-item{color:var(--text-secondary)}
+.arp-row .arp-item span{color:var(--text-primary);font-weight:500}
+.arp-warn{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:6px;padding:8px 12px;margin-top:10px;font-size:.75rem;color:var(--danger)}
+.arp-placeholder{color:var(--text-muted);font-size:.8rem;font-style:italic}
 
 /* ── SECTION HEADER ── */
 .section-header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
@@ -266,6 +284,38 @@ tr:hover td{background:rgba(59,130,246,.04)}
 </div>
 
 <script>
+// shared utils
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function escAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function showToast(msg, type='info', duration=3500) {
+  let c = document.getElementById('garuda-toasts');
+  if (!c) {
+    c = document.createElement('div');
+    c.id = 'garuda-toasts';
+    c.style.cssText = 'position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:10px;z-index:99999;pointer-events:none;align-items:flex-end;';
+    document.body.appendChild(c);
+  }
+  const t = document.createElement('div');
+  const s = getComputedStyle(document.documentElement);
+  const accent = s.getPropertyValue('--accent').trim() || accentColor;
+  const success = s.getPropertyValue('--success').trim() || successColor;
+  const warn = s.getPropertyValue('--warn').trim() || warnColor;
+  const danger = s.getPropertyValue('--danger').trim() || dangerColor;
+  const bg = type === 'error' ? danger : type === 'warn' ? warn : type === 'success' ? success : accent;
+  t.style.cssText = `background:rgba(15,20,28,0.95);color:#fff;border-left:4px solid ${bg};padding:12px 16px;border-radius:6px;font-family:system-ui,sans-serif;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,0.3);opacity:0;transform:translateY(20px);transition:opacity 0.3s ease, transform 0.3s ease;pointer-events:auto;max-width:300px;word-wrap:break-word;`;
+  t.innerHTML = escHtml(msg);
+  c.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateY(0)'; });
+  setTimeout(() => {
+    t.style.opacity = '0'; t.style.transform = 'translateY(20px)';
+    setTimeout(() => t.remove(), 300);
+  }, duration);
+}
+
 /* ═══════════════════════════════════════════════
    GARUDA HISTORY DASHBOARD — CLIENT
    ═══════════════════════════════════════════════
@@ -304,27 +354,49 @@ function riskClass(label) {
 function riskColor(label) {
   if (!label) return '#8b93a6';
   const l = label.toLowerCase();
-  if (l === 'critical') return '#ef4444';
-  if (l === 'high') return '#f97316';
-  if (l === 'medium') return '#f59e0b';
-  return '#10b981';
+  if (l === 'critical') return dangerColor;
+  if (l === 'high') return warnColor;
+  if (l === 'medium') return warnColor;
+  return successColor;
 }
 function loadingHTML() { return '<div class="loading"><div class="spinner"></div> Loading…</div>'; }
+
+
+  el.textContent = msg || 'Request failed';
+  el.style.opacity = '1';
+  clearTimeout(apiToastTimer);
+  apiToastTimer = setTimeout(() => { el.style.opacity = '0'; }, 4000);
+}
 function errorHTML(msg, retryFn) {
   const id = 'retry_' + Math.random().toString(36).slice(2,8);
   setTimeout(() => { const b = document.getElementById(id); if (b) b.onclick = retryFn; }, 0);
-  return `<div class="error-state">⚠ ${msg}<p>Backend offline — run <code>python garuda_backend.py</code></p><br><button class="btn" id="${id}">Retry</button></div>`;
+  const safe = escHtml(msg);
+  return `<div class="error-state">⚠ ${safe}<p>Backend offline — run <code>python garuda_backend.py</code></p><br><button class="btn" id="${id}">Retry</button></div>`;
 }
 function emptyHTML(msg) { return `<div class="empty-state">${msg || 'No data available yet. Run a scan first.'}</div>`; }
 
 async function apiFetch(path) {
   const res = await fetch(API + path);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  let json = {};
+  try { json = await res.json(); } catch (_) {}
+  if (json && typeof json.success === 'boolean') {
+    if (!json.success) { showToast(json.error || 'Request failed', 'error'); throw new Error(json.error || 'Request failed'); }
+    return json.data;
+  }
+  if (!res.ok) { showToast('HTTP ' + res.status, 'error'); throw new Error('HTTP ' + res.status); }
+  return json;
 }
 
 // ── Chart defaults ──
-Chart.defaults.color = '#8b93a6';
+const docStyle = getComputedStyle(document.documentElement);
+const accentColor = docStyle.getPropertyValue('--accent').trim();
+const successColor = docStyle.getPropertyValue('--success').trim();
+const dangerColor = docStyle.getPropertyValue('--danger').trim();
+const warnColor = docStyle.getPropertyValue('--warn').trim();
+const textColor = docStyle.getPropertyValue('--text-secondary').trim();
+const mutedColor = docStyle.getPropertyValue('--text-muted').trim();
+
+Chart.defaults.color = textColor;
 Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
 Chart.defaults.font.family = "'Inter', sans-serif";
 Chart.defaults.font.size = 11;
@@ -404,16 +476,17 @@ async function loadArpStatus() {
     const res = await fetch(API + '/api/arp/status');
     if (res.status === 404) { el.innerHTML = '<p class="arp-placeholder">ARP monitoring: coming soon</p>'; return; }
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const d = await res.json();
+    const raw = await res.json();
+    const d = (raw && raw.data !== undefined) ? raw.data : raw;
     const safe = !d.spoofing_detected;
     let h = `<div class="arp-row">`;
     h += `<span class="badge ${safe ? 'badge-low' : 'badge-critical'}">${safe ? 'ARP: Secure' : 'ARP: THREAT DETECTED'}</span>`;
     h += `<span class="arp-item">Entries: <span>${d.total_entries ?? '—'}</span></span>`;
-    h += `<span class="arp-item">Gateway MAC: <span style="font-family:'JetBrains Mono',monospace">${d.gateway_mac || '—'}</span></span>`;
+    h += `<span class="arp-item">Gateway MAC: <span style="font-family:'JetBrains Mono',monospace">${escHtml(d.gateway_mac || '—')}</span></span>`;
     h += `<span class="arp-item">Checked: <span>${fmtDate(d.last_checked)}</span></span>`;
     h += `</div>`;
     if (d.suspicious_ips && d.suspicious_ips.length > 0) {
-      h += d.suspicious_ips.map(ip => `<div class="arp-warn">⚠ Suspicious: ${ip}</div>`).join('');
+      h += d.suspicious_ips.map(ip => `<div class="arp-warn">⚠ Suspicious: ${escHtml(ip)}</div>`).join('');
     }
     el.innerHTML = h;
   } catch {
@@ -440,6 +513,7 @@ async function loadDashboard() {
       } catch {}
     }, 30000);
   } catch (e) {
+    showApiToast(e.message || 'Dashboard failed');
     el.innerHTML = errorHTML(e.message, loadDashboard);
   }
 }
@@ -454,7 +528,7 @@ function renderDashboard(data, el) {
   const riskHistory = data.risk_trend || [];
   const recentAlerts = data.recent_alerts || [];
 
-  const unackedColor = unacked > 0 ? '#ef4444' : '#10b981';
+  const unackedColor = unacked > 0 ? dangerColor : successColor;
   const scoreColor = riskColor(riskLabel);
 
   let html = `
@@ -493,7 +567,7 @@ function renderDashboard(data, el) {
     const ctx = document.getElementById('riskTrendChart').getContext('2d');
     chartInstances['riskTrend'] = new Chart(ctx, {
       type: 'line',
-      data: { labels, datasets: [{ label: 'Risk Score', data: scores, borderColor: '#1f6feb', backgroundColor: 'rgba(31,111,235,0.08)', fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: '#1f6feb', borderWidth: 2 }] },
+      data: { labels, datasets: [{ label: 'Risk Score', data: scores, borderColor: accentColor, backgroundColor: 'rgba(31,111,235,0.08)', fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: accentColor, borderWidth: 2 }] },
       options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.03)' } }, x: { display: true, ticks: { maxTicksLimit: 6, maxRotation: 0 }, grid: { display: false } } } }
     });
   } else {
@@ -507,8 +581,8 @@ function renderDashboard(data, el) {
   } else {
     alertsBox.innerHTML = recentAlerts.slice(0, 5).map(a => `
       <div class="alert-row ${a.acknowledged ? '' : 'unacked-highlight'}">
-        <span class="badge ${riskClass(a.severity)}">${a.severity || '—'}</span>
-        <span class="alert-title">${a.title || a.alert_type || '—'}</span>
+        <span class="badge ${riskClass(a.severity)}">${escHtml(a.severity || '—')}</span>
+        <span class="alert-title">${escHtml(a.title || a.alert_type || '—')}</span>
         <span class="alert-ts">${fmtDate(a.timestamp)}</span>
         ${!a.acknowledged ? `<button class="btn btn-sm alert-ack-btn" onclick="ackAlert(${a.id},loadDashboard)">Ack</button>` : ''}
       </div>
@@ -528,16 +602,19 @@ function renderDashboard(data, el) {
       ['Device Count', latestScan.device_count ?? '—'],
       ['Threat Level', latestScan.threat_level || '—'],
     ];
-    scanBox.innerHTML = fields.map(([l, v]) => `<div class="info-item"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
+    scanBox.innerHTML = fields.map(([l, v]) => `<div class="info-item"><div class="label">${escHtml(l)}</div><div class="value">${escHtml(v)}</div></div>`).join('');
   }
 }
 
 async function ackAlert(id, callback) {
   try {
-    await fetch(API + '/api/alerts/acknowledge/' + id, { method: 'POST' });
+    const res = await fetch(API + '/api/alerts/acknowledge/' + id, { method: 'POST' });
+    const b = await res.json().catch(() => ({}));
+    if (!res.ok || b.success === false) throw new Error(b.error || 'Acknowledge failed');
     if (callback) callback();
   } catch (e) {
-    console.error('Ack failed:', e);
+    showApiToast(e.message || 'Ack failed');
+    
   }
 }
 
@@ -577,7 +654,7 @@ function renderScans(el) {
   pageScans.forEach((s, i) => {
     const rid = 'scan_' + (s.id || i);
     const globalIdx = start + i + 1;
-    html += `<tr class="scan-row" data-rid="${rid}" style="cursor:pointer">
+    html += `<tr class="scan-row" data-rid="${escAttr(rid)}" style="cursor:pointer">
       <td>${globalIdx}</td>
       <td>${fmtDate(s.timestamp)}</td>
       <td>${s.ssid || '\u2014'}</td>
@@ -587,7 +664,7 @@ function renderScans(el) {
       <td><span class="badge ${riskClass(s.risk_label)}">${s.risk_label || '\u2014'}</span></td>
       <td><span class="badge ${riskClass(s.threat_level)}">${s.threat_level || '\u2014'}</span></td>
     </tr>
-    <tr class="expand-row" id="${rid}" style="display:none">
+    <tr class="expand-row" id="${escAttr(rid)}" style="display:none">
       <td colspan="8">
         <div class="expand-content">
           <div>Duration: <span>${s.duration || '\u2014'}</span></div>
@@ -886,7 +963,7 @@ function renderTraffic(data, el) {
     <div class="stat-card"><div class="stat-label">Total Bytes Sent</div><div class="stat-value" style="color:#3b82f6">${fmtBytes(totalSent)}</div></div>
     <div class="stat-card"><div class="stat-label">Total Bytes Received</div><div class="stat-value" style="color:#10b981">${fmtBytes(totalRecv)}</div></div>
     <div class="stat-card"><div class="stat-label">Total Packets</div><div class="stat-value">${totalPkts.toLocaleString()}</div></div>
-    <div class="stat-card"><div class="stat-label">Avg Error Rate</div><div class="stat-value" style="color:${parseFloat(avgErr) > 1 ? '#ef4444' : '#10b981'}">${avgErr}%</div></div>
+    <div class="stat-card"><div class="stat-label">Avg Error Rate</div><div class="stat-value" style="color:${parseFloat(avgErr) > 1 ? dangerColor : successColor}">${avgErr}%</div></div>
   </div>`;
 
   el.innerHTML = html;
@@ -899,8 +976,8 @@ function renderTraffic(data, el) {
     data: {
       labels,
       datasets: [
-        { label: 'Sent', data: records.map(r => r.bytes_sent || 0), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', fill: true, tension: .35, borderWidth: 2, pointRadius: 2 },
-        { label: 'Received', data: records.map(r => r.bytes_recv || 0), borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', fill: true, tension: .35, borderWidth: 2, pointRadius: 2 },
+        { label: 'Sent', data: records.map(r => r.bytes_sent || 0), borderColor: accentColor, backgroundColor: 'rgba(59,130,246,0.08)', fill: true, tension: .35, borderWidth: 2, pointRadius: 2 },
+        { label: 'Received', data: records.map(r => r.bytes_recv || 0), borderColor: successColor, backgroundColor: 'rgba(16,185,129,0.08)', fill: true, tension: .35, borderWidth: 2, pointRadius: 2 },
       ]
     },
     options: { responsive: true, interaction: { mode: 'index', intersect: false }, plugins: { legend: { labels: { boxWidth: 10 } } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.03)' } }, x: { ticks: { maxTicksLimit: 6, maxRotation: 0 }, grid: { display: false } } } }
@@ -913,8 +990,8 @@ function renderTraffic(data, el) {
     data: {
       labels,
       datasets: [
-        { label: 'Sent', data: records.map(r => r.packets_sent || 0), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', fill: true, tension: .35, borderWidth: 2, pointRadius: 2 },
-        { label: 'Received', data: records.map(r => r.packets_recv || 0), borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', fill: true, tension: .35, borderWidth: 2, pointRadius: 2 },
+        { label: 'Sent', data: records.map(r => r.packets_sent || 0), borderColor: accentColor, backgroundColor: 'rgba(59,130,246,0.08)', fill: true, tension: .35, borderWidth: 2, pointRadius: 2 },
+        { label: 'Received', data: records.map(r => r.packets_recv || 0), borderColor: successColor, backgroundColor: 'rgba(16,185,129,0.08)', fill: true, tension: .35, borderWidth: 2, pointRadius: 2 },
       ]
     },
     options: { responsive: true, interaction: { mode: 'index', intersect: false }, plugins: { legend: { labels: { boxWidth: 10 } } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.03)' } }, x: { ticks: { maxTicksLimit: 6, maxRotation: 0 }, grid: { display: false } } } }
@@ -944,6 +1021,24 @@ async function generatePDFReport() {
     const now = new Date().toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true });
 
     let h = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>GARUDA Report</title><style>
+
+:root {
+  --bg: #0d1117;
+  --bg-card: #161b22;
+  --bg-secondary: #1c2128;
+  --text-primary: #eef0f7;
+  --text-secondary: #8b93a6;
+  --text-muted: #3d4658;
+  --accent: #3b82f6;
+  --danger: #ef4444;
+  --warn: #f59e0b;
+  --success: #10b981;
+  --purple: #a855f7;
+  --critical: #ef4444;
+  --b0: rgba(255,255,255,0.05);
+  --b1: rgba(255,255,255,0.1);
+}
+
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
       *{margin:0;padding:0;box-sizing:border-box}
       body{background:#0d1117;color:#eef0f7;font-family:'Inter',sans-serif;font-size:12px;padding:30px}
@@ -968,7 +1063,7 @@ async function generatePDFReport() {
     h += `<div class="scard"><div class="lbl">Scans (24h)</div><div class="val" style="color:#3b82f6">${dash.scans_last_24h ?? 0}</div></div>`;
     h += `<div class="scard"><div class="lbl">Risk Score</div><div class="val" style="color:${riskColor(ls.risk_label)}">${ls.risk_score ?? 0}</div></div>`;
     h += `<div class="scard"><div class="lbl">Known Devices</div><div class="val" style="color:#a855f7">${dash.total_known_devices ?? 0}</div></div>`;
-    h += `<div class="scard"><div class="lbl">Unacked Alerts</div><div class="val" style="color:${(dash.unacked_alerts??0)>0?'#ef4444':'#10b981'}">${dash.unacked_alerts ?? 0}</div></div>`;
+    h += `<div class="scard"><div class="lbl">Unacked Alerts</div><div class="val" style="color:${(dash.unacked_alerts??0)>0?dangerColor:successColor}">${dash.unacked_alerts ?? 0}</div></div>`;
     h += `</div>`;
 
     if (trend.length > 0) {

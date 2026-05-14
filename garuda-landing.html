@@ -23,6 +23,8 @@
   --accent: #4a90a4;
   --accent-soft: rgba(74, 144, 164, 0.15);
   --success: #5cb85c;
+  --warn: #fbbf24;
+  --danger: #f87171;
   --border: rgba(255, 255, 255, 0.08);
   --border-light: rgba(255, 255, 255, 0.12);
 }
@@ -329,11 +331,13 @@ h1 span {
 }
 
 .feature-card {
-  background: var(--bg-primary);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 2.5rem 2rem;
   transition: all 0.2s;
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
 }
 
 .feature-card:hover {
@@ -751,6 +755,38 @@ footer {
 </footer>
 
 <script>
+// shared utils
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function escAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function showToast(msg, type='info', duration=3500) {
+  let c = document.getElementById('garuda-toasts');
+  if (!c) {
+    c = document.createElement('div');
+    c.id = 'garuda-toasts';
+    c.style.cssText = 'position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:10px;z-index:99999;pointer-events:none;align-items:flex-end;';
+    document.body.appendChild(c);
+  }
+  const t = document.createElement('div');
+  const s = getComputedStyle(document.documentElement);
+  const accent = s.getPropertyValue('--accent').trim() || '#3b82f6';
+  const success = s.getPropertyValue('--success').trim() || '#10b981';
+  const warn = s.getPropertyValue('--warn').trim() || '#f59e0b';
+  const danger = s.getPropertyValue('--danger').trim() || '#ef4444';
+  const bg = type === 'error' ? danger : type === 'warn' ? warn : type === 'success' ? success : accent;
+  t.style.cssText = `background:rgba(15,20,28,0.95);color:#fff;border-left:4px solid ${bg};padding:12px 16px;border-radius:6px;font-family:system-ui,sans-serif;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,0.3);opacity:0;transform:translateY(20px);transition:opacity 0.3s ease, transform 0.3s ease;pointer-events:auto;max-width:300px;word-wrap:break-word;`;
+  t.innerHTML = escHtml(msg);
+  c.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateY(0)'; });
+  setTimeout(() => {
+    t.style.opacity = '0'; t.style.transform = 'translateY(20px)';
+    setTimeout(() => t.remove(), 300);
+  }, duration);
+}
+
 const API = 'http://localhost:5000';
 let isLandingDarkTheme = localStorage.getItem('garudaLandingTheme') !== 'light';
 
@@ -784,17 +820,25 @@ function animateNum(id, target) {
 }
 
 async function loadData() {
+  const unwrap = (b) => {
+    if (!b) return null;
+    if (typeof b.success === 'boolean') return b.success ? b.data : null;
+    return b;
+  };
   try {
-    const [health, traffic, dash] = await Promise.all([
+    const [hRaw, tRaw, dRaw] = await Promise.all([
       fetch(`${API}/api/health`, {signal: AbortSignal.timeout(3000)}).then(r => r.json()).catch(() => null),
       fetch(`${API}/api/traffic/live`, {signal: AbortSignal.timeout(3000)}).then(r => r.json()).catch(() => null),
       fetch(`${API}/api/dashboard`, {signal: AbortSignal.timeout(3000)}).then(r => r.json()).catch(() => null)
     ]);
-    
+    const health = unwrap(hRaw);
+    const trafficWrap = unwrap(tRaw);
+    const dash = unwrap(dRaw);
+
     const dot = document.getElementById('backend-dot');
     const txt = document.getElementById('status-text');
-    
-    if (health && health.status === 'ok') {
+
+    if (health && health.status === 'OPERATIONAL') {
       dot.style.background = '#5cb85c';
       txt.textContent = 'Online';
       txt.style.color = '#5cb85c';
@@ -803,18 +847,20 @@ async function loadData() {
       txt.textContent = 'Offline';
       txt.style.color = '#8899a6';
     }
-    
+
+    const traffic = trafficWrap && trafficWrap.current ? trafficWrap.current : trafficWrap;
     if (traffic && !traffic.error) {
       document.getElementById('traffic-sent').textContent = traffic.bytes_sent || '--';
       document.getElementById('traffic-recv').textContent = traffic.bytes_received || '--';
       document.getElementById('pkt-sent').textContent = traffic.packets_sent || '--';
       document.getElementById('pkt-recv').textContent = traffic.packets_received || '--';
     }
-    
+
     if (dash) {
-      animateNum('scans', dash.total_scans || 0);
-      animateNum('devices', dash.unique_devices || 0);
-      animateNum('threats', dash.recent_alerts || 0);
+      animateNum('scans', dash.scans_last_24h ?? dash.total_scans ?? 0);
+      animateNum('devices', dash.total_known_devices ?? dash.unique_devices ?? 0);
+      const threatCount = dash.unacked_alerts ?? (Array.isArray(dash.recent_alerts) ? dash.recent_alerts.length : 0);
+      animateNum('threats', threatCount);
     }
   } catch (e) {
     console.log('Backend unavailable');

@@ -9,6 +9,24 @@ const API_BASE = isFileProtocol || window.location.hostname === 'localhost' || w
 console.log('API Base URL:', API_BASE);
 console.log('Protocol:', window.location.protocol);
 
+function escHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+let _toastTimer = null;
+function showApiToast(msg) {
+    let el = document.getElementById('apiErrorToast');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'apiErrorToast';
+        el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:12px 18px;background:#0f172a;color:#fecaca;border-radius:10px;font:14px sans-serif;z-index:100000;max-width:90%;box-shadow:0 4px 24px rgba(0,0,0,.4);opacity:0;transition:opacity .25s;';
+        document.body.appendChild(el);
+    }
+    el.textContent = msg || 'Something went wrong';
+    el.style.opacity = '1';
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { el.style.opacity = '0'; }, 4500);
+}
+
 // Initialize particles
 function initParticles() {
     const container = document.getElementById('particles');
@@ -103,7 +121,11 @@ function fetchNetworkData() {
         }
         return response.json();
     })
-    .then(data => {
+    .then(body => {
+        if (body && body.success === false) {
+            throw new Error(body.error || 'Scan failed');
+        }
+        const data = (body && body.data !== undefined) ? body.data : body;
         console.log('=== FULL SCAN DATA RECEIVED ===');
         console.log('Full data:', data);
         console.log('Connected network:', data.connected_network);
@@ -116,7 +138,8 @@ function fetchNetworkData() {
     })
     .catch(error => {
         console.error('Backend Error:', error);
-        showError(`Cannot connect to backend server. Make sure Python backend is running on port 5000.\n\nError: ${error.message}`);
+        showApiToast('Cannot reach the GARUDA server. Start the backend or try again.');
+        showError('Cannot connect to backend server. Make sure Python backend is running on port 5000.');
         
         // Show dummy data so UI still displays
         showDummyData();
@@ -272,14 +295,14 @@ function createGatewayCard(device) {
         <div class="device-card">
             <div class="device-header">
                 <span class="device-icon">◢</span>
-                <span>${device.ip} - GATEWAY NODE</span>
+                <span>${escHtml(device.ip)} - GATEWAY NODE</span>
             </div>
             <div class="device-info">
-                <strong>STATUS:</strong> <span class="status-online">${device.status || 'ONLINE'}</span><br>
-                <strong>MAC ID:</strong> ${device.mac || 'Unknown'}<br>
-                <strong>VENDOR:</strong> ${device.vendor || 'Router'}<br>
+                <strong>STATUS:</strong> <span class="status-online">${escHtml(device.status || 'ONLINE')}</span><br>
+                <strong>MAC ID:</strong> ${escHtml(device.mac || 'Unknown')}<br>
+                <strong>VENDOR:</strong> ${escHtml(device.vendor || 'Router')}<br>
                 <strong>OPEN PORTS:</strong> ${device.ports?.join(', ') || '22, 53, 80, 443'}<br>
-                <strong>THREAT LEVEL:</strong> <span style="color: #0f0;">${device.threat_level || 'SECURE'}</span>
+                <strong>THREAT LEVEL:</strong> <span style="color: #0f0;">${escHtml(device.threat_level || 'SECURE')}</span>
             </div>
         </div>
     `;
@@ -306,15 +329,15 @@ function createCurrentDeviceCard(device) {
         <div class="device-card ${cardClass}">
             <div class="device-header">
                 <span class="device-icon" style="color: ${threatColor};">◢</span>
-                <span>${device.ip} - ${device.type}</span>
+                <span>${escHtml(device.ip)} - ${escHtml(device.type)}</span>
             </div>
             <div class="device-info">
-                <strong>STATUS:</strong> <span class="status-online">${device.status}</span><br>
-                <strong>CONNECTED TO:</strong> <span style="color: #0ff; font-weight: 700;">${networkName}</span><br>
-                <strong>ENCRYPTION:</strong> ${encryption}<br>
-                <strong>SIGNAL:</strong> ${signal}<br>
-                <strong>MAC ADDRESS:</strong> ${bssid}<br>
-                <strong>THREAT LEVEL:</strong> <span style="color: ${threatColor};">${threatLevel}</span>
+                <strong>STATUS:</strong> <span class="status-online">${escHtml(device.status)}</span><br>
+                <strong>CONNECTED TO:</strong> <span style="color: #0ff; font-weight: 700;">${escHtml(networkName)}</span><br>
+                <strong>ENCRYPTION:</strong> ${escHtml(encryption)}<br>
+                <strong>SIGNAL:</strong> ${escHtml(signal)}<br>
+                <strong>MAC ADDRESS:</strong> ${escHtml(bssid)}<br>
+                <strong>THREAT LEVEL:</strong> <span style="color: ${threatColor};">${escHtml(threatLevel)}</span>
             </div>
         </div>
     `;
@@ -360,18 +383,18 @@ function createConnectedDevicesCard(devices) {
         // Show all devices if 5 or fewer
         deviceList = devices.map(d => 
             `<div style="margin: 5px 0; padding: 5px; background: rgba(0,255,255,0.1); border-left: 2px solid #0ff;">
-                <strong>${d.ip}</strong><br>
-                MAC: ${d.mac}<br>
-                Status: <span style="color: #0f0;">${d.status}</span>
+                <strong>${escHtml(d.ip)}</strong><br>
+                MAC: ${escHtml(d.mac)}<br>
+                Status: <span style="color: #0f0;">${escHtml(d.status)}</span>
             </div>`
         ).join('');
     } else {
         // Show first 3 and indicate more
         deviceList = devices.slice(0, 3).map(d => 
             `<div style="margin: 5px 0; padding: 5px; background: rgba(0,255,255,0.1); border-left: 2px solid #0ff;">
-                <strong>${d.ip}</strong><br>
-                MAC: ${d.mac}<br>
-                Status: <span style="color: #0f0;">${d.status}</span>
+                <strong>${escHtml(d.ip)}</strong><br>
+                MAC: ${escHtml(d.mac)}<br>
+                Status: <span style="color: #0f0;">${escHtml(d.status)}</span>
             </div>`
         ).join('') + `<div style="margin: 10px 0; color: #0ff; font-style: italic;">+ ${deviceCount - 3} more devices...</div>`;
     }
@@ -509,7 +532,8 @@ window.addEventListener('DOMContentLoaded', () => {
         mode: 'cors'
     })
     .then(response => response.json())
-    .then(data => {
+    .then(body => {
+        const data = (body && body.data !== undefined) ? body.data : body;
         console.log('✓ Backend connected:', data);
         console.log('✓ System:', data.system);
         console.log('✓ Status:', data.status);

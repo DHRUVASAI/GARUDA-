@@ -1,281 +1,271 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GARUDA Backend Diagnostic</title>
-    <style>
-        body {
-            font-family: 'Courier New', monospace;
-            background: #000;
-            color: #0f0;
-            padding: 20px;
-            line-height: 1.8;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: rgba(0, 20, 0, 0.8);
-            border: 2px solid #0f0;
-            padding: 30px;
-            border-radius: 5px;
-        }
-        h1 {
-            color: #0ff;
-            text-align: center;
-            font-size: 2em;
-            margin-bottom: 30px;
-        }
-        .test-section {
-            margin: 20px 0;
-            padding: 15px;
-            background: rgba(0, 50, 0, 0.5);
-            border-left: 4px solid #0f0;
-        }
-        .status {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 3px;
-            font-weight: bold;
-        }
-        .success {
-            background: rgba(0, 255, 0, 0.2);
-            color: #0f0;
-            border: 1px solid #0f0;
-        }
-        .error {
-            background: rgba(255, 0, 0, 0.2);
-            color: #f00;
-            border: 1px solid #f00;
-        }
-        .warning {
-            background: rgba(255, 255, 0, 0.2);
-            color: #ff0;
-            border: 1px solid #ff0;
-        }
-        button {
-            background: linear-gradient(135deg, rgba(0, 255, 255, 0.3), rgba(0, 100, 255, 0.3));
-            border: 2px solid #0ff;
-            color: #0ff;
-            padding: 12px 30px;
-            font-size: 16px;
-            cursor: pointer;
-            font-family: 'Courier New', monospace;
-            margin: 10px 5px;
-            transition: all 0.3s;
-        }
-        button:hover {
-            background: linear-gradient(135deg, rgba(0, 255, 255, 0.5), rgba(0, 100, 255, 0.5));
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-        }
-        code {
-            background: rgba(0, 0, 0, 0.5);
-            padding: 2px 8px;
-            border-radius: 3px;
-            color: #ff0;
-        }
-        .json-output {
-            background: #000;
-            padding: 15px;
-            border-radius: 5px;
-            overflow-x: auto;
-            font-size: 12px;
-            border: 1px solid #0f0;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        .loading {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border: 2px solid #0ff;
-            border-radius: 50%;
-            border-top-color: transparent;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GARUDA — Backend diagnostic</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0c1017;
+  --glass: rgba(15, 20, 28, 0.65);
+  --b0: rgba(255,255,255,0.08);
+  --t0: #f0f4f8;
+  --t1: #94a3b8;
+  --t2: #64748b;
+  --accent: #22d3ee;
+  --success: #34d399;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --font: 'Inter', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--t0);
+  line-height: 1.55;
+  padding: 28px 18px 48px;
+}
+.wrap { max-width: 720px; margin: 0 auto; }
+h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 6px; }
+.sub { color: var(--t1); font-size: 13px; margin-bottom: 22px; }
+.card {
+  background: var(--glass);
+  border: 1px solid var(--b0);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  backdrop-filter: blur(14px);
+}
+.card h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t1); margin-bottom: 12px; }
+.checklist { list-style: none; }
+.checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--b0);
+  font-size: 14px;
+}
+.checklist li:last-child { border-bottom: none; }
+.ic { font-size: 18px; line-height: 1.2; flex-shrink: 0; }
+.ok .ic { color: var(--success); }
+.warn .ic { color: var(--warn); }
+.fail .ic { color: var(--danger); }
+.detail { font-size: 12px; color: var(--t2); margin-top: 4px; font-family: var(--mono); word-break: break-all; }
+.btn {
+  font-family: var(--font);
+  border: 1px solid var(--b0);
+  background: rgba(34, 211, 238, 0.12);
+  color: var(--t0);
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  margin-right: 8px;
+  margin-top: 4px;
+}
+pre.raw {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--b0);
+  background: rgba(0,0,0,0.35);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--t1);
+  overflow: auto;
+  max-height: 220px;
+  display: none;
+}
+pre.raw.on { display: block; }
+a { color: var(--accent); }
+</style>
 </head>
 <body>
-    <div class="container">
-        <h1>◈ GARUDA BACKEND DIAGNOSTIC ◈</h1>
-        
-        <div class="test-section">
-            <h3>📡 CONNECTION TEST</h3>
-            <button onclick="testConnection()">Test Backend Connection</button>
-            <div id="connectionStatus"></div>
-        </div>
+<div class="wrap">
+  <h1>Backend diagnostic</h1>
+  <p class="sub">Uses the standard API envelope <code class="mono" style="font-family:var(--mono);font-size:12px;color:var(--t1)">{ success, data, error, timestamp }</code>.</p>
 
-        <div class="test-section">
-            <h3>🔍 HEALTH CHECK</h3>
-            <button onclick="testHealth()">GET /api/health</button>
-            <div id="healthStatus"></div>
-            <pre id="healthOutput" class="json-output" style="display: none;"></pre>
-        </div>
+  <div class="card">
+    <h2>Health checklist</h2>
+    <ul class="checklist" id="checklist"></ul>
+    <button type="button" class="btn" id="btnRerun">Run health checks</button>
+    <button type="button" class="btn" id="btnFullScan">Run full scan (slow)</button>
+  </div>
 
-        <div class="test-section">
-            <h3>📶 NETWORK SCAN</h3>
-            <button onclick="testFullScan()">POST /api/scan/full</button>
-            <div id="scanStatus"></div>
-            <pre id="scanOutput" class="json-output" style="display: none;"></pre>
-        </div>
+  <div class="card">
+    <h2>Raw responses</h2>
+    <p style="font-size:13px;color:var(--t1);margin-bottom:8px;">Toggle after running checks.</p>
+    <button type="button" class="btn" id="btnToggleHealth">Health JSON</button>
+    <button type="button" class="btn" id="btnToggleScan">Scan JSON</button>
+    <pre class="raw" id="rawHealth"></pre>
+    <pre class="raw" id="rawScan"></pre>
+  </div>
 
-        <div class="test-section">
-            <h3>🛠️ TROUBLESHOOTING</h3>
-            <div id="troubleshootInfo">
-                <p><strong>If all tests fail:</strong></p>
-                <ol>
-                    <li>Make sure Python backend is running: <code>python garuda_backend.py</code></li>
-                    <li>Check backend terminal shows: <code>Running on http://127.0.0.1:5000</code></li>
-                    <li>Try accessing: <a href="http://127.0.0.1:5000/api/health" target="_blank" style="color: #0ff;">http://127.0.0.1:5000/api/health</a></li>
-                    <li>Check firewall isn't blocking port 5000</li>
-                    <li>Try running backend as admin/sudo if needed</li>
-                </ol>
-                
-                <p><strong>If health check works but scan fails:</strong></p>
-                <ol>
-                    <li>Make sure you're connected to a WiFi network</li>
-                    <li>Check backend terminal for error messages</li>
-                    <li>On Linux, ensure NetworkManager is installed</li>
-                </ol>
-            </div>
-        </div>
+  <div class="card">
+    <h2>Troubleshooting</h2>
+    <ul style="margin-left:18px;color:var(--t1);font-size:14px;">
+      <li>Start backend: <span style="font-family:var(--mono);color:var(--t0)">python garuda_backend.py</span></li>
+      <li>Open <a id="healthLink" href="#" target="_blank" rel="noopener">/api/health</a> in a new tab</li>
+      <li>Full scan requires WiFi; may take a minute</li>
+    </ul>
+  </div>
+</div>
 
-        <div class="test-section">
-            <h3>ℹ️ SYSTEM INFO</h3>
-            <div id="systemInfo">
-                <p><strong>Current URL:</strong> <code id="currentUrl"></code></p>
-                <p><strong>Protocol:</strong> <code id="protocol"></code></p>
-                <p><strong>API Base:</strong> <code id="apiBase"></code></p>
-                <p><strong>Browser:</strong> <code id="browser"></code></p>
-            </div>
-        </div>
-    </div>
+<script>
+// shared utils
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function escAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function showToast(msg, type='info', duration=3500) {
+  let c = document.getElementById('garuda-toasts');
+  if (!c) {
+    c = document.createElement('div');
+    c.id = 'garuda-toasts';
+    c.style.cssText = 'position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:10px;z-index:99999;pointer-events:none;align-items:flex-end;';
+    document.body.appendChild(c);
+  }
+  const t = document.createElement('div');
+  const s = getComputedStyle(document.documentElement);
+  const accent = s.getPropertyValue('--accent').trim() || '#3b82f6';
+  const success = s.getPropertyValue('--success').trim() || '#10b981';
+  const warn = s.getPropertyValue('--warn').trim() || '#f59e0b';
+  const danger = s.getPropertyValue('--danger').trim() || '#ef4444';
+  const bg = type === 'error' ? danger : type === 'warn' ? warn : type === 'success' ? success : accent;
+  t.style.cssText = `background:rgba(15,20,28,0.95);color:#fff;border-left:4px solid ${bg};padding:12px 16px;border-radius:6px;font-family:system-ui,sans-serif;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,0.3);opacity:0;transform:translateY(20px);transition:opacity 0.3s ease, transform 0.3s ease;pointer-events:auto;max-width:300px;word-wrap:break-word;`;
+  t.innerHTML = escHtml(msg);
+  c.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateY(0)'; });
+  setTimeout(() => {
+    t.style.opacity = '0'; t.style.transform = 'translateY(20px)';
+    setTimeout(() => t.remove(), 300);
+  }, duration);
+}
 
-    <script>
-        const API_BASE = 'http://127.0.0.1:5000';
+(function () {
+  const LS = 'garuda_api_base';
+  function base() {
+    try {
+      const u = localStorage.getItem(LS);
+      return (u || window.location.origin).replace(/\/$/, '');
+    } catch (e) { return window.location.origin; }
+  }
 
-        // Update system info
-        document.getElementById('currentUrl').textContent = window.location.href;
-        document.getElementById('protocol').textContent = window.location.protocol;
-        document.getElementById('apiBase').textContent = API_BASE;
-        document.getElementById('browser').textContent = navigator.userAgent;
+  
 
-        function showLoading(elementId) {
-            document.getElementById(elementId).innerHTML = '<span class="loading"></span> Testing...';
-        }
+  function setRow(li, state, title, detail) {
+    li.className = state;
+    li.textContent = '';
+    const ic = document.createElement('span');
+    ic.className = 'ic';
+    ic.setAttribute('aria-hidden', 'true');
+    ic.textContent = state === 'ok' ? '✅' : state === 'warn' ? '⚠️' : '❌';
+    const body = document.createElement('div');
+    const t = document.createElement('div');
+    t.textContent = title;
+    body.appendChild(t);
+    if (detail) {
+      const d = document.createElement('div');
+      d.className = 'detail';
+      d.textContent = detail;
+      body.appendChild(d);
+    }
+    li.appendChild(ic);
+    li.appendChild(body);
+  }
 
-        function showSuccess(elementId, message) {
-            document.getElementById(elementId).innerHTML = 
-                `<div class="status success">✓ SUCCESS: ${message}</div>`;
-        }
+  async function fetchEnvelope(path, opts) {
+    const url = base() + path;
+    const r = await fetch(url, opts || {});
+    let j = null;
+    try { j = await r.json(); } catch (e) { j = { success: false, error: 'Non-JSON body', data: null }; }
+    return { r, j };
+  }
 
-        function showError(elementId, message) {
-            document.getElementById(elementId).innerHTML = 
-                `<div class="status error">✗ ERROR: ${message}</div>`;
-        }
+  const checklist = document.getElementById('checklist');
+  const rawHealth = document.getElementById('rawHealth');
+  const rawScan = document.getElementById('rawScan');
 
-        function showWarning(elementId, message) {
-            document.getElementById(elementId).innerHTML = 
-                `<div class="status warning">⚠ WARNING: ${message}</div>`;
-        }
+  function li() {
+    const el = document.createElement('li');
+    checklist.appendChild(el);
+    return el;
+  }
 
-        async function testConnection() {
-            showLoading('connectionStatus');
-            
-            try {
-                const response = await fetch(`${API_BASE}/api/health`, {
-                    method: 'GET',
-                    mode: 'cors'
-                });
-                
-                if (response.ok) {
-                    showSuccess('connectionStatus', 'Backend is reachable!');
-                } else {
-                    showError('connectionStatus', `HTTP ${response.status}: ${response.statusText}`);
-                }
-            } catch (error) {
-                showError('connectionStatus', 
-                    `Cannot connect to backend. Error: ${error.message}<br>` +
-                    `Make sure backend is running: <code>python garuda_backend.py</code>`
-                );
-            }
-        }
+  async function runHealth() {
+    checklist.textContent = '';
+    rawHealth.textContent = '';
+    rawScan.textContent = '';
+    rawHealth.classList.remove('on');
+    rawScan.classList.remove('on');
+    document.getElementById('healthLink').href = base() + '/api/health';
 
-        async function testHealth() {
-            showLoading('healthStatus');
-            const outputEl = document.getElementById('healthOutput');
-            
-            try {
-                const response = await fetch(`${API_BASE}/api/health`, {
-                    method: 'GET',
-                    mode: 'cors'
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showSuccess('healthStatus', 
-                        `Backend operational! System: ${data.system}, Status: ${data.status}`
-                    );
-                    outputEl.textContent = JSON.stringify(data, null, 2);
-                    outputEl.style.display = 'block';
-                } else {
-                    showError('healthStatus', `HTTP ${response.status}`);
-                    outputEl.textContent = JSON.stringify(data, null, 2);
-                    outputEl.style.display = 'block';
-                }
-            } catch (error) {
-                showError('healthStatus', `Request failed: ${error.message}`);
-                outputEl.style.display = 'none';
-            }
-        }
+    const l0 = li();
+    setRow(l0, 'warn', 'Reachability', 'Testing ' + base() + ' …');
 
-        async function testFullScan() {
-            showLoading('scanStatus');
-            const outputEl = document.getElementById('scanOutput');
-            
-            try {
-                const response = await fetch(`${API_BASE}/api/scan/full`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    mode: 'cors'
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showSuccess('scanStatus', 
-                        `Scan complete! Found ${data.nodes_detected} nodes, ` +
-                        `${data.connected_devices?.length || 0} devices`
-                    );
-                    outputEl.textContent = JSON.stringify(data, null, 2);
-                    outputEl.style.display = 'block';
-                } else {
-                    showError('scanStatus', 
-                        `Scan failed: ${data.message || response.statusText}`
-                    );
-                    outputEl.textContent = JSON.stringify(data, null, 2);
-                    outputEl.style.display = 'block';
-                }
-            } catch (error) {
-                showError('scanStatus', 
-                    `Request failed: ${error.message}<br>` +
-                    `Make sure you're connected to WiFi`
-                );
-                outputEl.style.display = 'none';
-            }
-        }
+    try {
+      const h = await fetchEnvelope('/api/health', { method: 'GET' });
+      rawHealth.textContent = JSON.stringify(h.j, null, 2);
+      const envOk = h.j && typeof h.j.success === 'boolean';
+      if (!h.r.ok) {
+        setRow(l0, 'fail', 'HTTP ' + h.r.status, esc(h.j && h.j.error));
+        return;
+      }
+      if (!envOk || !h.j.success) {
+        setRow(l0, 'fail', 'Envelope rejected health response', esc(h.j && h.j.error));
+        return;
+      }
+      setRow(l0, 'ok', 'Backend reachable', 'status=' + esc((h.j.data && h.j.data.status) || ''));
 
-        // Auto-test on load
-        window.addEventListener('DOMContentLoaded', () => {
-            console.log('Running auto-diagnostic...');
-            testConnection();
-        });
-    </script>
+      const l1 = li();
+      const d = h.j.data || {};
+      if (d.db_available) setRow(l1, 'ok', 'Database', 'db_available=true');
+      else setRow(l1, 'warn', 'Database', 'db_available=false (history features limited)');
+    } catch (e) {
+      setRow(l0, 'fail', 'Network error', esc(e.message));
+    }
+  }
+
+  async function runFullScanCheck() {
+    const l2 = li();
+    setRow(l2, 'warn', 'Full scan', 'Starting POST /api/scan/full …');
+    try {
+      const scan = await fetchEnvelope('/api/scan/full', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      rawScan.textContent = JSON.stringify(scan.j, null, 2);
+      if (scan.r.status === 409) {
+        setRow(l2, 'warn', 'Full scan', 'Scan already in progress (409)');
+        return;
+      }
+      if (!scan.r.ok || !scan.j || scan.j.success !== true) {
+        setRow(l2, 'fail', 'Full scan', esc(scan.j && (scan.j.error || scan.r.statusText)));
+        return;
+      }
+      const nodes = scan.j.data && scan.j.data.nodes_detected;
+      setRow(l2, 'ok', 'Full scan completed', 'nodes_detected=' + esc(nodes));
+    } catch (e) {
+      setRow(l2, 'fail', 'Full scan', esc(e.message));
+    }
+  }
+
+  document.getElementById('btnRerun').addEventListener('click', runHealth);
+  document.getElementById('btnFullScan').addEventListener('click', runFullScanCheck);
+  document.getElementById('btnToggleHealth').addEventListener('click', function () {
+    rawHealth.classList.toggle('on');
+  });
+  document.getElementById('btnToggleScan').addEventListener('click', function () {
+    rawScan.classList.toggle('on');
+  });
+
+  runHealth();
+})();
+</script>
 </body>
 </html>

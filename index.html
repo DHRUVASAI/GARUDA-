@@ -479,7 +479,47 @@ body{font-family:var(--font-ui);background:var(--bg);color:var(--t0);min-height:
   </div>
 </main>
 <script>
+// shared utils
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function escAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function showToast(msg, type='info', duration=3500) {
+  let c = document.getElementById('garuda-toasts');
+  if (!c) {
+    c = document.createElement('div');
+    c.id = 'garuda-toasts';
+    c.style.cssText = 'position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:10px;z-index:99999;pointer-events:none;align-items:flex-end;';
+    document.body.appendChild(c);
+  }
+  const t = document.createElement('div');
+  const s = getComputedStyle(document.documentElement);
+  const accent = s.getPropertyValue('--accent').trim() || '#3b82f6';
+  const success = s.getPropertyValue('--success').trim() || '#10b981';
+  const warn = s.getPropertyValue('--warn').trim() || '#f59e0b';
+  const danger = s.getPropertyValue('--danger').trim() || '#ef4444';
+  const bg = type === 'error' ? danger : type === 'warn' ? warn : type === 'success' ? success : accent;
+  t.style.cssText = `background:rgba(15,20,28,0.95);color:#fff;border-left:4px solid ${bg};padding:12px 16px;border-radius:6px;font-family:system-ui,sans-serif;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,0.3);opacity:0;transform:translateY(20px);transition:opacity 0.3s ease, transform 0.3s ease;pointer-events:auto;max-width:300px;word-wrap:break-word;`;
+  t.innerHTML = escHtml(msg);
+  c.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateY(0)'; });
+  setTimeout(() => {
+    t.style.opacity = '0'; t.style.transform = 'translateY(20px)';
+    setTimeout(() => t.remove(), 300);
+  }, duration);
+}
+
 const isFile = location.protocol === 'file:';
+
+const docStyle = getComputedStyle(document.documentElement);
+const accentColor = docStyle.getPropertyValue('--accent').trim() || '#3b82f6';
+const successColor = docStyle.getPropertyValue('--success').trim() || '#10b981';
+const dangerColor = docStyle.getPropertyValue('--danger').trim() || '#ef4444';
+const warnColor = docStyle.getPropertyValue('--warn').trim() || '#f59e0b';
+const textColor = docStyle.getPropertyValue('--text-secondary').trim() || '#8b93a6';
+const mutedColor = docStyle.getPropertyValue('--text-muted').trim() || '#3d4658';
 const API = isFile || ['localhost','127.0.0.1'].includes(location.hostname) ? 'http://127.0.0.1:5000' : '/api';
 const RISKY_PORTS = new Set([21,23,135,139,445,3389,5900,1433,3306,5432,6379,27017]);
 const PORT_NAMES = {21:'FTP',22:'SSH',23:'Telnet',25:'SMTP',53:'DNS',80:'HTTP',110:'POP3',135:'RPC',139:'NetBIOS',143:'IMAP',443:'HTTPS',445:'SMB',993:'IMAPS',995:'POP3S',1433:'MSSQL',1521:'Oracle',3000:'Dev',3306:'MySQL',3389:'RDP',5432:'Postgres',5900:'VNC',6379:'Redis',8080:'HTTP-Alt',8443:'HTTPS-Alt',8888:'Jupyter',27017:'MongoDB'};
@@ -496,6 +536,14 @@ let trafficRange = '1H';
 const TRAFFIC_RANGE_POINTS = { '1H': 20, '6H': 72, '24H': 288, '7D': 800 };
 const MAX_TRAFFIC_POINTS = 1000;
 let trafficHistory = {labels:[], bytesSent:[], bytesRecv:[], pktSent:[], pktRecv:[]};
+
+
+
+  el.textContent = msg || 'Error';
+  el.style.opacity = '1';
+  clearTimeout(_toastT);
+  _toastT = setTimeout(() => { el.style.opacity = '0'; }, 4000);
+}
 
 function getDeviceDisplayName(device) {
   if (!device) return '—';
@@ -519,7 +567,10 @@ function switchPage(page) {
 
 // Health check
 function checkHealth() {
-  fetch(`${API}/api/health`).then(r => r.json()).then(() => setOnline(true)).catch(() => setOnline(false));
+  fetch(`${API}/api/health`).then(r => r.json()).then(b => {
+    const ok = (b && b.success === true) || (b && b.status === 'OPERATIONAL');
+    setOnline(!!ok);
+  }).catch(() => setOnline(false));
 }
 function setOnline(on) {
   document.getElementById('sDot').className = 'status-dot ' + (on ? 'on' : 'off');
@@ -557,8 +608,12 @@ function startScan() {
 
 function fetchData() {
   fetch(`${API}/api/scan/full`, {method:'POST', headers:{'Content-Type':'application/json'}, mode:'cors'})
-    .then(r => r.json()).then(d => { scanData = d; lastScanTs = Date.now(); updateAll(d); finishScan(); })
-    .catch(e => { console.error(e); finishScan(); });
+    .then(r => r.json()).then(body => {
+      if (body && body.success === false) throw new Error(body.error || 'Scan failed');
+      const d = (body && body.data !== undefined) ? body.data : body;
+      scanData = d; lastScanTs = Date.now(); updateAll(d); finishScan();
+    })
+    .catch(e => { console.error(e); showApiToast(e.message || 'Scan failed'); finishScan(); });
 }
 
 function finishScan() {
@@ -621,7 +676,7 @@ function updateAll(data) {
   if (pred.attack_predictions && pred.attack_predictions.length > 0) {
     threatsDiv.innerHTML = pred.attack_predictions.slice(0,6).map(a => {
       const dotColor = {Critical:'var(--critical)',High:'var(--danger)',Medium:'var(--warn)',Low:'var(--success)'}[a.severity] || 'var(--t2)';
-      return `<div class="threat-item"><div class="threat-dot" style="background:${dotColor}"></div><span style="flex:1">${a.type}</span><span class="sev-${(a.severity||'').toLowerCase()}">${a.severity}</span></div>`;
+      return `<div class="threat-item"><div class="threat-dot" style="background:${dotColor}"></div><span style="flex:1">${escHtml(a.type)}</span><span class="sev-${(a.severity||'').toLowerCase()}">${escHtml(a.severity)}</span></div>`;
     }).join('');
   } else {
     threatsDiv.innerHTML = '<div class="threat-item"><div class="threat-dot" style="background:var(--success)"></div><span>No significant threats detected</span></div>';
@@ -664,9 +719,10 @@ function updateDeviceTable(data) {
   }
   tbody.innerHTML = devices.map(d => {
     const ports = portData[d.ip] || [];
-    const portStr = ports.length > 0 ? ports.map(p => `<span class="port-tag${RISKY_PORTS.has(p)?' risky':''}">${p}</span>`).join('') : '<span style="color:var(--t2)">—</span>';
+    const portStr = ports.length > 0 ? ports.map(p => `<span class="port-tag${RISKY_PORTS.has(p)?' risky':''}">${escHtml(p)}</span>`).join('') : '<span style="color:var(--t2)">—</span>';
     const statusCls = d.status === 'ACTIVE' ? 'text-success' : 'text-warn';
-    return `<tr><td class="mono text-accent">${d.ip}</td><td>${getDeviceDisplayName(d)}</td><td class="mono">${d.mac||'—'}</td><td>${d.vendor||'Unknown'}</td><td class="${statusCls}">${d.status||'—'}</td><td>${portStr}</td><td>${d.detection_method||'—'}</td></tr>`;
+    const disp = escHtml(getDeviceDisplayName(d));
+    return `<tr><td class="mono text-accent">${escHtml(d.ip)}</td><td>${disp}</td><td class="mono">${escHtml(d.mac||'—')}</td><td>${escHtml(d.vendor||'Unknown')}</td><td class="${statusCls}">${escHtml(d.status||'—')}</td><td>${portStr}</td><td>${escHtml(d.detection_method||'—')}</td></tr>`;
   }).join('');
 
   const active = devices.filter(d => d.status === 'ACTIVE').length;
@@ -729,7 +785,7 @@ function updateThreatAnalysis(pred) {
   const segBar = document.getElementById('riskSegBar');
   const segLabels = document.getElementById('riskSegLabels');
   const compNames = {encryption:'Encryption Weakness',unknown_devices:'Unknown Devices',arp_anomalies:'ARP Anomalies',open_ports:'Open Port Exposure',device_density:'Device Density',traffic_anomaly:'Traffic Anomaly'};
-  const compColors = {encryption:'#f85149',unknown_devices:'#d29922',arp_anomalies:'#da3633',open_ports:'#1f6feb',device_density:'#8b5cf6',traffic_anomaly:'#ec4899'};
+  const compColors = {encryption:'#f85149',unknown_devices:warnColor,arp_anomalies:dangerColor,open_ports:accentColor,device_density:accentColor,traffic_anomaly:'#ec4899'};
   if (pred.component_scores) {
     segBar.innerHTML = Object.entries(pred.component_scores).map(([k,v]) => `
       <div style="margin-bottom:10px">
@@ -756,7 +812,9 @@ function updateThreatAnalysis(pred) {
   }
 }
 
-function updateTraffic(t) {
+function updateTraffic(payload) {
+  const t = payload && payload.current ? payload.current : payload;
+  if (!t) return;
   document.getElementById('tf-bs').textContent = t.bytes_sent || '—';
   document.getElementById('tf-br').textContent = t.bytes_received || '—';
   const pktTotal = (t.packets_sent_raw||0) + (t.packets_recv_raw||0);
@@ -791,21 +849,21 @@ function renderCharts() {
     if (v >= 1024) return (v/1024).toFixed(1)+' KB';
     return v+' B';
   };
-  const bytesOpts = {responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{color:'#8b949e',font:{size:10,family:'Inter'},boxWidth:10}},tooltip:{callbacks:{label:ctx=>{return ` ${ctx.dataset.label}: ${fmtBytes(ctx.raw)}`;}}}},scales:{x:{ticks:{color:'#484f58',font:{size:9,family:'JetBrains Mono'}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#484f58',font:{size:9,family:'JetBrains Mono'},maxTicksLimit:6,callback:function(value){return fmtBytes(value);}},grid:{color:'rgba(255,255,255,0.04)'}}}};
-  const pktOpts = {responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{color:'#8b949e',font:{size:10,family:'Inter'},boxWidth:10}}},scales:{x:{ticks:{color:'#484f58',font:{size:9,family:'JetBrains Mono'}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#484f58',font:{size:9,family:'JetBrains Mono'},maxTicksLimit:6},grid:{color:'rgba(255,255,255,0.04)'}}}};
+  const bytesOpts = {responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{color:textColor,font:{size:10,family:'Inter'},boxWidth:10}},tooltip:{callbacks:{label:ctx=>{return ` ${ctx.dataset.label}: ${fmtBytes(ctx.raw)}`;}}}},scales:{x:{ticks:{color: mutedColor,font:{size:9,family:'JetBrains Mono'}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color: mutedColor,font:{size:9,family:'JetBrains Mono'},maxTicksLimit:6,callback:function(value){return fmtBytes(value);}},grid:{color:'rgba(255,255,255,0.04)'}}}};
+  const pktOpts = {responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{color:textColor,font:{size:10,family:'Inter'},boxWidth:10}}},scales:{x:{ticks:{color: mutedColor,font:{size:9,family:'JetBrains Mono'}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color: mutedColor,font:{size:9,family:'JetBrains Mono'},maxTicksLimit:6},grid:{color:'rgba(255,255,255,0.04)'}}}};
   
   const ctx1 = document.getElementById('bytesChart').getContext('2d');
   if (bytesChart) bytesChart.destroy();
   bytesChart = new Chart(ctx1, {type:'line', data:{labels,datasets:[
-    {label:'Sent',data:bytesSent,borderColor:'#1f6feb',backgroundColor:'rgba(31,111,235,0.1)',fill:true,tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5},
-    {label:'Received',data:bytesRecv,borderColor:'#2ea043',backgroundColor:'rgba(46,160,67,0.1)',fill:true,tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5}
+    {label:'Sent',data:bytesSent,borderColor:accentColor,backgroundColor:accentColor,fill:true,tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5},
+    {label:'Received',data:bytesRecv,borderColor:successColor,backgroundColor:'color-mix(in srgb, ' + successColor + ' 10%, transparent)',fill:true,tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5}
   ]}, options:bytesOpts});
 
   const ctx2 = document.getElementById('packetsChart').getContext('2d');
   if (packetsChart) packetsChart.destroy();
   packetsChart = new Chart(ctx2, {type:'line', data:{labels,datasets:[
-    {label:'Sent',data:pktSent,borderColor:'#d29922',backgroundColor:'transparent',tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5},
-    {label:'Received',data:pktRecv,borderColor:'#8b5cf6',backgroundColor:'transparent',tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5}
+    {label:'Sent',data:pktSent,borderColor:warnColor,backgroundColor:'transparent',tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5},
+    {label:'Received',data:pktRecv,borderColor:accentColor,backgroundColor:'transparent',tension:0.4,pointRadius:0,pointHoverRadius:4,borderWidth:1.5}
   ]}, options:pktOpts});
 }
 
@@ -821,7 +879,10 @@ let trafficTimer = null;
 function startTrafficPolling() {
   if (trafficTimer) clearInterval(trafficTimer);
   trafficTimer = setInterval(() => {
-    fetch(`${API}/api/traffic/live`).then(r => r.json()).then(t => updateTraffic(t)).catch(() => {});
+    fetch(`${API}/api/traffic/live`).then(r => r.json()).then(raw => {
+      const b = raw && raw.data !== undefined ? raw.data : raw;
+      if (b) updateTraffic(b);
+    }).catch(() => {});
   }, 5000);
 }
 
@@ -870,10 +931,10 @@ function buildTopology(data) {
     const ports = portData[d.ip] || [];
     const hasRisky = ports.some(p => RISKY_PORTS.has(p));
     let r = d.type === 'GATEWAY' ? 20 : d.type === 'THIS_DEVICE' ? 14 : hasRisky ? 11 : 9;
-    let fill = '#8b949e';
-    if (d.type === 'GATEWAY') fill = '#1f6feb';
-    else if (d.type === 'THIS_DEVICE') fill = '#2ea043';
-    else if (hasRisky) fill = '#da3633';
+    let fill = textColor;
+    if (d.type === 'GATEWAY') fill = accentColor;
+    else if (d.type === 'THIS_DEVICE') fill = successColor;
+    else if (hasRisky) fill = dangerColor;
 
     const nodeData = {device:d, pos, r, fill, ports, hasRisky, rings:[], edge:null, circle:null, text:null, selectRing:null};
 
@@ -882,8 +943,9 @@ function buildTopology(data) {
       const line = document.createElementNS('http://www.w3.org/2000/svg','line');
       line.setAttribute('x1', positions[0].x); line.setAttribute('y1', positions[0].y);
       line.setAttribute('x2', pos.x); line.setAttribute('y2', pos.y);
-      line.setAttribute('stroke', hasRisky ? 'rgba(218,54,51,0.4)' : 'rgba(139,148,158,0.2)');
+      line.setAttribute('stroke', hasRisky ? dangerColor : mutedColor);
       line.setAttribute('stroke-width', hasRisky ? '2' : '1.5');
+      line.setAttribute('opacity', hasRisky ? '0.4' : '0.2');
       line.style.transition = 'x1 0.05s,y1 0.05s,x2 0.05s,y2 0.05s';
       edgeGroup.appendChild(line);
       nodeData.edge = line;
@@ -893,7 +955,7 @@ function buildTopology(data) {
     if (d.type === 'GATEWAY') {
       const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
       ring.setAttribute('cx',pos.x); ring.setAttribute('cy',pos.y); ring.setAttribute('r',28);
-      ring.setAttribute('fill','none'); ring.setAttribute('stroke','#1f6feb'); ring.setAttribute('stroke-width','1.5'); ring.setAttribute('opacity','0.25');
+      ring.setAttribute('fill','none'); ring.setAttribute('stroke',accentColor); ring.setAttribute('stroke-width','1.5'); ring.setAttribute('opacity','0.25');
       nodeGroup.appendChild(ring);
       nodeData.rings.push(ring);
     }
@@ -901,7 +963,7 @@ function buildTopology(data) {
     if (hasRisky && d.type !== 'GATEWAY') {
       const pr = document.createElementNS('http://www.w3.org/2000/svg','circle');
       pr.setAttribute('cx',pos.x); pr.setAttribute('cy',pos.y); pr.setAttribute('r','14');
-      pr.setAttribute('fill','none'); pr.setAttribute('stroke','#da3633'); pr.setAttribute('stroke-width','1');
+      pr.setAttribute('fill','none'); pr.setAttribute('stroke',dangerColor); pr.setAttribute('stroke-width','1');
       pr.style.animation = 'pulse-ring 2s infinite';
       nodeGroup.appendChild(pr);
       nodeData.rings.push(pr);
@@ -954,7 +1016,7 @@ function buildTopology(data) {
     // IP label
     const text = document.createElementNS('http://www.w3.org/2000/svg','text');
     text.setAttribute('x',pos.x); text.setAttribute('y',pos.y + r + 14);
-    text.setAttribute('text-anchor','middle'); text.setAttribute('fill','#8b949e');
+    text.setAttribute('text-anchor','middle'); text.setAttribute('fill',textColor);
     text.setAttribute('font-size','9'); text.setAttribute('font-family','JetBrains Mono');
     text.style.pointerEvents = 'none'; text.style.transition = 'opacity 0.2s';
     const label = d.ip ? d.ip.split('.').pop() : '?';

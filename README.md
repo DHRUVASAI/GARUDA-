@@ -112,6 +112,37 @@ garuda
 
 ---
 
+## Deployment and configuration
+
+Configuration is driven by `config.py`, which reads **`GARUDA_*` environment variables**. Copy `.env.example` to `.env`, edit values, then export them in your shell (or use a process manager that loads `.env`).
+
+**High Sensitivity Mode.** You can toggle "High Sensitivity Mode" directly from the dashboard (Settings panel). This reduces the data polling interval from 5s to 2s for real-time monitoring. The base interval can also be configured via `GARUDA_POLL_INTERVAL` in your `.env`. Note: This will increase CPU and network usage.
+
+**Run locally (single process).** From this directory:
+
+```bash
+pip install -r requirements.txt
+python garuda_backend.py
+```
+
+Then open `http://127.0.0.1:5000` (Flask serves the HTML assets from the same folder).
+
+**Run in production.** Use **Gunicorn** in front of the WSGI app; the `Procfile` runs two workers with four threads each so port scans and clients do not block each other:
+
+```bash
+pip install -r requirements.txt
+gunicorn -w 2 --threads 4 -b 0.0.0.0:8000 garuda_backend:app
+```
+
+Set `GARUDA_DEBUG=false` and put a reverse proxy (nginx, Caddy, etc.) in front for TLS. Tune `GARUDA_RATE_SCAN_FULL` if legitimate clients hit rate limits.
+
+**Optional background service** (scheduled scans and desktop notifications): `python monitor.py` in a separate session or systemd unit.
+
+**Privileges.** Deep ping sweeps and some ARP behaviour are more reliable when the process runs with **Administrator** rights on Windows or **root** on Linux; without elevation, behaviour depends on OS APIs and policies.
+
+
+---
+
 ## 🎬 Feature Previews
 
 | Preview | Description |
