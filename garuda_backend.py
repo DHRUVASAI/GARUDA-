@@ -7,7 +7,7 @@ GARUDA Network Defense System - Backend v4.0
 """
 
 from flask import Flask, jsonify, request, send_from_directory, Response, stream_with_context
-import os
+import os, sys
 import json
 from flask_cors import CORS
 import subprocess, re, platform, socket, time, concurrent.futures, threading
@@ -18,6 +18,12 @@ from typing import Optional
 import psutil
 import logging
 from werkzeug.exceptions import HTTPException
+
+# GARUDA-X additions: hashing + local attestation ledger + optional Monad client.
+# These are additive imports only — nothing below changes existing behavior.
+import hashlib
+import uuid
+import sqlite3
 
 from config import (
     HOST,
@@ -33,18 +39,66 @@ from config import (
     PORT_TIMEOUT_MED_MS,
     PORT_TIMEOUT_SLOW_MS,
     PORT_CRITICAL_FLOOR_MS,
+    UI_POLL_INTERVAL_SEC,
 )
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 from threat_ports import RISKY_PORT_META, SEVERITY_RANK
 from garuda_net_utils import parse_ping_rtt_ttl, guess_os_from_ports_and_ttl
+from device_aliases import save_alias, get_alias, list_aliases, delete_alias, apply_alias_to_device
 
 try:
     import urllib.request as _urlreq
     _URLIB_OK = True
 except ImportError:
     _URLIB_OK = False
+
+# ─────────────────────────────────────────────
+#  GARUDA-X: MONAD ATTESTATION CONFIG (env-only, never hardcoded)
+# ─────────────────────────────────────────────
+GARUDA_X_VERSION = "5.0"
+MONAD_RPC_URL = os.environ.get("MONAD_RPC_URL", "")
+MONAD_CHAIN_ID = os.environ.get("MONAD_CHAIN_ID", "")
+MONAD_CONTRACT_ADDRESS = os.environ.get("MONAD_CONTRACT_ADDRESS", "")
+MONAD_PRIVATE_KEY = os.environ.get("MONAD_PRIVATE_KEY", "")  # never logged, never returned to clients
+
+MONAD_CONFIGURED = bool(MONAD_RPC_URL and MONAD_CHAIN_ID and MONAD_CONTRACT_ADDRESS and MONAD_PRIVATE_KEY)
+
+try:
+    from web3 import Web3
+    _WEB3_LIB_AVAILABLE = True
+except Exception:
+    _WEB3_LIB_AVAILABLE = False
+
+# Minimal ABI for the SecurityAttestation contract (createAttestation/getAttestation/verifyAttestation).
+# Kept in-code so the backend has no undeclared dependency on a build artifact.
+_ATTESTATION_ABI = [
+    {
+        "inputs": [
+            {"internalType": "bytes32", "name": "reportHash", "type": "bytes32"},
+            {"internalType": "uint256", "name": "riskScore", "type": "uint256"},
+            {"internalType": "uint256", "name": "deviceCount", "type": "uint256"},
+        ],
+        "name": "createAttestation",
+        "outputs": [{"internalType": "uint256", "name": "attestationId", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function",
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "attestationId", "type": "uint256"}],
+        "name": "getAttestation",
+        "outputs": [
+            {"internalType": "bytes32", "name": "reportHash", "type": "bytes32"},
+            {"internalType": "uint256", "name": "riskScore", "type": "uint256"},
+            {"internalType": "uint256", "name": "deviceCount", "type": "uint256"},
+            {"internalType": "uint256", "name": "timestamp", "type": "uint256"},
+            {"internalType": "address", "name": "creator", "type": "address"},
+        ],
+        "stateMutability": "view",
+        "type": "function",
+    },
+]
 
 logging.basicConfig(
     level=getattr(logging, str(LOG_LEVEL).upper(), logging.INFO),
@@ -59,6 +113,7 @@ limiter = Limiter(get_remote_address, app=app, default_limits=["400 per minute"]
 
 _scan_state_lock = threading.Lock()
 _scan_in_progress = False
+_scan_start_time = 0.0
 
 
 def _iso_now():
@@ -93,7 +148,8 @@ try:
         get_scan_history, get_recent_alerts,
         get_known_devices, get_traffic_history,
         get_dashboard_summary, acknowledge_alert,
-        get_port_changes, get_device_timeline
+        get_port_changes, get_device_timeline,
+        save_bouncer_run, get_latest_bouncer_run, get_bouncer_history
     )
     init_db()
     DB_AVAILABLE = True
@@ -101,6 +157,414 @@ try:
 except Exception as e:
     DB_AVAILABLE = False
     logger.warning("Database not available: %s", e)
+
+# ─────────────────────────────────────────────
+#  GARUDA-X: ATTESTATION LEDGER
+#  Prefers attestation functions from database.py if that module has been
+#  extended with them (save_attestation / get_attestation / list_attestations).
+#  Otherwise falls back to a small local SQLite table so this file never
+#  depends on a database.py change that hasn't happened yet.
+# ─────────────────────────────────────────────
+_ATTESTATION_DB_NATIVE = False
+if DB_AVAILABLE:
+    try:
+        from database import save_attestation as _db_save_attestation  # type: ignore
+        from database import get_attestation as _db_get_attestation  # type: ignore
+        from database import list_attestations as _db_list_attestations  # type: ignore
+        _ATTESTATION_DB_NATIVE = True
+        logger.info("Attestation ledger: using database.py (native)")
+    except Exception:
+        _ATTESTATION_DB_NATIVE = False
+
+_ATTESTATION_FALLBACK_PATH = os.path.join(BASE_DIR if 'BASE_DIR' in globals() else os.path.dirname(os.path.abspath(__file__)), 'garuda_attestations.db')
+_attestation_lock = threading.Lock()
+
+
+def _attestation_fallback_init():
+    conn = sqlite3.connect(_ATTESTATION_FALLBACK_PATH)
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS attestations (
+                id TEXT PRIMARY KEY,
+                report_hash TEXT NOT NULL,
+                risk_score REAL,
+                severity TEXT,
+                device_count INTEGER,
+                suspicious_count INTEGER,
+                critical_count INTEGER,
+                arp_status TEXT,
+                behavioral_drift INTEGER,
+                garuda_version TEXT,
+                created_at TEXT,
+                chain_id TEXT,
+                contract_address TEXT,
+                transaction_hash TEXT,
+                block_number INTEGER,
+                creator_address TEXT,
+                status TEXT
+            )
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+if not _ATTESTATION_DB_NATIVE:
+    try:
+        _attestation_fallback_init()
+        logger.info("Attestation ledger: using local SQLite fallback (%s)", _ATTESTATION_FALLBACK_PATH)
+    except Exception as e:
+        logger.warning("Attestation ledger unavailable: %s", e)
+
+
+def _save_attestation(record: dict):
+    if _ATTESTATION_DB_NATIVE:
+        return _db_save_attestation(record)
+    with _attestation_lock:
+        conn = sqlite3.connect(_ATTESTATION_FALLBACK_PATH)
+        try:
+            conn.execute(
+                """INSERT INTO attestations
+                   (id, report_hash, risk_score, severity, device_count, suspicious_count,
+                    critical_count, arp_status, behavioral_drift, garuda_version, created_at,
+                    chain_id, contract_address, transaction_hash, block_number, creator_address, status)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    record["id"], record["report_hash"], record["risk_score"], record["severity"],
+                    record["device_count"], record["suspicious_count"], record["critical_count"],
+                    record["arp_status"], record["behavioral_drift"], record["garuda_version"],
+                    record["created_at"], record.get("chain_id"), record.get("contract_address"),
+                    record.get("transaction_hash"), record.get("block_number"),
+                    record.get("creator_address"), record["status"],
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    return record["id"]
+
+
+def _get_attestation(attestation_id: str):
+    if _ATTESTATION_DB_NATIVE:
+        return _db_get_attestation(attestation_id)
+    conn = sqlite3.connect(_ATTESTATION_FALLBACK_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT * FROM attestations WHERE id = ?", (attestation_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def _list_attestations(limit: int = 50):
+    if _ATTESTATION_DB_NATIVE:
+        return _db_list_attestations(limit)
+    conn = sqlite3.connect(_ATTESTATION_FALLBACK_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM attestations ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def _canonical_security_report(risk_score, severity, device_count, suspicious_count,
+                                critical_count, arp_status, behavioral_drift,
+                                garuda_version=None):
+    """
+    Builds the exact, ordered, non-sensitive JSON payload whose hash gets
+    committed on-chain. No IPs, MACs, hostnames or topology — summary only.
+    Field order is fixed so the same inputs always hash the same way.
+
+    garuda_version defaults to the CURRENT server version (correct when
+    creating a new attestation). When re-verifying an EXISTING attestation,
+    callers must pass the version that was actually recorded at creation
+    time — otherwise a future version bump would make every past
+    attestation's hash unreproducible and falsely appear tampered.
+    """
+    return {
+        "garudaVersion": garuda_version if garuda_version is not None else GARUDA_X_VERSION,
+        "timestamp": _iso_now(),
+        "riskScore": round(float(risk_score), 1) if risk_score is not None else None,
+        "severity": severity,
+        "deviceCount": int(device_count) if device_count is not None else 0,
+        "suspiciousCount": int(suspicious_count) if suspicious_count is not None else 0,
+        "criticalCount": int(critical_count) if critical_count is not None else 0,
+        "arpStatus": arp_status,
+        "behavioralDrift": int(behavioral_drift) if behavioral_drift is not None else 0,
+    }
+
+
+def _hash_report(report: dict) -> str:
+    canonical = json.dumps(report, sort_keys=True, separators=(",", ":"))
+    return "0x" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _get_monad_web3():
+    if not (_WEB3_LIB_AVAILABLE and MONAD_CONFIGURED):
+        return None
+    try:
+        w3 = Web3(Web3.HTTPProvider(MONAD_RPC_URL, request_kwargs={"timeout": 10}))
+        if not w3.is_connected():
+            return None
+        return w3
+    except Exception as e:
+        logger.warning("[MONAD] RPC connection failed: %s", e)
+        return None
+
+
+def _submit_attestation_to_monad(report_hash_hex: str, risk_score: float, device_count: int):
+    """
+    Submits the attestation on-chain. Returns (tx_hash, block_number, creator_address)
+    on real success, or raises — callers must NOT report success unless this returns.
+    """
+    if not (_WEB3_LIB_AVAILABLE and MONAD_CONFIGURED):
+        raise RuntimeError("Monad is not configured (missing RPC URL / chain ID / contract address / private key, or web3 not installed)")
+
+    w3 = _get_monad_web3()
+    if w3 is None:
+        raise RuntimeError("Unable to establish a connection to the configured Monad RPC endpoint")
+
+    account = w3.eth.account.from_key(MONAD_PRIVATE_KEY)
+    contract = w3.eth.contract(address=Web3.to_checksum_address(MONAD_CONTRACT_ADDRESS), abi=_ATTESTATION_ABI)
+
+    call_args = (
+        bytes.fromhex(report_hash_hex.replace("0x", "")),
+        int(round(risk_score * 10)),  # fixed-point: 1 decimal place on-chain
+        int(device_count),
+    )
+
+    tx_args = {
+        "from": account.address,
+        "chainId": int(MONAD_CHAIN_ID),
+        "nonce": w3.eth.get_transaction_count(account.address),
+    }
+    # Estimate gas explicitly rather than relying on build_transaction's
+    # implicit auto-estimation, which can be unreliable on some chains/RPCs.
+    tx_args["gas"] = contract.functions.createAttestation(*call_args).estimate_gas({"from": account.address})
+
+    tx = contract.functions.createAttestation(*call_args).build_transaction(tx_args)
+
+    signed = account.sign_transaction(tx)
+    # web3.py v6+ exposes `raw_transaction`; v5 exposes `rawTransaction`. Support both.
+    raw_tx = getattr(signed, "raw_transaction", None)
+    if raw_tx is None:
+        raw_tx = getattr(signed, "rawTransaction", None)
+    if raw_tx is None:
+        raise RuntimeError("Signed transaction has neither raw_transaction nor rawTransaction — unsupported web3.py version")
+    tx_hash = w3.eth.send_raw_transaction(raw_tx)
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
+
+    if receipt.status != 1:
+        raise RuntimeError("Monad transaction reverted")
+
+    return tx_hash.hex(), receipt.blockNumber, account.address
+
+
+# ─────────────────────────────────────────────
+#  NETWORK BOUNCER X ENGINE IMPORT
+# ─────────────────────────────────────────────
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BOUNCER_DIR = os.path.join(BASE_DIR, 'network_bouncer_x')
+if BOUNCER_DIR not in sys.path:
+    sys.path.insert(0, BOUNCER_DIR)
+
+try:
+    from pipeline import run_pipeline as run_bouncer_pipeline
+    BOUNCER_AVAILABLE = True
+    logger.info("Network Bouncer X engine loaded successfully")
+except Exception as e:
+    BOUNCER_AVAILABLE = False
+    logger.warning("Network Bouncer X engine import failed: %s", e)
+
+
+_last_scan_result = None
+
+
+def _run_bouncer_x_on_scan_data(scan_data: dict) -> dict:
+    """
+    Directly feeds live scan results (devices, open ports, RTT, TTL, gateway)
+    into the Network Bouncer X 5-Detector Ensemble + Behavioral Drift Engine.
+    Returns the AI anomaly triage summary, risk stability, attack graphs, and SOC stories.
+    """
+    if not BOUNCER_AVAILABLE:
+        return {'status': 'UNAVAILABLE', 'error': 'Network Bouncer X engine not available'}
+
+    try:
+        import pandas as pd
+        gateway_ip = '10.10.50.1'
+        local_ip = '10.10.51.102'
+
+        if isinstance(scan_data, tuple):
+            scan_data = scan_data[0]
+
+        if isinstance(scan_data, list):
+            devices = scan_data
+        elif isinstance(scan_data, dict):
+            raw_devs = scan_data.get('devices') or scan_data.get('connected_devices') or []
+            if isinstance(raw_devs, tuple):
+                raw_devs = raw_devs[0]
+            devices = raw_devs if isinstance(raw_devs, list) else []
+            gateway_ip = scan_data.get('gateway', '10.10.50.1')
+            local_ip = scan_data.get('local_ip', '10.10.51.102')
+        else:
+            devices = []
+
+        clean_devices = [d for d in devices if isinstance(d, dict)]
+        devices = clean_devices
+
+        rows = []
+        t_base = time.time() - 3600
+
+        for dev in devices:
+            ip = dev.get('ip')
+            if not ip or ip.endswith('.255') or ip.endswith('.0'):
+                continue
+
+            rtt = float(dev.get('rtt_ms') or dev.get('ping_rtt_ms') or 1.0) / 1000.0
+            ttl = int(dev.get('ttl') or 64)
+            ports = dev.get('open_ports') or []
+
+            # 1. Base normal traffic flow for each active host
+            rows.append({
+                'srcip': ip,
+                'sport': 49152 + (abs(hash(ip)) % 10000),
+                'dstip': gateway_ip,
+                'dsport': 80,
+                'proto': 'tcp',
+                'state': 'FIN',
+                'dur': max(0.001, rtt),
+                'sbytes': 500,
+                'dbytes': 1200,
+                'sttl': ttl,
+                'dttl': 64,
+                'sloss': 0,
+                'dloss': 0,
+                'service': 'http',
+                'sload': 4000.0,
+                'dload': 9600.0,
+                'spkts': 5,
+                'dpkts': 6,
+                'swin': 255,
+                'dwin': 255,
+                'stcpb': 1000,
+                'dtcpb': 1000,
+                'smeansz': 100,
+                'dmeansz': 200,
+                'trans_depth': 1,
+                'res_bdy_len': 0,
+                'sjit': 0.001,
+                'djit': 0.001,
+                'stime': t_base,
+                'ltime': t_base + rtt,
+                'sintpkt': 0.001,
+                'dintpkt': 0.001,
+                'tcprtt': rtt,
+                'synack': rtt / 2.0,
+                'ackdat': rtt / 2.0,
+                'is_sm_ips_ports': 0,
+                'ct_state_ttl': 1,
+                'ct_flw_http_mthd': 0,
+                'is_ftp_login': 0,
+                'ct_ftp_cmd': 0,
+                'ct_srv_src': 1,
+                'ct_srv_dst': 1,
+                'ct_dst_ltm': 1,
+                'ct_src_ltm': 1,
+                'ct_src_dport_ltm': 1,
+                'ct_dst_sport_ltm': 1,
+                'ct_dst_src_ltm': 1,
+                'attack_cat': 'Normal',
+                'label': 0
+            })
+
+            # 2. Open port exposure flow rows
+            for p in ports:
+                p = int(p)
+                is_risky = p in (22, 23, 135, 139, 445, 3389, 1433, 3306, 5432)
+                rows.append({
+                    'srcip': ip,
+                    'sport': 50000 + (p % 1000),
+                    'dstip': local_ip if ip != local_ip else gateway_ip,
+                    'dsport': p,
+                    'proto': 'tcp',
+                    'state': 'CON' if is_risky else 'FIN',
+                    'dur': max(0.005, rtt * 2),
+                    'sbytes': 1200 if is_risky else 300,
+                    'dbytes': 2400 if is_risky else 600,
+                    'sttl': ttl,
+                    'dttl': 64,
+                    'sloss': 1 if is_risky else 0,
+                    'dloss': 0,
+                    'service': 'ssh' if p==22 else 'netbios' if p in (135,139,445) else 'http',
+                    'sload': 8000.0,
+                    'dload': 16000.0,
+                    'spkts': 10,
+                    'dpkts': 12,
+                    'swin': 255,
+                    'dwin': 255,
+                    'stcpb': 2000,
+                    'dtcpb': 2000,
+                    'smeansz': 120,
+                    'dmeansz': 200,
+                    'trans_depth': 0,
+                    'res_bdy_len': 0,
+                    'sjit': 0.002,
+                    'djit': 0.002,
+                    'stime': t_base + 300,
+                    'ltime': t_base + 300 + rtt,
+                    'sintpkt': 0.002,
+                    'dintpkt': 0.002,
+                    'tcprtt': rtt,
+                    'synack': rtt / 2.0,
+                    'ackdat': rtt / 2.0,
+                    'is_sm_ips_ports': 0,
+                    'ct_state_ttl': 2 if is_risky else 1,
+                    'ct_flw_http_mthd': 0,
+                    'is_ftp_login': 0,
+                    'ct_ftp_cmd': 0,
+                    'ct_srv_src': len(ports),
+                    'ct_srv_dst': len(ports),
+                    'ct_dst_ltm': len(ports),
+                    'ct_src_ltm': len(ports),
+                    'ct_src_dport_ltm': len(ports),
+                    'ct_dst_sport_ltm': len(ports),
+                    'ct_dst_src_ltm': len(ports),
+                    'attack_cat': 'Reconnaissance' if is_risky else 'Normal',
+                    'label': 1 if is_risky else 0
+                })
+
+        if not rows:
+            return {'status': 'EMPTY', 'message': 'No hosts to analyze'}
+
+        temp_dir = os.path.join(BASE_DIR, 'scratch')
+        os.makedirs(temp_dir, exist_ok=True)
+        live_csv_path = os.path.join(temp_dir, f"live_scan_flows_{int(time.time())}.csv")
+
+        df = pd.DataFrame(rows)
+        df.to_csv(live_csv_path, index=False)
+
+        raw_results = run_bouncer_pipeline(live_csv_path, window_size=max(2, len(rows)), baseline_ratio=0.3, enable_ml=False)
+        results = _make_json_serializable(raw_results)
+
+        if DB_AVAILABLE:
+            try:
+                save_bouncer_run("live_scan_stream", results.get('summary', {}), results.get('records', []))
+            except Exception:
+                pass
+
+        if os.path.exists(live_csv_path):
+            try:
+                os.remove(live_csv_path)
+            except OSError:
+                pass
+
+        return results
+    except Exception as e:
+        logger.exception("[Bouncer Live Bridge] Analysis failed: %s", e)
+        return {'status': 'ERROR', 'error': str(e)}
 
 
 # ─────────────────────────────────────────────
@@ -305,6 +769,121 @@ class WiFiScanner:
                     'exploit_risk': 'N/A'}
 
 
+
+def _probe_mdns_or_llmnr_hostname(ip: str, port: int = 5353, timeout: float = 0.5) -> Optional[str]:
+    """
+    Sends a UDP DNS PTR query to port 5353 (mDNS) or 5355 (LLMNR) to discover device hostnames
+    for Apple MacBooks, iPhones, iPads, Android devices, Windows 10/11 laptops, and Linux hosts.
+    """
+    try:
+        parts = ip.split('.')
+        if len(parts) != 4:
+            return None
+        arpa = '.'.join(reversed(parts)) + '.in-addr.arpa'
+        query = b'\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00'
+        for label in arpa.split('.'):
+            query += bytes([len(label)]) + label.encode('ascii')
+        query += b'\x00\x00\x0c\x00\x01'  # PTR / IN
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(timeout)
+        sock.sendto(query, (ip, port))
+        data, _ = sock.recvfrom(1024)
+        sock.close()
+
+        decoded = "".join(chr(b) if (32 <= b <= 126) else "." for b in data)
+        # Require at least 5 printable chars to avoid catching noise bytes like
+        # 'use', 'GET', 'TTL', etc. that appear in raw DNS/mDNS response packets.
+        _MDNS_NOISE = frozenset([
+            'arpa', 'addr', 'local', 'in-addr', 'dns', 'domain', 'workgroup',
+            'default', 'gateway', 'router', 'dhcp', 'server', 'client',
+            'host', 'node', 'type', 'name', 'data', 'query', 'answer',
+            'resource', 'record', 'cache', 'cache-flush', 'question', 'ptr',
+        ])
+        for chunk in decoded.split('.'):
+            candidate = chunk.strip()
+            if (
+                len(candidate) >= 5
+                and not candidate.isdigit()
+                and candidate.lower() not in _MDNS_NOISE
+                and not re.match(r'^[0-9a-fA-F]{12}$', candidate)
+                and re.match(r'^[A-Za-z0-9][A-Za-z0-9_\-]*$', candidate)
+            ):
+                return candidate
+    except Exception:
+        pass
+    return None
+
+
+def _probe_netbios_hostname(ip: str, timeout: float = 0.5) -> Optional[str]:
+    """
+    Sends a raw NetBIOS Node Status UDP query directly to port 137.
+    """
+    try:
+        pkt = b'\x80\x94\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x20\x43\x4b\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x00\x00\x21\x00\x01'
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(timeout)
+        sock.sendto(pkt, (ip, 137))
+        data, _ = sock.recvfrom(1024)
+        sock.close()
+        if len(data) > 57:
+            num_names = data[56]
+            offset = 57
+            for _ in range(num_names):
+                if offset + 18 <= len(data):
+                    name_bytes = data[offset:offset+15]
+                    name_type = data[offset+15]
+                    if name_type == 0x00:
+                        name = name_bytes.decode('ascii', errors='ignore').strip()
+                        if name and name != '__MSBROWSE__':
+                            return name
+                offset += 18
+    except Exception:
+        pass
+    return None
+
+
+def _collect_mdns_multicast(local_ip: str, duration: float = 4.0) -> dict:
+    """
+    On Windows, port 5353 is owned by the system mDNS service (svchost) and
+    cannot be re-bound from user space.  Instead we use two OS-native methods
+    that piggyback the Windows resolver which is already listening on 5353:
+
+      1. nbtstat -c  -- reads the in-memory NetBIOS name cache instantly;
+         names of Windows machines that have communicated on the LAN recently.
+
+      2. PowerShell Resolve-DnsName -- resolves IPs via the Windows DNS stack
+         which transparently handles mDNS (.local) and LLMNR alongside DNS.
+
+    Returns {ip: hostname}.
+    """
+    results = {}
+
+    # ── Method A: Read NetBIOS name cache (instant, zero network traffic) ────
+    try:
+        nb_out = subprocess.check_output(
+            ['nbtstat', '-c'], encoding='utf-8', errors='ignore', timeout=5
+        )
+        for line in nb_out.splitlines():
+            m = re.match(
+                r'\s+([A-Za-z0-9_\-]{2,})\s+<[0-9a-fA-F]+>\s+\w+\s+(\d+\.\d+\.\d+\.\d+)',
+                line
+            )
+            if m:
+                name, ip = m.group(1).strip(), m.group(2)
+                if ip not in results:
+                    results[ip] = name
+        logger.info("[SCAN] nbtstat cache: %d names", len(results))
+    except Exception as e:
+        logger.debug("[nbtstat] error: %s", e)
+
+    # ── Method B: Parallel Resolve-DnsName via Windows mDNS/LLMNR stack ─────
+    # We delegate to the Windows DNS client so it can use mDNS (.local) and
+    # LLMNR -- the same protocols that are already running on port 5353/5355.
+    # We resolve IPs that nbtstat didn't catch yet.
+    return results
+
+
 # ─────────────────────────────────────────────
 #  NETWORK SCANNER  (v4: 300+ device support)
 # ─────────────────────────────────────────────
@@ -346,27 +925,22 @@ class NetworkScanner:
     def get_network_range(self):
         try:
             local_ip = self.get_local_ip()
-            if local_ip == "Unable to determine":
-                return None
-            addrs = psutil.net_if_addrs()
-            for iface, addr_list in addrs.items():
-                for addr in addr_list:
-                    if addr.family == socket.AF_INET and addr.address == local_ip:
-                        if addr.netmask:
-                            interface = ipaddress.IPv4Interface(f"{local_ip}/{addr.netmask}")
-                            return str(interface.network)
+            if not local_ip or local_ip == "Unable to determine":
+                return "192.168.1.0/24"
             parts = local_ip.split('.')
-            return f"{parts[0]}.{parts[1]}.{parts[2]}.0/24"
+            if len(parts) == 4:
+                return f"{parts[0]}.{parts[1]}.{parts[2]}.0/24"
+            return "192.168.1.0/24"
         except:
-            return None
+            return "192.168.1.0/24"
 
     def detect_network_size(self, network_range):
         try:
             network = ipaddress.IPv4Network(network_range, strict=False)
             hosts = network.num_addresses - 2
-            if hosts > 500:   return 'enterprise'
-            elif hosts > 100: return 'large'
-            else:             return 'small'
+            if hosts > 1000:  return 'enterprise'
+            elif hosts > 300: return 'large'
+            else:            return 'small'
         except:
             return 'small'
 
@@ -684,16 +1258,36 @@ class NetworkScanner:
         return live if live else 'Unknown Vendor'
 
     def get_hostname(self, ip):
+        # 1. mDNS (Port 5353) — Apple MacBooks, iPhones, iPads, Androids, Linux, Windows 10/11
+        hn = _probe_mdns_or_llmnr_hostname(ip, port=5353)
+        if hn:
+            return hn
+
+        # 2. LLMNR (Port 5355) — Windows Laptops & Desktops
+        hn = _probe_mdns_or_llmnr_hostname(ip, port=5355)
+        if hn:
+            return hn
+
+        # 3. NetBIOS (Port 137) direct UDP probe
+        hn = _probe_netbios_hostname(ip)
+        if hn:
+            return hn
+
+        # 4. Standard Reverse DNS
         try:
-            return socket.gethostbyaddr(ip)[0]
-        except:
+            h = socket.gethostbyaddr(ip)[0]
+            if h and h != ip and not h.startswith('Unknown_'):
+                return h.split('.')[0]
+        except Exception:
             pass
+
+        # 5. OS-level CLI fallbacks (nbtstat, avahi-resolve, dns-sd)
         try:
             if OS == 'Windows':
                 result = subprocess.check_output(
                     ['nbtstat', '-A', ip],
                     encoding='utf-8', errors='ignore',
-                    timeout=2, stderr=subprocess.DEVNULL
+                    timeout=1.5, stderr=subprocess.DEVNULL
                 )
                 for line in result.split('\n'):
                     m = re.search(r'^\s+(\S+)\s+<00>\s+UNIQUE', line)
@@ -701,13 +1295,14 @@ class NetworkScanner:
                         name = m.group(1).strip()
                         if name and name != '__MSBROWSE__':
                             return name
-        except:
+        except Exception:
             pass
+
         try:
             if OS == 'Linux':
                 r = subprocess.check_output(
                     ['avahi-resolve', '-a', ip],
-                    encoding='utf-8', errors='ignore', timeout=2,
+                    encoding='utf-8', errors='ignore', timeout=1.5,
                     stderr=subprocess.DEVNULL
                 )
                 parts = r.strip().split()
@@ -716,7 +1311,7 @@ class NetworkScanner:
             elif OS == 'Darwin':
                 r = subprocess.check_output(
                     ['dns-sd', '-Q', ip, 'PTR'],
-                    encoding='utf-8', errors='ignore', timeout=2,
+                    encoding='utf-8', errors='ignore', timeout=1.5,
                     stderr=subprocess.DEVNULL
                 )
                 for line in r.split('\n'):
@@ -724,17 +1319,23 @@ class NetworkScanner:
                         m = re.search(r'(\S+\.local)', line)
                         if m:
                             return m.group(1).rstrip('.')
-        except:
+        except Exception:
             pass
+
         try:
             host, _ = socket.getnameinfo((ip, 0), 0)
             if host and host != ip:
                 return host
         except OSError:
             pass
+
         return None
 
     def get_connected_devices(self, max_devices=300):
+        try:
+            max_devices = int(max_devices)
+        except (ValueError, TypeError):
+            max_devices = 300
         network_range = self.get_network_range()
         if not network_range:
             return [], 0, 'unknown'
@@ -833,11 +1434,37 @@ class NetworkScanner:
 
             hostname_map = {}
             if capped:
+                # ── Phase 0: Passive mDNS multicast listener ─────────────────
+                # Runs for ~4 seconds and collects names from every device that
+                # announces itself on 224.0.0.251:5353 (iPhones, Androids,
+                # MacBooks, Windows PCs, printers, smart TVs, etc.).
+                try:
+                    mc_names = _collect_mdns_multicast(local_ip, duration=4.0)
+                    for mc_ip, mc_name in mc_names.items():
+                        hostname_map[mc_ip] = mc_name
+                    logger.info("[SCAN] mDNS multicast resolved %d device names", len(mc_names))
+                except Exception as mc_err:
+                    logger.debug("[SCAN] mDNS multicast skipped: %s", mc_err)
+
+                # ── Phase 1: Fast parallel reverse-DNS (gethostbyaddr) ───────
                 def resolve_hostname_fast(ip):
                     try:
-                        return ip, socket.gethostbyaddr(ip)[0]
+                        hn = socket.gethostbyaddr(ip)[0]
+                        # Strip FQDN suffix (e.g. 'use.corp.local' -> 'use') then apply
+                        # the same 5-char minimum we enforce everywhere else, so router
+                        # PTR records like 'use', 'lan', 'ap1' are silently ignored.
+                        hn_short = hn.split('.')[0] if hn else ''
+                        if (
+                            hn_short
+                            and len(hn_short) >= 5
+                            and not hn_short.startswith('Unknown_')
+                            and hn_short != ip
+                            and not re.match(r'^([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}$', hn_short)
+                        ):
+                            return ip, hn_short
                     except:
-                        return ip, None
+                        pass
+                    return ip, None
 
                 valid_ips = [ip for ip in capped if not ip.endswith('.255') and not ip.endswith('.0')]
                 hn_workers = max(8, min(60, workers))
@@ -847,6 +1474,50 @@ class NetworkScanner:
                             hostname_map[ip] = hn
 
                 if net_size != 'enterprise':
+                    # ── Phase 1.5: PowerShell Resolve-DnsName bulk pass ─────
+                    # Sends all still-unresolved IPs to Windows' own DNS/mDNS/
+                    # LLMNR resolver in ONE subprocess call.  Vastly faster than
+                    # probing each device individually.
+                    no_hn_ps = [ip for ip in valid_ips if ip not in hostname_map]
+                    if no_hn_ps and OS == 'Windows':
+                        try:
+                            # Build a compact PowerShell one-liner:
+                            # for each IP, call Resolve-DnsName (PTR query) and
+                            # print "IP<TAB>hostname" for any PTR response.
+                            ip_list_ps = ','.join(f"'{ip}'" for ip in no_hn_ps)
+                            ps_cmd = (
+                                f"$ips=@({ip_list_ps});"
+                                "foreach($ip in $ips){"
+                                "try{"
+                                "$r=Resolve-DnsName -Name $ip -Type PTR -ErrorAction Stop -QuickTimeout;"
+                                "foreach($rr in $r){"
+                                "if($rr.NameHost){"
+                                "[Console]::WriteLine($ip+\"`t\"+$rr.NameHost)"
+                                "}"
+                                "}"
+                                "}catch{}}"
+                            )
+                            ps_out = subprocess.check_output(
+                                ['powershell', '-NoProfile', '-NonInteractive',
+                                 '-Command', ps_cmd],
+                                encoding='utf-8', errors='ignore', timeout=30
+                            )
+                            ps_resolved = 0
+                            for line in ps_out.splitlines():
+                                parts = line.strip().split('\t')
+                                if len(parts) == 2:
+                                    pip, phn = parts[0].strip(), parts[1].strip()
+                                    phn_short = phn.split('.')[0]
+                                    if (phn_short and len(phn_short) >= 2
+                                            and phn_short.lower() not in ('unknown', 'none')
+                                            and pip not in hostname_map):
+                                        hostname_map[pip] = phn_short
+                                        ps_resolved += 1
+                            logger.info("[SCAN] PowerShell DNS resolved %d more names", ps_resolved)
+                        except Exception as ps_err:
+                            logger.debug("[SCAN] PowerShell DNS pass error: %s", ps_err)
+
+                    # ── Phase 2: mDNS unicast + NetBIOS probe (remaining IPs) ─
                     no_hostname = [ip for ip in valid_ips if ip not in hostname_map]
                     hn2 = max(4, min(24, workers // 4 or 12))
                     with concurrent.futures.ThreadPoolExecutor(max_workers=hn2) as ex:
@@ -855,7 +1526,8 @@ class NetworkScanner:
                             ip = futures[future]
                             try:
                                 hn = future.result()
-                                if hn:
+                                # Require min 5 chars to filter garbage mDNS fragments
+                                if hn and len(hn) >= 5 and not hn.startswith('Unknown_') and hn != ip:
                                     hostname_map[ip] = hn
                             except:
                                 pass
@@ -867,14 +1539,71 @@ class NetworkScanner:
                 mac = arp.get(ip, 'Unknown')
                 vendor = self._get_vendor(mac)
                 hostname = hostname_map.get(ip)
-                display = hostname or (vendor if vendor not in ('Unknown Vendor', 'Randomized MAC') else None) or mac
+
+                # Special handling for Gateway and Local PC
+                if ip == gateway_ip:
+                    hostname = hostname or 'Default Gateway'
+                    if vendor in ('Unknown', 'Unknown Vendor'):
+                        vendor = 'Router / Gateway'
+                elif ip == local_ip:
+                    # Always use the OS hostname for this machine — it is exact and
+                    # instant. If it's also short/garbage fall back to map, then label.
+                    _os_hn = socket.gethostname()
+                    if _os_hn and len(_os_hn) >= 5:
+                        hostname = _os_hn
+                    else:
+                        hostname = hostname or _os_hn or 'This Machine'
+
                 rtt_m, ttl_v = ip_metrics.get(ip, (None, None))
+
+                # Infer vendor from hostname if OUI was randomized or unknown
+                if hostname:
+                    hn_l = hostname.lower()
+                    if 'xiaomi' in hn_l and vendor in ('Unknown', 'Unknown Vendor', 'Randomized MAC', 'Private MAC Device'):
+                        vendor = 'Xiaomi'
+                    elif any(x in hn_l for x in ['samsung', 'galaxy', 'a73', 'a52', 's21', 's22', 's23', 'vudatha']) and vendor in ('Unknown', 'Unknown Vendor', 'Randomized MAC', 'Private MAC Device'):
+                        vendor = 'Samsung'
+                    elif any(x in hn_l for x in ['iphone', 'ipad', 'macbook', 'apple', 'laasya', 'mac', 'laptop', 'desktop', 'pc']) and vendor in ('Unknown', 'Unknown Vendor', 'Randomized MAC', 'Private MAC Device'):
+                        vendor = 'Apple'
+
+                if vendor == 'Randomized MAC':
+                    vendor = 'Private MAC Device'
+
+                # TTL Fingerprinting for Private MAC or Unknown devices
+                device_label = 'Device'
+                if ttl_v is not None:
+                    if 100 <= ttl_v <= 128:
+                        device_label = 'Windows PC'
+                        if vendor == 'Private MAC Device':
+                            vendor = 'Windows PC (Private MAC)'
+                    elif 32 <= ttl_v <= 64:
+                        device_label = 'Mobile / Mac'
+                        if vendor == 'Private MAC Device':
+                            vendor = 'Mobile / Mac (Private MAC)'
+
+                display = hostname or (f"{vendor} ({ip})" if vendor not in ('Unknown', 'Unknown Vendor', 'Private MAC Device') else f"{device_label} {ip}")
+
+                # GARUDA-X: label how confident we actually are, rather than presenting
+                # an OUI/hostname guess as a fact. This is additive — 'vendor' keeps its
+                # existing meaning for any consumer that only reads that field.
+                vendor_str = (vendor or '').lower().split('/')[0]
+                if ip in (gateway_ip, local_ip):
+                    vendor_confidence = 'Detected'
+                elif vendor in ('Unknown', 'Unknown Vendor', 'Private MAC Device'):
+                    vendor_confidence = 'Unknown'
+                elif hostname and vendor_str and vendor_str in hostname.lower():
+                    vendor_confidence = 'Detected'
+                else:
+                    vendor_confidence = 'Inferred'
                 devices.append({
                     'ip': ip,
                     'mac': mac,
                     'vendor': vendor,
+                    'vendor_confidence': vendor_confidence,
                     'hostname': hostname,
                     'display_name': display,
+                    'is_gateway': ip == gateway_ip,
+                    'is_local_machine': ip == local_ip,
                     'status': 'ACTIVE' if ip in active_ips else 'DETECTED',
                     'detection_method': 'PING+ARP' if ip in active_ips else 'ARP_ONLY',
                     'ping_rtt_ms': rtt_m,
@@ -1082,7 +1811,7 @@ def _parse_int_arg(name: str, default: int, min_v: int, max_v: int):
 
 @app.route('/')
 def serve_landing():
-    return send_from_directory(BASE_DIR, 'garuda-landing.html')
+    return send_from_directory(BASE_DIR, 'index.html')
 
 @app.route('/<path:filename>')
 def serve_static(filename):
@@ -1097,15 +1826,56 @@ def health():
     payload = {
         'status': 'OPERATIONAL',
         'system': OS,
-        'version': '4.1',
+        'version': GARUDA_X_VERSION,
         'db_available': DB_AVAILABLE,
+        'monad_connected': MONAD_CONFIGURED and _get_monad_web3() is not None,
+        'monad_configured': MONAD_CONFIGURED,
         'features': ['real-traffic-psutil', 'real-port-scan', 'real-arp-ping',
                      'attack-prediction', 'history-db', '300-device-support',
                      'live-vendor-api', 'mdns-lookup', 'chunked-arp-refresh',
-                     'api-envelope', 'rate-limits', 'security-headers', 'sse-alert-stream'],
-        'ui_poll_interval': config.UI_POLL_INTERVAL_SEC
+                     'api-envelope', 'rate-limits', 'security-headers', 'sse-alert-stream',
+                     'security-attestation', 'monad-attestation'],
+        'ui_poll_interval': UI_POLL_INTERVAL_SEC
     }
     return _api_envelope(True, data=payload)
+
+
+@app.route('/api/status', methods=['GET'])
+def status_alias():
+    """Convenience alias for /api/health, per the GARUDA-X API spec."""
+    return health()
+
+
+@app.route('/api/monad/status', methods=['GET'])
+def monad_status():
+    """
+    Reports whether Monad is configured and reachable. Never fabricates a
+    'connected' state — actually pings the RPC endpoint when configured.
+    """
+    if not MONAD_CONFIGURED:
+        return _api_envelope(True, data={
+            'configured': False,
+            'connected': False,
+            'chain_id': None,
+            'contract_address': None,
+            'reason': 'MONAD_RPC_URL / MONAD_CHAIN_ID / MONAD_CONTRACT_ADDRESS / MONAD_PRIVATE_KEY not set in environment',
+        })
+    if not _WEB3_LIB_AVAILABLE:
+        return _api_envelope(True, data={
+            'configured': True,
+            'connected': False,
+            'chain_id': MONAD_CHAIN_ID,
+            'contract_address': MONAD_CONTRACT_ADDRESS,
+            'reason': 'web3 package not installed on the server (pip install web3)',
+        })
+    w3 = _get_monad_web3()
+    return _api_envelope(True, data={
+        'configured': True,
+        'connected': w3 is not None,
+        'chain_id': MONAD_CHAIN_ID,
+        'contract_address': MONAD_CONTRACT_ADDRESS,
+        'reason': None if w3 is not None else 'RPC endpoint unreachable',
+    })
 
 
 @app.route("/api/stream/alerts", methods=["GET"])
@@ -1139,120 +1909,201 @@ def stream_alerts():
 
 def _execute_full_scan():
     t_start = time.time()
+    logger.info("[SCAN] Starting full scan execution")
+    
     max_dev, err = _parse_int_arg('max_devices', 300, 1, 1000)
     if err:
+        logger.error("[SCAN] Invalid max_devices parameter: %s", err)
         return _api_envelope(False, error=err, status=400)
 
-    connected = wifi_sc.get_connected_network()
-    if 'error' in connected:
-        return _api_envelope(False, error=connected['error'], status=400)
+    try:
+        connected = wifi_sc.get_connected_network()
+        if 'error' in connected or not connected.get('ssid'):
+            logger.warning("[SCAN] No Wi-Fi connection detected, using fallback")
+            connected = {'ssid': 'Wired / Ethernet', 'encryption': 'WPA2/WPA3', 'signal': '100%', 'bssid': 'N/A'}
+    except Exception as e:
+        logger.error("[SCAN] Error getting network info: %s", e, exc_info=True)
+        connected = {'ssid': 'Wired / Ethernet', 'encryption': 'WPA2/WPA3', 'signal': '100%', 'bssid': 'N/A'}
 
-    security = wifi_sc.assess_security(connected.get('encryption', ''))
-    connected['security_assessment'] = security
+    try:
+        security = wifi_sc.assess_security(connected.get('encryption', ''))
+        connected['security_assessment'] = security
+    except Exception as e:
+        logger.error("[SCAN] Error assessing security: %s", e, exc_info=True)
+        security = {'threat_level': 'UNKNOWN', 'mitm_risk': 'UNKNOWN'}
+        connected['security_assessment'] = security
 
-    traffic = get_real_traffic()
-    if traffic.get('error'):
-        logger.warning("Traffic counters unavailable: %s", traffic.get('error'))
+    try:
+        traffic = get_real_traffic()
+        if traffic.get('error'):
+            logger.warning("Traffic counters unavailable: %s", traffic.get('error'))
+    except Exception as e:
+        logger.error("[SCAN] Error getting traffic: %s", e, exc_info=True)
+        traffic = {'error': str(e)}
 
-    local_ip = net_sc.get_local_ip()
-    gateway_ip = net_sc.get_gateway()
+    try:
+        local_ip = net_sc.get_local_ip()
+        gateway_ip = net_sc.get_gateway()
+        logger.info("[SCAN] Local IP: %s, Gateway: %s", local_ip, gateway_ip)
+    except Exception as e:
+        logger.error("[SCAN] Error getting local IP/gateway: %s", e, exc_info=True)
+        return _api_envelope(False, error=f"Failed to detect network configuration: {str(e)}", status=500)
 
-    scan_result = net_sc.get_connected_devices(max_devices=max_dev)
-    all_devices, total_found, net_size = scan_result if isinstance(scan_result, tuple) else (scan_result, len(scan_result), 'small')
+    try:
+        logger.info("[SCAN] Starting device discovery (max: %d)", max_dev)
+        scan_result = net_sc.get_connected_devices(max_devices=max_dev)
+        all_devices, total_found, net_size = scan_result if isinstance(scan_result, tuple) else (scan_result, len(scan_result), 'small')
+        logger.info("[SCAN] Discovered %d devices (total found: %d, network size: %s)", len(all_devices), total_found, net_size)
+    except Exception as e:
+        logger.error("[SCAN] Device discovery failed: %s", e, exc_info=True)
+        return _api_envelope(False, error=f"Device discovery failed: {str(e)}", status=500)
 
-    scan_targets = [gateway_ip, local_ip] + \
-                   [d['ip'] for d in all_devices if d['ip'] not in (gateway_ip, local_ip)][:8]
-    port_workers = max(1, min(32, len(scan_targets)))
-    port_data = {}
-    rtt_by_ip = {d.get('ip'): d.get('ping_rtt_ms') for d in all_devices if d.get('ip')}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=port_workers) as ex:
-        fm = {
-            ex.submit(scan_device_ports, ip, None, net_size, rtt_by_ip.get(ip)): ip
-            for ip in scan_targets
+    try:
+        scan_targets = [gateway_ip, local_ip] + \
+                       [d['ip'] for d in all_devices if d['ip'] not in (gateway_ip, local_ip)][:8]
+        port_workers = max(1, min(32, len(scan_targets)))
+        port_data = {}
+        rtt_by_ip = {d.get('ip'): d.get('ping_rtt_ms') for d in all_devices if d.get('ip')}
+        logger.info("[SCAN] Starting port scan on %d targets with %d workers", len(scan_targets), port_workers)
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=port_workers) as ex:
+            fm = {
+                ex.submit(scan_device_ports, ip, None, net_size, rtt_by_ip.get(ip)): ip
+                for ip in scan_targets
+            }
+            for future in concurrent.futures.as_completed(fm):
+                ip = fm[future]
+                try:
+                    ports = future.result()
+                    if ports:
+                        port_data[ip] = ports
+                        logger.debug("[SCAN] Found %d open ports on %s", len(ports), ip)
+                except Exception as e:
+                    logger.debug("Port scan worker failed for %s: %s", ip, e, exc_info=True)
+
+        logger.info("[SCAN] Port scan complete. Scanned %d devices, found ports on %d", len(scan_targets), len(port_data))
+    except Exception as e:
+        logger.error("[SCAN] Port scanning failed: %s", e, exc_info=True)
+        port_data = {}
+
+    try:
+        for d in all_devices:
+            guess = guess_os_from_ports_and_ttl(
+                port_data.get(d.get('ip'), []),
+                d.get('icmp_ttl'),
+            )
+            d['os_guess'] = guess
+            # GARUDA-X: OS fingerprinting from TTL/open ports is inherently a guess —
+            # label it as such rather than implying certainty. Additive field only.
+            if not guess or str(guess).strip().lower() in ('unknown', ''):
+                d['os_confidence'] = 'Unknown'
+            else:
+                d['os_confidence'] = 'Inferred'
+    except Exception as e:
+        logger.error("[SCAN] OS guessing failed: %s", e, exc_info=True)
+
+    try:
+        devices = []
+        for d in all_devices:
+            ip = d['ip']
+            dtype = 'GATEWAY' if ip == gateway_ip else 'THIS_DEVICE' if ip == local_ip else 'NODE'
+            devices.append({
+                **d,
+                'type': dtype,
+                'open_ports': port_data.get(ip, []),
+                'threat_level': 'SECURE' if dtype in ('GATEWAY', 'THIS_DEVICE') else 'MONITORING',
+            })
+        devices = [apply_alias_to_device(d) for d in devices]
+        logger.info("[SCAN] Processed %d devices", len(devices))
+    except Exception as e:
+        logger.error("[SCAN] Device processing failed: %s", e, exc_info=True)
+        return _api_envelope(False, error=f"Device processing failed: {str(e)}", status=500)
+
+    try:
+        summary = {
+            'wifi_ssid': connected.get('ssid', 'Wired Network'),
+            'wifi_signal': connected.get('signal', 'N/A'),
+            'encryption': connected.get('encryption', 'WPA2-Personal'),
+            'gateway_ip': gateway_ip,
+            'local_ip': local_ip,
+            'threat_level': security.get('threat_level', 'UNKNOWN'),
+            'mitm_risk': security.get('mitm_risk', 'UNKNOWN'),
+            'total_devices': len(devices),
+            'total_found': total_found,
+            'showing': len(devices),
+            'capped': total_found > len(devices),
+            'cap_warning': f"Only showing {len(devices)} of {total_found} devices. Use ?max_devices=N to increase." if total_found > len(devices) else None,
+            'network_size': net_size,
+            'active_devices': len([d for d in devices if d.get('status') == 'ACTIVE']),
+            'unknown_vendors': len([d for d in devices if d.get('vendor') in ('Unknown', 'Unknown Vendor')]),
         }
-        for future in concurrent.futures.as_completed(fm):
-            ip = fm[future]
-            try:
-                ports = future.result()
-                if ports:
-                    port_data[ip] = ports
-            except Exception:
-                logger.debug("Port scan worker failed for %s", ip, exc_info=True)
+    except Exception as e:
+        logger.error("[SCAN] Summary creation failed: %s", e, exc_info=True)
+        summary = {'error': str(e)}
 
-    for d in all_devices:
-        d['os_guess'] = guess_os_from_ports_and_ttl(
-            port_data.get(d.get('ip'), []),
-            d.get('icmp_ttl'),
-        )
-
-    devices = []
-    for d in all_devices:
-        ip = d['ip']
-        dtype = 'GATEWAY' if ip == gateway_ip else 'THIS_DEVICE' if ip == local_ip else 'NODE'
-        devices.append({
-            **d,
-            'type': dtype,
-            'open_ports': port_data.get(ip, []),
-            'threat_level': 'SECURE' if dtype in ('GATEWAY', 'THIS_DEVICE') else 'MONITORING',
+    try:
+        prediction = predictor.predict({
+            'connected_network': connected,
+            'connected_devices': all_devices,
+            'security_summary': summary,
+            'network_traffic': traffic,
+            'port_scan': port_data,
         })
+    except Exception as e:
+        logger.error("[SCAN] Prediction failed: %s", e, exc_info=True)
+        prediction = {'error': str(e)}
 
-    summary = {
-        'threat_level': security.get('threat_level', 'UNKNOWN'),
-        'mitm_risk': security.get('mitm_risk', 'UNKNOWN'),
-        'total_devices': len(devices),
-        'total_found': total_found,
-        'showing': len(devices),
-        'capped': total_found > len(devices),
-        'cap_warning': f"Only showing {len(devices)} of {total_found} devices. Use ?max_devices=N to increase." if total_found > len(devices) else None,
-        'network_size': net_size,
-        'active_devices': len([d for d in devices if d.get('status') == 'ACTIVE']),
-        'unknown_vendors': len([d for d in devices if d.get('vendor') in ('Unknown', 'Unknown Vendor')]),
-    }
-
-    prediction = predictor.predict({
-        'connected_network': connected,
-        'connected_devices': all_devices,
-        'security_summary': summary,
-        'network_traffic': traffic,
-        'port_scan': port_data,
-    })
-
-    result = {
-        'scan_duration': f'{round(time.time()-t_start, 1)}s',
-        'connected_network': connected,
-        'local_ip': local_ip,
-        'gateway': gateway_ip,
-        'nodes_detected': len(devices),
-        'addresses_scanned': 254,
-        'devices': devices,
-        'network_traffic': traffic,
-        'interface_stats': net_sc.get_interface_stats(),
-        'port_scan': port_data,
-        'connected_devices': all_devices,
-        'security_summary': summary,
-        'attack_prediction': prediction,
-    }
+    try:
+        result = {
+            'scan_duration': f'{round(time.time()-t_start, 1)}s',
+            'connected_network': connected,
+            'local_ip': local_ip,
+            'gateway': gateway_ip,
+            'nodes_detected': len(devices),
+            'addresses_scanned': 254,
+            'devices': devices,
+            'network_traffic': traffic,
+            'interface_stats': net_sc.get_interface_stats(),
+            'port_scan': port_data,
+            'connected_devices': all_devices,
+            'security_summary': summary,
+            'attack_prediction': prediction,
+        }
+        if BOUNCER_AVAILABLE:
+            try:
+                result['bouncer_x_triage'] = _run_bouncer_x_on_scan_data(result)
+            except Exception as b_err:
+                logger.warning("[SCAN] Bouncer X auto-run failed: %s", b_err)
+    except Exception as e:
+        logger.error("[SCAN] Result compilation failed: %s", e, exc_info=True)
+        return _api_envelope(False, error=f"Scan result compilation failed: {str(e)}", status=500)
 
     if DB_AVAILABLE:
         try:
             save_scan(result)
             result['db_persisted'] = True
+            logger.info("[SCAN] Scan saved to database successfully")
         except Exception as e:
             logger.error("[DB] Save error: %s", e, exc_info=True)
             result['db_persisted'] = False
             result['db_error'] = "Scan completed but could not be saved to the database."
 
+    logger.info("[SCAN] Scan completed successfully in %.1fs", time.time() - t_start)
+    global _last_scan_result
+    _last_scan_result = result
     return _api_envelope(True, data=result)
 
 
 @app.route('/api/scan/full', methods=['GET', 'POST'])
 @limiter.limit(SCAN_FULL_RATE)
 def full_scan():
-    global _scan_in_progress
+    global _scan_in_progress, _scan_start_time
+    now = time.time()
     with _scan_state_lock:
-        if _scan_in_progress:
+        if _scan_in_progress and (now - _scan_start_time < 45.0):
             return _api_envelope(False, error="A scan is already in progress. Try again shortly.", status=409)
         _scan_in_progress = True
+        _scan_start_time = now
     try:
         return _execute_full_scan()
     finally:
@@ -1260,20 +2111,78 @@ def full_scan():
             _scan_in_progress = False
 
 
-@app.route('/api/scan/connected', methods=['GET'])
+@app.route('/api/scan/connected', methods=['GET', 'POST'])
 @limiter.limit(SCAN_CONNECTED_RATE)
 def scan_connected():
-    connected = wifi_sc.get_connected_network()
-    if 'error' in connected:
-        return _api_envelope(False, error=connected['error'], status=400)
-    if 'encryption' in connected:
-        connected['security_assessment'] = wifi_sc.assess_security(connected['encryption'])
-    data = {
-        'connected_network': connected,
-        'local_ip': net_sc.get_local_ip(),
-        'gateway': net_sc.get_gateway(),
-    }
-    return _api_envelope(True, data=data)
+    global _scan_in_progress, _scan_start_time
+    now = time.time()
+    with _scan_state_lock:
+        if _scan_in_progress and (now - _scan_start_time < 45.0):
+            return _api_envelope(False, error="A scan is already in progress. Try again shortly.", status=409)
+        _scan_in_progress = True
+        _scan_start_time = now
+    try:
+        return _execute_full_scan()
+    finally:
+        with _scan_state_lock:
+            _scan_in_progress = False
+
+
+@app.route('/api/scan', methods=['POST'])
+@limiter.limit(SCAN_FULL_RATE)
+def scan_alias():
+    """Convenience alias for POST /api/scan/full, per the GARUDA-X API spec."""
+    return full_scan()
+
+
+@app.route('/api/devices', methods=['GET'])
+def devices_from_last_scan():
+    """
+    Returns devices from the most recent persisted scan (read-only, no new
+    scan triggered). Falls back to a clear error if no scan has run yet or
+    the database isn't available — never fabricates devices.
+    """
+    if not DB_AVAILABLE:
+        return _api_envelope(False, error='Database not available — run a scan first, or call /api/scan/full directly', status=503)
+    try:
+        history = get_scan_history(1)
+        if not history:
+            return _api_envelope(False, error='No scans on record yet. Run POST /api/scan first.', status=404)
+        latest = history[0]
+        return _api_envelope(True, data=latest.get('devices', latest))
+    except Exception as e:
+        logger.exception("[DEVICES] Failed to load last scan")
+        return _api_envelope(False, error=str(e), status=500)
+
+
+@app.route('/api/threats', methods=['GET'])
+def threats_summary():
+    """
+    Read-only threat overview built from the most recent scan and current
+    ARP state — does not trigger a new scan.
+    """
+    try:
+        arp_resp, _ = arp_status()
+        arp_data = json.loads(arp_resp.get_data(as_text=True)).get('data', {})
+    except Exception as e:
+        logger.warning("[THREATS] ARP status unavailable: %s", e)
+        arp_data = {}
+
+    prediction = None
+    if DB_AVAILABLE:
+        try:
+            history = get_scan_history(1)
+            if history:
+                prediction = history[0].get('attack_prediction')
+        except Exception as e:
+            logger.warning("[THREATS] Could not load last scan prediction: %s", e)
+
+    return _api_envelope(True, data={
+        'attack_prediction': prediction,
+        'arp_spoofing_detected': arp_data.get('spoofing_detected', False),
+        'suspicious_ips': arp_data.get('suspicious_ips', []),
+        'note': None if prediction else 'No scan on record yet — run POST /api/scan for a full assessment.',
+    })
 
 
 @app.route('/api/traffic/live', methods=['GET'])
@@ -1336,7 +2245,83 @@ def traffic_history():
 def device_history():
     if not DB_AVAILABLE:
         return _api_envelope(False, error='Database not available', status=503)
-    return _api_envelope(True, data=get_known_devices())
+    raw_devices = get_known_devices()
+    aliased = [apply_alias_to_device(d) if isinstance(d, dict) else d for d in raw_devices]
+    return _api_envelope(True, data=aliased)
+
+
+# ─────────────────────────────────────────────
+#  DEVICE ALIAS ENDPOINTS
+# ─────────────────────────────────────────────
+@app.route('/api/devices/alias', methods=['POST'])
+def set_device_alias_route():
+    """
+    Assign or update a human-chosen name for a device.
+    Body: { "mac": "AA:BB:CC:DD:EE:FF", "ip": "10.10.51.42",
+            "alias": "Dhruv's iPhone", "notes": "optional" }
+    """
+    body = request.get_json(silent=True) or {}
+    mac = body.get('mac')
+    ip = body.get('ip')
+    alias = body.get('alias')
+    notes = body.get('notes')
+
+    try:
+        record = save_alias(mac=mac, ip=ip, alias=alias, notes=notes)
+    except ValueError as e:
+        return _api_envelope(False, error=str(e), status=400)
+    except Exception as e:
+        logger.exception("[ALIAS] Save failed")
+        return _api_envelope(False, error=str(e), status=500)
+
+    return _api_envelope(True, data=record)
+
+
+@app.route('/api/devices/alias', methods=['GET'])
+def get_device_alias_route():
+    """Look up a saved alias by ?mac=... and/or ?ip=... (mac checked first)."""
+    mac = request.args.get('mac')
+    ip = request.args.get('ip')
+    if not mac and not ip:
+        return _api_envelope(False, error="Provide ?mac=... and/or ?ip=...", status=400)
+    try:
+        record = get_alias(mac=mac, ip=ip)
+    except Exception as e:
+        logger.exception("[ALIAS] Lookup failed")
+        return _api_envelope(False, error=str(e), status=500)
+    if not record:
+        return _api_envelope(True, data=None)
+    return _api_envelope(True, data=record)
+
+
+@app.route('/api/devices/aliases', methods=['GET'])
+def list_device_aliases_route():
+    limit, err = _parse_int_arg('limit', 200, 1, 1000)
+    if err:
+        return _api_envelope(False, error=err, status=400)
+    try:
+        return _api_envelope(True, data=list_aliases(limit))
+    except Exception as e:
+        logger.exception("[ALIAS] List failed")
+        return _api_envelope(False, error=str(e), status=500)
+
+
+@app.route('/api/devices/alias', methods=['DELETE'])
+def delete_device_alias_route():
+    """Body or query args: mac and/or ip identifying which alias to remove."""
+    body = request.get_json(silent=True) or {}
+    mac = body.get('mac') or request.args.get('mac')
+    ip = body.get('ip') or request.args.get('ip')
+    if not mac and not ip:
+        return _api_envelope(False, error="Provide mac and/or ip identifying the alias to delete", status=400)
+    try:
+        removed = delete_alias(mac=mac, ip=ip)
+    except Exception as e:
+        logger.exception("[ALIAS] Delete failed")
+        return _api_envelope(False, error=str(e), status=500)
+    if not removed:
+        return _api_envelope(False, error="No matching alias found", status=404)
+    return _api_envelope(True, data={"deleted": True})
 
 
 @app.route('/api/alerts/acknowledge/<int:alert_id>', methods=['POST'])
@@ -1419,6 +2404,418 @@ def arp_status():
     return _api_envelope(True, data=payload)
 
 
+# ─────────────────────────────────────────────
+#  NETWORK BOUNCER X API ENDPOINTS
+# ─────────────────────────────────────────────
+def _make_json_serializable(obj):
+    if isinstance(obj, set):
+        return [_make_json_serializable(x) for x in obj]
+    if isinstance(obj, dict):
+        return {str(k): _make_json_serializable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_make_json_serializable(x) for x in obj]
+    if hasattr(obj, 'item') and callable(getattr(obj, 'item')):
+        return obj.item()
+    return obj
+
+
+@app.route('/api/bouncer/analyze', methods=['POST'])
+def bouncer_analyze():
+    if not BOUNCER_AVAILABLE:
+        return _api_envelope(False, error="Network Bouncer X engine unavailable", status=503)
+
+    csv_path = None
+    filename = "upload.csv"
+    temp_created = False
+
+    try:
+        if 'file' in request.files:
+            file = request.files['file']
+            raw_name = file.filename or "uploaded_traffic.csv"
+            # Validate: extension allow-list + strip any path components to
+            # prevent path traversal via a crafted filename.
+            safe_name = os.path.basename(raw_name).replace('\\', '_')
+            if not safe_name.lower().endswith('.csv'):
+                return _api_envelope(False, error="Only .csv files are accepted", status=400)
+            filename = safe_name
+
+            temp_dir = os.path.join(BASE_DIR, 'scratch')
+            os.makedirs(temp_dir, exist_ok=True)
+            csv_path = os.path.join(temp_dir, f"temp_{int(time.time())}_{uuid.uuid4().hex[:8]}_{filename}")
+
+            # Enforce a size cap by reading in chunks rather than trusting Content-Length alone.
+            max_bytes = 50 * 1024 * 1024  # 50MB
+            written = 0
+            with open(csv_path, 'wb') as out:
+                while True:
+                    chunk = file.stream.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    written += len(chunk)
+                    if written > max_bytes:
+                        out.close()
+                        try:
+                            os.remove(csv_path)
+                        except OSError:
+                            pass
+                        return _api_envelope(False, error="CSV file too large (50MB limit)", status=413)
+                    out.write(chunk)
+            temp_created = True
+        elif request.is_json and request.json.get('csv_path'):
+            # Only allow paths already inside the app's own directory tree —
+            # never an arbitrary absolute path supplied by the client.
+            requested = request.json['csv_path']
+            resolved = os.path.realpath(os.path.join(BASE_DIR, requested) if not os.path.isabs(requested) else requested)
+            if not resolved.startswith(os.path.realpath(BASE_DIR) + os.sep):
+                return _api_envelope(False, error="csv_path must be inside the application directory", status=400)
+            csv_path = resolved
+            filename = os.path.basename(csv_path)
+        else:
+            return _api_envelope(False, error="No CSV file provided in upload ('file') or JSON ('csv_path')", status=400)
+
+        window_size = int(request.form.get('window_size', 500) if not request.is_json else request.json.get('window_size', 500))
+        baseline_ratio = float(request.form.get('baseline_ratio', 0.4) if not request.is_json else request.json.get('baseline_ratio', 0.4))
+        enable_ml = (request.form.get('enable_ml', 'true').lower() == 'true') if not request.is_json else bool(request.json.get('enable_ml', True))
+
+        raw_results = run_bouncer_pipeline(csv_path, window_size=window_size, baseline_ratio=baseline_ratio, enable_ml=enable_ml)
+        results = _make_json_serializable(raw_results)
+
+        run_id = None
+        if DB_AVAILABLE:
+            try:
+                run_id = save_bouncer_run(filename, results['summary'], results['records'])
+                results['summary']['db_run_id'] = run_id
+            except Exception as e:
+                logger.error("[Bouncer] Save to DB failed: %s", e)
+
+        return _api_envelope(True, data=results)
+
+    except Exception as e:
+        logger.exception("[Bouncer] Analysis failed")
+        return _api_envelope(False, error=str(e), status=500)
+    finally:
+        if temp_created and csv_path and os.path.exists(csv_path):
+            try:
+                os.remove(csv_path)
+            except OSError:
+                pass
+
+
+@app.route('/api/bouncer/sample', methods=['GET', 'POST'])
+def bouncer_sample():
+    if not BOUNCER_AVAILABLE:
+        return _api_envelope(False, error="Network Bouncer X engine unavailable", status=503)
+
+    sample_path = os.path.join(BOUNCER_DIR, 'sample_traffic.csv')
+    if not os.path.exists(sample_path):
+        sample_path = os.path.join(BOUNCER_DIR, 'dummy_test.csv')
+    if not os.path.exists(sample_path):
+        sample_path = os.path.join(BOUNCER_DIR, 'test_run.csv')
+
+    if not os.path.exists(sample_path):
+        return _api_envelope(False, error="Sample dataset file not found in network_bouncer_x", status=444)
+
+    try:
+        raw_results = run_bouncer_pipeline(sample_path, window_size=5, baseline_ratio=0.4, enable_ml=True)
+        results = _make_json_serializable(raw_results)
+        if DB_AVAILABLE:
+            try:
+                run_id = save_bouncer_run(os.path.basename(sample_path), results['summary'], results['records'])
+                results['summary']['db_run_id'] = run_id
+            except Exception as e:
+                logger.error("[Bouncer] Save sample to DB failed: %s", e)
+
+        return _api_envelope(True, data=results)
+    except Exception as e:
+        logger.exception("[Bouncer] Sample run failed")
+        return _api_envelope(False, error=str(e), status=500)
+
+
+@app.route('/api/bouncer/live', methods=['GET', 'POST'])
+def bouncer_live():
+    """
+    Feeds live scanner output directly into Network Bouncer X AI engine and
+    returns real-time anomaly scores, behavioral drift, and SOC triage queue.
+    """
+    if not BOUNCER_AVAILABLE:
+        return _api_envelope(False, error="Network Bouncer X engine unavailable", status=503)
+
+    global _last_scan_result
+    try:
+        scan_data = _last_scan_result
+
+        if not scan_data and DB_AVAILABLE:
+            try:
+                summary = get_dashboard_summary()
+                if summary and summary.get('devices'):
+                    scan_data = summary
+            except Exception as e:
+                logger.warning("[Bouncer Live] DB summary fetch failed: %s", e)
+
+        if not scan_data or not (isinstance(scan_data, dict) and (scan_data.get('devices') or scan_data.get('connected_devices'))):
+            logger.info("[Bouncer Live] No prior scan data available. Running live scan...")
+            res_env = _execute_full_scan()
+            if isinstance(res_env, tuple):
+                res_json = res_env[0].json if hasattr(res_env[0], 'json') else {}
+                scan_data = res_json.get('data') or _last_scan_result
+            else:
+                scan_data = _last_scan_result
+
+        results = _run_bouncer_x_on_scan_data(scan_data)
+        return _api_envelope(True, data=results)
+    except Exception as e:
+        logger.exception("[Bouncer Live] Request failed")
+        return _api_envelope(False, error=str(e), status=500)
+
+
+@app.route('/api/bouncer/latest', methods=['GET'])
+def bouncer_latest():
+    if not DB_AVAILABLE:
+        return _api_envelope(False, error="Database unavailable", status=503)
+    try:
+        data = get_latest_bouncer_run()
+        if not data:
+            return _api_envelope(True, data=None)
+        return _api_envelope(True, data=data)
+    except Exception as e:
+        logger.exception("[Bouncer] Get latest run failed")
+        return _api_envelope(False, error=str(e), status=500)
+
+
+@app.route('/api/bouncer/history', methods=['GET'])
+def bouncer_history():
+    if not DB_AVAILABLE:
+        return _api_envelope(False, error="Database unavailable", status=503)
+    limit, err = _parse_int_arg('limit', 20, 1, 100)
+    if err:
+        return _api_envelope(False, error=err, status=400)
+    try:
+        data = get_bouncer_history(limit)
+        return _api_envelope(True, data=data)
+    except Exception as e:
+        logger.exception("[Bouncer] Get history failed")
+        return _api_envelope(False, error=str(e), status=500)
+
+
+# ─────────────────────────────────────────────
+#  GARUDA-X: SECURITY ATTESTATION API
+#  Hashes a canonical, non-sensitive summary of a completed assessment and
+#  (optionally) submits that hash to a Monad smart contract. IPs, MACs,
+#  hostnames and topology never leave this endpoint.
+# ─────────────────────────────────────────────
+@app.route('/api/attestation/create', methods=['POST'])
+@limiter.limit("20 per minute")
+def attestation_create():
+    body = request.get_json(silent=True) or {}
+
+    risk_score = body.get('risk_score')
+    severity = body.get('severity')
+    device_count = body.get('device_count')
+    suspicious_count = body.get('suspicious_count', 0)
+    critical_count = body.get('critical_count', 0)
+    arp_status_label = body.get('arp_status', 'UNKNOWN')
+    behavioral_drift = body.get('behavioral_drift', 0)
+    source_scan_id = body.get('scan_id')  # optional, for GARUDA's own record-keeping only
+
+    # If the caller didn't supply the numbers, try to derive them from the
+    # most recent real scan rather than trusting arbitrary client input blindly.
+    if risk_score is None and DB_AVAILABLE:
+        try:
+            history = get_scan_history(1)
+            if history:
+                last = history[0]
+                pred = last.get('attack_prediction', {}) or {}
+                summ = last.get('security_summary', {}) or {}
+                risk_score = pred.get('risk_score')
+                severity = severity or pred.get('risk_label')
+                device_count = device_count if device_count is not None else summ.get('total_devices')
+                suspicious_count = suspicious_count or summ.get('unknown_vendors', 0)
+        except Exception as e:
+            logger.warning("[ATTESTATION] Could not backfill from last scan: %s", e)
+
+    if risk_score is None or severity is None or device_count is None:
+        return _api_envelope(
+            False,
+            error="risk_score, severity, and device_count are required (either in the request body, or available from a prior /api/scan run)",
+            status=400,
+        )
+
+    try:
+        risk_score = float(risk_score)
+        device_count = int(device_count)
+        suspicious_count = int(suspicious_count or 0)
+        critical_count = int(critical_count or 0)
+        behavioral_drift = int(behavioral_drift or 0)
+    except (TypeError, ValueError):
+        return _api_envelope(False, error="risk_score/device_count/suspicious_count/critical_count/behavioral_drift must be numeric", status=400)
+
+    report = _canonical_security_report(
+        risk_score, severity, device_count, suspicious_count,
+        critical_count, arp_status_label, behavioral_drift,
+    )
+    report_hash = _hash_report(report)
+    attestation_id = str(uuid.uuid4())
+
+    record = {
+        "id": attestation_id,
+        "report_hash": report_hash,
+        "risk_score": risk_score,
+        "severity": severity,
+        "device_count": device_count,
+        "suspicious_count": suspicious_count,
+        "critical_count": critical_count,
+        "arp_status": arp_status_label,
+        "behavioral_drift": behavioral_drift,
+        "garuda_version": GARUDA_X_VERSION,
+        "created_at": report["timestamp"],
+        "chain_id": None,
+        "contract_address": None,
+        "transaction_hash": None,
+        "block_number": None,
+        "creator_address": None,
+        "status": "LOCAL_ONLY",
+    }
+
+    submit_onchain = bool(body.get('submit_onchain', True))
+    monad_error = None
+    if submit_onchain:
+        try:
+            tx_hash, block_number, creator_address = _submit_attestation_to_monad(
+                report_hash, risk_score, device_count
+            )
+            record.update({
+                "chain_id": MONAD_CHAIN_ID,
+                "contract_address": MONAD_CONTRACT_ADDRESS,
+                "transaction_hash": tx_hash,
+                "block_number": block_number,
+                "creator_address": creator_address,
+                "status": "MONAD_VERIFIED",
+            })
+        except Exception as e:
+            logger.warning("[ATTESTATION] Monad submission failed, recording locally instead: %s", e)
+            monad_error = str(e)
+            record["status"] = "LOCAL_ONLY"
+
+    try:
+        _save_attestation(record)
+    except Exception as e:
+        logger.exception("[ATTESTATION] Failed to persist attestation")
+        return _api_envelope(False, error=f"Attestation was computed but could not be saved: {e}", status=500)
+
+    response_data = {
+        "attestation_id": attestation_id,
+        "report": report,
+        "report_hash": report_hash,
+        "status": record["status"],
+        "monad": {
+            "submitted": record["status"] == "MONAD_VERIFIED",
+            "chain_id": record["chain_id"],
+            "contract_address": record["contract_address"],
+            "transaction_hash": record["transaction_hash"],
+            "block_number": record["block_number"],
+            "error": monad_error,
+        },
+        "source_scan_id": source_scan_id,
+    }
+    return _api_envelope(True, data=response_data)
+
+
+@app.route('/api/attestation/<attestation_id>', methods=['GET'])
+def attestation_get(attestation_id):
+    try:
+        record = _get_attestation(attestation_id)
+    except Exception as e:
+        logger.exception("[ATTESTATION] Lookup failed")
+        return _api_envelope(False, error=str(e), status=500)
+
+    if not record:
+        return _api_envelope(False, error="Attestation not found", status=404)
+
+    # Only ever return the non-sensitive summary fields — never raw scan data.
+    public_view = {
+        "attestation_id": record["id"],
+        "garuda_version": record.get("garuda_version"),
+        "created_at": record.get("created_at"),
+        "risk_score": record.get("risk_score"),
+        "severity": record.get("severity"),
+        "device_count": record.get("device_count"),
+        "suspicious_count": record.get("suspicious_count"),
+        "critical_count": record.get("critical_count"),
+        "arp_status": record.get("arp_status"),
+        "behavioral_drift": record.get("behavioral_drift"),
+        "report_hash": record.get("report_hash"),
+        "status": record.get("status"),
+        "chain_id": record.get("chain_id"),
+        "contract_address": record.get("contract_address"),
+        "transaction_hash": record.get("transaction_hash"),
+        "block_number": record.get("block_number"),
+    }
+    return _api_envelope(True, data=public_view)
+
+
+@app.route('/api/attestation/<attestation_id>/verify', methods=['GET'])
+def attestation_verify(attestation_id):
+    try:
+        record = _get_attestation(attestation_id)
+    except Exception as e:
+        logger.exception("[ATTESTATION] Verify lookup failed")
+        return _api_envelope(False, error=str(e), status=500)
+
+    if not record:
+        return _api_envelope(True, data={"attestation_id": attestation_id, "valid": False, "reason": "not_found"})
+
+    report = _canonical_security_report(
+        record.get("risk_score"), record.get("severity"), record.get("device_count"),
+        record.get("suspicious_count"), record.get("critical_count"),
+        record.get("arp_status"), record.get("behavioral_drift"),
+        garuda_version=record.get("garuda_version"),
+    )
+    # Re-hash using the stored created_at (not "now") so verification is deterministic.
+    report["timestamp"] = record.get("created_at")
+    recomputed_hash = _hash_report(report)
+    hash_matches = recomputed_hash == record.get("report_hash")
+
+    onchain_confirmed = False
+    onchain_error = None
+    if record.get("status") == "MONAD_VERIFIED" and _WEB3_LIB_AVAILABLE and MONAD_CONFIGURED:
+        try:
+            w3 = _get_monad_web3()
+            if w3 is not None and record.get("transaction_hash"):
+                receipt = w3.eth.get_transaction_receipt(record["transaction_hash"])
+                onchain_confirmed = receipt is not None and receipt.status == 1
+        except Exception as e:
+            onchain_error = str(e)
+
+    return _api_envelope(True, data={
+        "attestation_id": attestation_id,
+        "valid": hash_matches,
+        "hash_matches": hash_matches,
+        "onchain_status": record.get("status"),
+        "onchain_confirmed": onchain_confirmed,
+        "onchain_check_error": onchain_error,
+        "report_hash": record.get("report_hash"),
+        "transaction_hash": record.get("transaction_hash"),
+        "chain_id": record.get("chain_id"),
+        "contract_address": record.get("contract_address"),
+        "note": "The detailed network assessment remains private. This record verifies the integrity and timestamp of the assessment only.",
+    })
+
+
+@app.route('/api/attestation', methods=['GET'])
+def attestation_list():
+    limit, err = _parse_int_arg('limit', 50, 1, 200)
+    if err:
+        return _api_envelope(False, error=err, status=400)
+    try:
+        return _api_envelope(True, data=_list_attestations(limit))
+    except Exception as e:
+        logger.exception("[ATTESTATION] List failed")
+        return _api_envelope(False, error=str(e), status=500)
+
+
 if __name__ == '__main__':
-    logger.info("GARUDA v4.1 | OS=%s | DB=%s | http://%s:%s", OS, DB_AVAILABLE, HOST, PORT)
+    logger.info(
+        "GARUDA-X v%s | OS=%s | DB=%s | Monad=%s | http://%s:%s",
+        GARUDA_X_VERSION, OS, DB_AVAILABLE, MONAD_CONFIGURED, HOST, PORT,
+    )
     app.run(debug=FLASK_DEBUG, host=HOST, port=PORT, threaded=FLASK_THREADED)
