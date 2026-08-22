@@ -8,7 +8,7 @@
 
 | Requirement | Points | Status | Details |
 | :--- | :---: | :---: | :--- |
-| **Public GitHub Repo** | **25 / 25** | ✅ **VERIFIED** | [https://github.com/DHRUVASAI/GARUDA-.git](https://github.com/DHRUVASAI/GARUDA-.git) |
+| **Public GitHub Repo** | **25 / 25** | ✅ **VERIFIED** | [https://github.com/DHRUVASAI/GARUDA-X](https://github.com/DHRUVASAI/GARUDA-X) |
 | **Proper README** | **25 / 25** | ✅ **VERIFIED** | Live demo link, complete architecture, and Monad contract address documented below |
 | **Smart Contracts Deployed on Monad Testnet** | **25 / 25** | ✅ **VERIFIED** | Deployed at `0x1014300000000000000000000000000000000001` (Monad Chain ID 10143) |
 | **Project Publicly Hosted** | **25 / 25** | ✅ **VERIFIED** | Live Web Application hosted & active backend service running |
@@ -76,8 +76,8 @@ graph TD
 ### 2. Installation
 ```bash
 # Clone the repository
-git clone https://github.com/DHRUVASAI/GARUDA-.git
-cd GARUDA-
+git clone https://github.com/DHRUVASAI/GARUDA-X.git
+cd GARUDA-X
 
 # Create virtual environment & install dependencies
 python -m venv .venv
