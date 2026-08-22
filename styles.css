@@ -206,17 +206,17 @@ select:focus, select:hover {
 /* ═══════════════════════════════════════════════════════════════
    2. HOLOGRAPHIC SCAN LOADING MODAL OVERLAY
 ═══════════════════════════════════════════════════════════════ */
-#scan-loading-modal {
+#scan-loading-modal, .modal-overlay-backdrop {
   position: fixed;
   inset: 0;
   background-color: rgba(5, 8, 14, 0.92);
   backdrop-filter: blur(8px);
-  z-index: 900;
+  z-index: 999;
   display: none;
   align-items: center;
   justify-content: center;
 }
-#scan-loading-modal.active {
+#scan-loading-modal.active, .modal-overlay-backdrop.active {
   display: flex;
 }
 

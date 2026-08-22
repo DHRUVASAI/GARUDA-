@@ -52,16 +52,12 @@ const MONAD_CHAIN_CONFIG = {
 
 window.connectMonadWallet = function() {
   const modal = document.getElementById('wallet-modal');
-  const overlay = document.getElementById('wallet-modal-overlay');
   if (modal) modal.classList.add('active');
-  if (overlay) overlay.classList.add('active');
 };
 
 window.closeWalletModal = function() {
   const modal = document.getElementById('wallet-modal');
-  const overlay = document.getElementById('wallet-modal-overlay');
   if (modal) modal.classList.remove('active');
-  if (overlay) overlay.classList.remove('active');
 };
 
 window.connectViaMetaMaskExtension = async function() {

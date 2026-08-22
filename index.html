@@ -365,41 +365,42 @@
     </div>
 
   <!-- MONAD WALLET CONNECTION & MANUAL ADDRESS MODAL -->
-  <div class="modal-overlay" id="wallet-modal-overlay" onclick="window.closeWalletModal()"></div>
-  <div class="scan-loading-modal" id="wallet-modal" style="max-width:480px;text-align:left;padding:24px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border-default);padding-bottom:12px">
-      <div style="font-weight:700;font-size:16px;color:var(--text-primary);display:flex;align-items:center;gap:8px">
-        <span>🦊</span> Connect Monad Web3 Wallet
+  <div class="modal-overlay-backdrop" id="wallet-modal">
+    <div class="scan-card-wrap" style="max-width:480px;text-align:left;padding:24px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border-default);padding-bottom:12px">
+        <div style="font-weight:700;font-size:16px;color:var(--text-primary);display:flex;align-items:center;gap:8px">
+          <span>🦊</span> Connect Monad Web3 Wallet
+        </div>
+        <button style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer" onclick="window.closeWalletModal()">✕</button>
       </div>
-      <button style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer" onclick="window.closeWalletModal()">✕</button>
-    </div>
 
-    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
-      Select how you want to connect your wallet to <strong>Monad Testnet (Chain ID 10143)</strong>:
-    </div>
-
-    <!-- OPTION 1: METAMASK EXTENSION -->
-    <div onclick="window.connectViaMetaMaskExtension()" style="background:var(--bg-root);border:1px solid var(--border-default);border-radius:var(--r-sm);padding:14px;margin-bottom:12px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.2s ease" onmouseover="this.style.borderColor='var(--accent-blue)'" onmouseout="this.style.borderColor='var(--border-default)'">
-      <span style="font-size:24px">🦊</span>
-      <div>
-        <div style="font-weight:700;color:var(--text-primary);font-size:13px">MetaMask Extension / Mobile Wallet</div>
-        <div style="font-size:11px;color:var(--text-secondary)">Connect directly via browser extension popup (eth_requestAccounts)</div>
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+        Select how you want to connect your wallet to <strong>Monad Testnet (Chain ID 10143)</strong>:
       </div>
-    </div>
 
-    <!-- OPTION 2: MANUAL ADDRESS INPUT -->
-    <div style="background:var(--bg-root);border:1px solid var(--border-default);border-radius:var(--r-sm);padding:14px">
-      <div style="font-weight:700;color:var(--text-primary);font-size:13px;margin-bottom:6px;display:flex;align-items:center;gap:6px">
-        <span>✏️</span> Enter Custom Monad Address Manually
+      <!-- OPTION 1: METAMASK EXTENSION -->
+      <div onclick="window.connectViaMetaMaskExtension()" style="background:var(--bg-root);border:1px solid var(--border-default);border-radius:var(--r-sm);padding:14px;margin-bottom:12px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.2s ease" onmouseover="this.style.borderColor='var(--accent-blue)'" onmouseout="this.style.borderColor='var(--border-default)'">
+        <span style="font-size:24px">🦊</span>
+        <div>
+          <div style="font-weight:700;color:var(--text-primary);font-size:13px">MetaMask Extension / Mobile Wallet</div>
+          <div style="font-size:11px;color:var(--text-secondary)">Connect directly via browser extension popup (eth_requestAccounts)</div>
+        </div>
       </div>
-      <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px">Paste any 0x... EVM wallet address to link for attestations:</div>
-      <div style="display:flex;gap:8px">
-        <input type="text" id="manual-wallet-input" placeholder="0x71C7656EC7ab88b098defB751B7401B5f6d8976F" style="flex:1;background:var(--bg-card);border:1px solid var(--border-default);color:var(--text-primary);padding:8px 12px;border-radius:var(--r-sm);font-family:var(--font-mono);font-size:12px" />
-        <button class="btn-tool btn-tool-primary" onclick="window.connectManualAddress()" style="padding:8px 14px">Set Address</button>
+
+      <!-- OPTION 2: MANUAL ADDRESS INPUT -->
+      <div style="background:var(--bg-root);border:1px solid var(--border-default);border-radius:var(--r-sm);padding:14px">
+        <div style="font-weight:700;color:var(--text-primary);font-size:13px;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          <span>✏️</span> Enter Custom Monad Address Manually
+        </div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px">Paste any 0x... EVM wallet address to link for attestations:</div>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="manual-wallet-input" placeholder="0x71C7656EC7ab88b098defB751B7401B5f6d8976F" style="flex:1;background:var(--bg-card);border:1px solid var(--border-default);color:var(--text-primary);padding:8px 12px;border-radius:var(--r-sm);font-family:var(--font-mono);font-size:12px" />
+          <button class="btn-tool btn-tool-primary" onclick="window.connectManualAddress()" style="padding:8px 14px">Set Address</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <script src="app.js?v=manual_address_v27"></script>
+  <script src="app.js?v=modal_backdrop_v28"></script>
 </body>
 </html>
