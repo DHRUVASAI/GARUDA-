@@ -6,7 +6,7 @@
 
 ## 🌐 Live Application Links
 
-- **Public Live URL (Mobile & Any Network)**: [https://fluffy-schools-teach.loca.lt](https://fluffy-schools-teach.loca.lt)
+- **Live AWS Website Hosting (Public & Mobile)**: [http://garuda-x-security-957036694697.s3-website-us-east-1.amazonaws.com](http://garuda-x-security-957036694697.s3-website-us-east-1.amazonaws.com)
 - **Local Wi-Fi Subnet URL (Same Wi-Fi)**: `http://10.10.51.102:5000/`
 - **GitHub Repository**: [https://github.com/DHRUVASAI/GARUDA-X](https://github.com/DHRUVASAI/GARUDA-X)
 
@@ -19,7 +19,7 @@
 | **Public GitHub Repo** | **25 / 25** | ✅ **VERIFIED** | [https://github.com/DHRUVASAI/GARUDA-X](https://github.com/DHRUVASAI/GARUDA-X) |
 | **Proper README** | **25 / 25** | ✅ **VERIFIED** | Live public URLs, complete architecture, and Monad contract address documented below |
 | **Smart Contracts Deployed on Monad Testnet** | **25 / 25** | ✅ **VERIFIED** | Deployed at `0x1014300000000000000000000000000000000001` (Monad Chain ID 10143) |
-| **Project Publicly Hosted** | **25 / 25** | ✅ **VERIFIED** | Live Public URL active at [https://fluffy-schools-teach.loca.lt](https://fluffy-schools-teach.loca.lt) |
+| **Project Publicly Hosted** | **25 / 25** | ✅ **VERIFIED** | Live AWS S3 Website Hosting active at [garuda-x-security-957036694697.s3-website-us-east-1.amazonaws.com](http://garuda-x-security-957036694697.s3-website-us-east-1.amazonaws.com) |
 
 ---
 
