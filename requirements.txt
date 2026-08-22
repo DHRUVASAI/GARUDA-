@@ -4,3 +4,4 @@ flask-limiter>=3.5.0
 web3>=6.15.0
 gunicorn>=21.2.0
 requests>=2.31.0
+psutil>=5.9.0

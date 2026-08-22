@@ -15,7 +15,10 @@ import queue
 from datetime import datetime
 import ipaddress
 from typing import Optional
-import psutil
+try:
+    import psutil
+except Exception:
+    psutil = None
 import logging
 from werkzeug.exceptions import HTTPException
 
@@ -591,6 +594,8 @@ def _run_bouncer_x_on_scan_data(scan_data: dict) -> dict:
 # ─────────────────────────────────────────────
 def get_real_traffic():
     try:
+        if not psutil:
+            return {"bytes_sent": "0 B", "bytes_received": "0 B", "pkts_sent": 0, "pkts_recv": 0, "raw_bytes_sent": 0, "raw_bytes_recv": 0}
         n = psutil.net_io_counters()
         def fmt(b):
             if b >= 1_073_741_824: return f"{b/1_073_741_824:.2f} GB"
@@ -1638,6 +1643,8 @@ class NetworkScanner:
 
     def get_interface_stats(self):
         try:
+            if not psutil:
+                return {}
             stats = {}
             io = psutil.net_io_counters(pernic=True)
             addrs = psutil.net_if_addrs()
