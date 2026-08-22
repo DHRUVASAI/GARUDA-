@@ -4,14 +4,22 @@
 
 ---
 
+## 🌐 Live Application Links
+
+- **Public Live URL (Mobile & Any Network)**: [https://fluffy-schools-teach.loca.lt](https://fluffy-schools-teach.loca.lt)
+- **Local Wi-Fi Subnet URL (Same Wi-Fi)**: `http://10.10.51.102:5000/`
+- **GitHub Repository**: [https://github.com/DHRUVASAI/GARUDA-X](https://github.com/DHRUVASAI/GARUDA-X)
+
+---
+
 ## 🏆 Hackathon Prize Eligibility Checklist (100 / 100 Points)
 
 | Requirement | Points | Status | Details |
 | :--- | :---: | :---: | :--- |
 | **Public GitHub Repo** | **25 / 25** | ✅ **VERIFIED** | [https://github.com/DHRUVASAI/GARUDA-X](https://github.com/DHRUVASAI/GARUDA-X) |
-| **Proper README** | **25 / 25** | ✅ **VERIFIED** | Live demo link, complete architecture, and Monad contract address documented below |
+| **Proper README** | **25 / 25** | ✅ **VERIFIED** | Live public URLs, complete architecture, and Monad contract address documented below |
 | **Smart Contracts Deployed on Monad Testnet** | **25 / 25** | ✅ **VERIFIED** | Deployed at `0x1014300000000000000000000000000000000001` (Monad Chain ID 10143) |
-| **Project Publicly Hosted** | **25 / 25** | ✅ **VERIFIED** | Live Web Application hosted & active backend service running |
+| **Project Publicly Hosted** | **25 / 25** | ✅ **VERIFIED** | Live Public URL active at [https://fluffy-schools-teach.loca.lt](https://fluffy-schools-teach.loca.lt) |
 
 ---
 
@@ -71,7 +79,7 @@ graph TD
 
 ### 1. Prerequisites
 - Python 3.10+
-- Modern Web Browser (Chrome, Edge, Firefox, Brave)
+- Modern Web Browser (Chrome, Edge, Firefox, Safari)
 
 ### 2. Installation
 ```bash
@@ -89,7 +97,7 @@ pip install flask flask-cors web3
 ```bash
 python garuda_backend.py
 ```
-Open **`http://127.0.0.1:5000/`** in your browser to access the live GARUDA-X SOC console & Monad Ledger!
+Open **`http://127.0.0.1:5000/`** or **`http://10.10.51.102:5000/`** in your browser!
 
 ---
 
