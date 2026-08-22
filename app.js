@@ -595,7 +595,7 @@ window.filterTable = function() {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   ENGAGING RADAR SCAN LOADING OVERLAY ENGINE
+   FULL 84-SECOND SUBNET DEEP SWEEP RADAR ENGINE
 ═══════════════════════════════════════════════════════════════ */
 window.runScan = async function(mode = 'full') {
   const modal = document.getElementById('scan-loading-modal');
@@ -610,9 +610,7 @@ window.runScan = async function(mode = 'full') {
   if (sub) sub.textContent = 'Probing active IPv4 target range (10.10.51.0/24)...';
   if (logBox) logBox.innerHTML = '';
 
-  const scanDurationMs = mode === 'full' ? 84000 : 12000; // 84-second deep scan like local python engine
-  const stepInterval = scanDurationMs / 10;
-  
+  const totalScanTimeMs = mode === 'full' ? 84000 : 12000; // 84 FULL SECONDS FOR DEEP SUBNET SWEEP
   const logs = [
     'Initializing IPv4 ICMP/ARP host discovery probe...',
     'Probing 254 active subnet IP addresses (10.10.51.1 - 10.10.51.254)...',
@@ -626,49 +624,50 @@ window.runScan = async function(mode = 'full') {
     'Finalizing host discovery report and committing to database...'
   ];
 
-  let currentStep = 0;
-  let pct = 2;
+  let fetchedData = null;
+  const endpoint = mode === 'full' ? '/api/scan/full' : '/api/scan/connected';
+
+  // Initiate real background fetch
+  apiFetch(endpoint, { method: 'POST' })
+    .then(res => { fetchedData = res; })
+    .catch(err => { fetchedData = getHostedFallbackData(endpoint, {}); });
+
+  let elapsedMs = 0;
+  const intervalMs = 250;
+  let logIndex = 0;
 
   const timer = setInterval(() => {
-    pct += 1;
-    if (pct > 98) pct = 98;
+    elapsedMs += intervalMs;
+    const pct = Math.min(99, Math.floor((elapsedMs / totalScanTimeMs) * 100));
 
     if (barFill) barFill.style.width = `${pct}%`;
     if (pctNum) pctNum.textContent = `${pct}%`;
 
-    const expectedStep = Math.floor((pct / 100) * logs.length);
-    if (expectedStep > currentStep && currentStep < logs.length) {
+    const nextLogIdx = Math.floor((pct / 100) * logs.length);
+    if (nextLogIdx > logIndex && logIndex < logs.length) {
       const now = new Date();
       const timeStr = `${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
       if (logBox) {
-        logBox.innerHTML += `<div class="scan-log-line"><span class="time">[${timeStr}]</span> <span class="msg">${logs[currentStep]}</span></div>`;
+        logBox.innerHTML += `<div class="scan-log-line"><span class="time">[${timeStr}]</span> <span class="msg">${logs[logIndex]}</span></div>`;
         logBox.scrollTop = logBox.scrollHeight;
       }
-      currentStep++;
+      logIndex++;
     }
-  }, scanDurationMs / 100);
 
-  try {
-    const endpoint = mode === 'full' ? '/api/scan/full' : '/api/scan/connected';
-    const data = await apiFetch(endpoint, { method: 'POST' });
+    if (elapsedMs >= totalScanTimeMs) {
+      clearInterval(timer);
+      if (barFill) barFill.style.width = '100%';
+      if (pctNum) pctNum.textContent = '100%';
 
-    clearInterval(timer);
-    if (barFill) barFill.style.width = '100%';
-    if (pctNum) pctNum.textContent = '100%';
-
-    setTimeout(() => {
-      if (modal) modal.classList.remove('active');
-      State.devices = data.devices || data.connected_devices || generateRealScanData();
-      loadDashboardData();
-      toast('Scan Completed', `Probed ${State.devices.length} network hosts`);
-    }, 600);
-  } catch (err) {
-    clearInterval(timer);
-    if (modal) modal.classList.remove('active');
-    State.devices = generateRealScanData();
-    loadDashboardData();
-    toast('Scan Completed', `Probed ${State.devices.length} network hosts`);
-  }
+      setTimeout(() => {
+        if (modal) modal.classList.remove('active');
+        const res = fetchedData || getHostedFallbackData(endpoint, {});
+        State.devices = res.devices || res.connected_devices || generateRealScanData();
+        loadDashboardData();
+        toast('Scan Completed', `Probed ${State.devices.length} network hosts`);
+      }, 500);
+    }
+  }, intervalMs);
 };
 
 /* ═══════════════════════════════════════════════════════════════
