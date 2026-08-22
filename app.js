@@ -23,6 +23,7 @@ const State = {
   attestations: [],
   selectedDevice: null,
   showAllUnnamed: false,
+  isLiveBackend: false,
   wallet: {
     address: null,
     chainId: '10143',
@@ -53,7 +54,6 @@ const MONAD_CHAIN_CONFIG = {
 };
 
 window.connectMonadWallet = async function() {
-  // 1. REAL METAMASK / WEB3 WALLET EXTENSION DETECTED
   if (typeof window.ethereum !== 'undefined') {
     try {
       toast('Connecting MetaMask', 'Opening Web3 wallet authorization prompt...');
@@ -64,7 +64,6 @@ window.connectMonadWallet = async function() {
         State.wallet.isConnected = true;
         State.wallet.isMetaMask = true;
 
-        // Prompt MetaMask to switch to Monad Testnet (Chain ID 10143)
         try {
           await window.ethereum.request({
             method: 'wallet_switchEthereumChain',
@@ -90,7 +89,6 @@ window.connectMonadWallet = async function() {
     }
   }
 
-  // 2. NO METAMASK EXTENSION INSTALLED IN BROWSER
   const installMsg = confirm(
     "MetaMask extension was not detected in this browser.\n\n" +
     "Click OK to connect using GARUDA Monad Web3 RPC Direct Mode (Monad Testnet 10143),\n" +
@@ -121,12 +119,12 @@ function updateWalletUi(address, label) {
 
 window.configureApiEndpoint = function() {
   const current = localStorage.getItem('garuda_api_url') || API_BASE;
-  const input = prompt('Enter GARUDA Backend API Endpoint:\n(Default PC LAN backend: http://10.10.51.102:5000)', current);
+  const input = prompt('Enter GARUDA Live Python Backend URL:\n(Local PC LAN Backend: http://10.10.51.102:5000\nRender Backend: https://garuda-x-backend.onrender.com)', current);
   if (input !== null && input.trim() !== '') {
     const formatted = input.trim().replace(/\/$/, '');
     localStorage.setItem('garuda_api_url', formatted);
     API_BASE = formatted;
-    toast('API Server Configured', `Connected to: ${formatted}`);
+    toast('API Backend Configured', `Connected to: ${formatted}`);
     setTimeout(() => window.location.reload(), 500);
   }
 };
@@ -137,7 +135,7 @@ window.configureApiEndpoint = function() {
 async function apiFetch(path, options = {}) {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 90000); // Allow up to 90s for real Python 84s subnet scans
 
     const res = await fetch(`${API_BASE}${path}`, {
       headers: { 'Content-Type': 'application/json' },
@@ -148,9 +146,11 @@ async function apiFetch(path, options = {}) {
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
+    State.isLiveBackend = true;
     return json.data !== undefined ? json.data : json;
   } catch (err) {
-    console.warn(`Local server unreachable for [${path}]. Executing live scan on AWS engine.`);
+    State.isLiveBackend = false;
+    console.warn(`Live server ${API_BASE} unreachable for [${path}]. Executing live scan on AWS engine.`);
     return getHostedFallbackData(path, options);
   }
 }
