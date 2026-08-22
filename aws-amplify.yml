@@ -1,0 +1,16 @@
+version: 1
+frontend:
+  phases:
+    build:
+      commands:
+        - echo "Building GARUDA-X Application..."
+  artifacts:
+    baseDirectory: /
+    files:
+      - 'index.html'
+      - 'styles.css'
+      - 'app.js'
+      - 'manifest.json'
+      - 'sw.js'
+  cache:
+    paths: []
