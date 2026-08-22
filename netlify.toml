@@ -1,0 +1,13 @@
+[build]
+  publish = "."
+  command = "echo Netlify build complete"
+
+[[redirects]]
+  from = "/api/*"
+  to = "http://10.10.51.102:5000/api/:splat"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"

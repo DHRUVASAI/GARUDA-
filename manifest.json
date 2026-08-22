@@ -1,0 +1,22 @@
+{
+  "name": "GARUDA Quantum Defense",
+  "short_name": "GARUDA",
+  "description": "Network security scanner and threat analysis dashboard.",
+  "start_url": "./garuda.html",
+  "display": "standalone",
+  "background_color": "#0c1017",
+  "theme_color": "#0c1017",
+  "icons": [
+    {
+      "src": "public/assets/garuda_icon_192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "public/assets/garuda_icon_192.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

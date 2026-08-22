@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: garuda-x-backend
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn garuda_backend:app --bind 0.0.0.0:$PORT --workers 2 --threads 4"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: MONAD_RPC_URL
+        value: "https://testnet-rpc.monad.xyz/"
+      - key: MONAD_CHAIN_ID
+        value: "10143"

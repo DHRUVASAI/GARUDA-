@@ -1,0 +1,4 @@
+srcip,dstip,proto,state,dur,sbytes,dbytes,sttl,dttl,sloss,dloss,service,Sload,Dload,Spkts,Dpkts,swin,dwin,stcpb,dtcpb,smean,dmean,trans_depth,response_body_len,ct_srv_src,ct_state_ttl,ct_dst_ltm,ct_src_dport_ltm,ct_dst_sport_ltm,ct_dst_src_ltm,is_ftp_login,ct_ftp_cmd,ct_flw_http_mthd,ct_src_ltm,ct_srv_dst,is_sm_ips_ports,attack_cat,label
+10.0.0.1,10.0.0.2,tcp,FIN,0.1,100,200,64,64,0,0,-,1000,2000,10,10,255,255,123,456,10,20,0,0,1,1,1,1,1,1,0,0,0,1,1,0,Normal,0
+10.0.0.1,10.0.0.2,tcp,FIN,0.2,120,220,64,64,0,0,-,1000,2000,10,10,255,255,123,456,10,20,0,0,1,1,1,1,1,1,0,0,0,1,1,0,Normal,0
+10.0.0.1,10.0.0.2,tcp,FIN,0.3,130,230,64,64,0,0,-,1000,2000,10,10,255,255,123,456,10,20,0,0,1,1,1,1,1,1,0,0,0,1,1,0,Normal,0
