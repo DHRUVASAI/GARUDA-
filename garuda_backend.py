@@ -106,9 +106,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger("garuda")
 
-app = Flask(__name__, static_folder=os.path.dirname(os.path.abspath(__file__)))
+app = Flask(__name__, static_folder='.', static_url_path='')
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
+    return response
+
 app.config["GARUDA_CSP"] = CONTENT_SECURITY_POLICY
-CORS(app)
 limiter = Limiter(get_remote_address, app=app, default_limits=["400 per minute"], storage_uri="memory://")
 
 _scan_state_lock = threading.Lock()

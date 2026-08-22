@@ -6,7 +6,7 @@
 
 function getApiBase() {
   const custom = localStorage.getItem('garuda_api_url');
-  if (custom) return custom;
+  if (custom) return custom.replace(/\/$/, '');
   const host = window.location.hostname;
   if (host === 'localhost' || host === '127.0.0.1') return 'http://127.0.0.1:5000';
   if (host.startsWith('10.') || host.startsWith('192.168.') || host.startsWith('172.')) {
@@ -15,7 +15,7 @@ function getApiBase() {
   return 'http://127.0.0.1:5000';
 }
 
-const API_BASE = getApiBase();
+let API_BASE = getApiBase();
 
 const State = {
   activeView: 'devices',
@@ -35,13 +35,25 @@ const State = {
   }
 };
 
+window.configureApiEndpoint = function() {
+  const current = localStorage.getItem('garuda_api_url') || API_BASE;
+  const input = prompt('Enter GARUDA Python Backend Server Endpoint URL:\n(For local network scan from phone, use: http://10.10.51.102:5000)', current);
+  if (input !== null && input.trim() !== '') {
+    const formatted = input.trim().replace(/\/$/, '');
+    localStorage.setItem('garuda_api_url', formatted);
+    API_BASE = formatted;
+    toast('API Server Updated', `Connected to: ${formatted}`);
+    setTimeout(() => window.location.reload(), 500);
+  }
+};
+
 /* ═══════════════════════════════════════════════════════════════
-   UTILITIES & SMART API FETCH WITH FALLBACK ENGINE
+   UTILITIES & SMART API FETCH WITH LIVE PROBE FALLBACK
 ═══════════════════════════════════════════════════════════════ */
 async function apiFetch(path, options = {}) {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
 
     const res = await fetch(`${API_BASE}${path}`, {
       headers: { 'Content-Type': 'application/json' },
