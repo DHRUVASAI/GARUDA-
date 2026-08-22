@@ -50,28 +50,37 @@ const MONAD_CHAIN_CONFIG = {
   blockExplorerUrls: ['https://testnet.monadexplorer.com/']
 };
 
-window.connectMonadWallet = async function() {
-  // STRICT REAL METAMASK EXTENSION DETECTION (EIP-1193)
+window.connectMonadWallet = function() {
+  const modal = document.getElementById('wallet-modal');
+  const overlay = document.getElementById('wallet-modal-overlay');
+  if (modal) modal.classList.add('active');
+  if (overlay) overlay.classList.add('active');
+};
+
+window.closeWalletModal = function() {
+  const modal = document.getElementById('wallet-modal');
+  const overlay = document.getElementById('wallet-modal-overlay');
+  if (modal) modal.classList.remove('active');
+  if (overlay) overlay.classList.remove('active');
+};
+
+window.connectViaMetaMaskExtension = async function() {
+  window.closeWalletModal();
   if (typeof window.ethereum !== 'undefined') {
     try {
       toast('Opening MetaMask', 'Requesting Web3 wallet account permission...');
-      
-      // Real EIP-1193 account request popup
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      
       if (accounts && accounts.length > 0) {
         State.wallet.address = accounts[0];
         State.wallet.isConnected = true;
         State.wallet.isMetaMask = true;
 
-        // Trigger real network switch to Monad Testnet (Chain ID 10143)
         try {
           await window.ethereum.request({
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: MONAD_CHAIN_CONFIG.chainId }]
           });
         } catch (switchError) {
-          // If Monad network is not added to user's MetaMask yet, add it automatically
           if (switchError.code === 4902) {
             await window.ethereum.request({
               method: 'wallet_addEthereumChain',
@@ -80,36 +89,36 @@ window.connectMonadWallet = async function() {
           }
         }
 
-        updateWalletUi(State.wallet.address);
+        updateWalletUi(State.wallet.address, 'MetaMask Live');
         toast('MetaMask Monad Connected!', `Account: ${State.wallet.address.substring(0, 8)}... (Monad Testnet 10143)`);
-
-        // Listen for user account / network changes inside MetaMask
-        if (window.ethereum.on) {
-          window.ethereum.on('accountsChanged', (newAccounts) => {
-            if (newAccounts.length > 0) {
-              State.wallet.address = newAccounts[0];
-              updateWalletUi(State.wallet.address);
-            } else {
-              State.wallet.isConnected = false;
-              resetWalletUi();
-            }
-          });
-          window.ethereum.on('chainChanged', () => {
-            window.location.reload();
-          });
-        }
         return;
       }
     } catch (err) {
-      console.warn('MetaMask user connection error:', err.message);
-      toast('MetaMask Connection Error', err.message);
+      toast('MetaMask Error', err.message);
       return;
     }
   }
 
-  // IF METAMASK EXTENSION IS NOT INSTALLED IN THE BROWSER
-  alert("MetaMask extension not detected in this browser!\n\nPlease install MetaMask from https://metamask.io or open this app inside MetaMask Mobile to connect your wallet.");
+  alert("MetaMask extension not detected in this browser!\n\nPlease install MetaMask from https://metamask.io or enter your address manually.");
   window.open('https://metamask.io/download/', '_blank');
+};
+
+window.connectManualAddress = function() {
+  const input = document.getElementById('manual-wallet-input');
+  const val = input ? input.value.trim() : '';
+
+  if (!val || !val.startsWith('0x') || val.length < 10) {
+    alert('Please enter a valid Monad EVM address starting with 0x...');
+    return;
+  }
+
+  State.wallet.address = val;
+  State.wallet.isConnected = true;
+  State.wallet.isMetaMask = false;
+
+  window.closeWalletModal();
+  updateWalletUi(State.wallet.address, 'Manual Input');
+  toast('Monad Wallet Linked!', `Address: ${State.wallet.address.substring(0, 8)}... (Monad Testnet 10143)`);
 };
 
 function updateWalletUi(address) {
