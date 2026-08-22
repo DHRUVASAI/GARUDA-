@@ -9,9 +9,6 @@ function getApiBase() {
   if (custom) return custom.replace(/\/$/, '');
   const host = window.location.hostname;
   if (host === 'localhost' || host === '127.0.0.1') return 'http://127.0.0.1:5000';
-  if (host.startsWith('10.') || host.startsWith('192.168.') || host.startsWith('172.')) {
-    return `${window.location.protocol}//${host}:5000`;
-  }
   return 'http://10.10.51.102:5000';
 }
 
@@ -135,7 +132,7 @@ window.configureApiEndpoint = function() {
 async function apiFetch(path, options = {}) {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90000); // Allow up to 90s for real Python 84s subnet scans
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout for real Python ARP/ICMP/port scans
 
     const res = await fetch(`${API_BASE}${path}`, {
       headers: { 'Content-Type': 'application/json' },
@@ -150,7 +147,7 @@ async function apiFetch(path, options = {}) {
     return json.data !== undefined ? json.data : json;
   } catch (err) {
     State.isLiveBackend = false;
-    console.warn(`Live server ${API_BASE} unreachable for [${path}]. Executing live scan on AWS engine.`);
+    console.warn(`Live Python backend ${API_BASE} unreachable for [${path}]. Executing live scan simulation.`);
     return getHostedFallbackData(path, options);
   }
 }
@@ -613,29 +610,34 @@ window.runScan = async function(mode = 'full') {
   if (sub) sub.textContent = 'Probing active IPv4 target range (10.10.51.0/24)...';
   if (logBox) logBox.innerHTML = '';
 
+  const scanDurationMs = mode === 'full' ? 84000 : 12000; // 84-second deep scan like local python engine
+  const stepInterval = scanDurationMs / 10;
+  
   const logs = [
     'Initializing IPv4 ICMP/ARP host discovery probe...',
-    'Probing 254 active subnet IP addresses...',
-    'Querying mDNS broadcast & NetBIOS name records...',
-    'Querying IEEE OUI MAC hardware registers...',
-    'Probing open service TCP/UDP ports (22, 80, 443, 3306, 5432)...',
+    'Probing 254 active subnet IP addresses (10.10.51.1 - 10.10.51.254)...',
+    'Querying mDNS broadcast & NetBIOS name resolution records...',
+    'Querying IEEE OUI MAC hardware vendor lookup registers...',
+    'Probing open service TCP/UDP ports (22, 80, 443, 3306, 5432, 8080)...',
     'Executing Network Bouncer X 5-Detector AI Ensemble...',
     'Calculating point-biserial correlation weights & behavioral drift...',
-    'Constructing graph topology lateral movement chains...',
-    'Generating canonical SHA-256 hash for Monad attestation...'
+    'Constructing graph topology lateral movement threat chains...',
+    'Generating canonical SHA-256 state hash for Monad attestation...',
+    'Finalizing host discovery report and committing to database...'
   ];
 
   let currentStep = 0;
-  let pct = 5;
+  let pct = 2;
 
   const timer = setInterval(() => {
-    pct += Math.floor(Math.random() * 8) + 4;
-    if (pct > 92) pct = 92;
+    pct += 1;
+    if (pct > 98) pct = 98;
 
     if (barFill) barFill.style.width = `${pct}%`;
     if (pctNum) pctNum.textContent = `${pct}%`;
 
-    if (currentStep < logs.length && pct > (currentStep + 1) * 10) {
+    const expectedStep = Math.floor((pct / 100) * logs.length);
+    if (expectedStep > currentStep && currentStep < logs.length) {
       const now = new Date();
       const timeStr = `${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
       if (logBox) {
@@ -644,7 +646,7 @@ window.runScan = async function(mode = 'full') {
       }
       currentStep++;
     }
-  }, 350);
+  }, scanDurationMs / 100);
 
   try {
     const endpoint = mode === 'full' ? '/api/scan/full' : '/api/scan/connected';
