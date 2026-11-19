@@ -241,8 +241,12 @@
               <span class="leg"><i style="background:var(--warn)"></i>Unverified</span>
               <span class="leg"><i style="background:var(--danger)"></i>Alert / ML Risk</span>
             </div>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-sm" id="btnResetCam3D">Reset View</button>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <span class="muted" style="font-size:11px;font-weight:600;">SCALE TEST:</span>
+              <button class="btn btn-sm" id="btnBench12" title="Verify zero collision with 12 devices">12 Devs</button>
+              <button class="btn btn-sm" id="btnBench150" title="Verify multi-ring packing with 150 devices">150 Devs</button>
+              <button class="btn btn-sm" id="btnBench1000" title="Verify GPU instancing with 1,000 devices">1,000 Devs</button>
+              <button class="btn btn-sm" id="btnResetView" title="Reset zoom and camera position">Reset View</button>
               <button class="btn btn-sm" data-goto="devices">Manage Devices →</button>
             </div>
           </div>
@@ -342,6 +346,9 @@
               <button class="btn btn-sm" data-sim="port_sweep">⚡ Active: Rapid Device Probing</button>
               <button class="btn btn-sm" data-sim="open_wifi">👁 Passive: Open Unencrypted Wi-Fi</button>
               <button class="btn btn-sm" data-sim="malware_eicar">🦠 Malware: EICAR Virus Signature Test</button>
+              <button class="btn btn-sm" id="btnLabBench12">🧪 Stress Test: 12 Devices (Zero Collision)</button>
+              <button class="btn btn-sm" id="btnLabBench150">🧪 Stress Test: 150 Devices (Multi-Ring Scaling)</button>
+              <button class="btn btn-sm" id="btnLabBench1000">🧪 Stress Test: 1,000 Devices (GPU Benchmark)</button>
               <button class="btn btn-safe btn-sm" data-sim="reset">✓ Reset to Clean Safe State</button>
             </div>
           </div>
@@ -568,6 +575,7 @@
   </aside>
 
   <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+  <script src="/static/layoutEngine.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

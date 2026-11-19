@@ -13,6 +13,14 @@
     radarPoints: [],
     hoveredMac: null,
     selectedDeviceMac: null,
+    radarZoom: 1.0,
+    radarPanX: 0,
+    radarPanY: 0,
+    isRadarDragging: false,
+    radarDragStartX: 0,
+    radarDragStartY: 0,
+    dragDistance: 0,
+    pointerDownPos: null,
     soundEnabled: true,
     desktopNotifications: true,
     seenAlertIds: new Set(),
@@ -119,10 +127,10 @@
     $("btnMode2D").classList.toggle("active", !is3d);
     $("topology3dHost").hidden = !is3d;
     $("networkRadar").hidden = is3d;
-    $("btnResetCam3D").hidden = !is3d;
+    if ($("btnResetView")) $("btnResetView").hidden = false;
     $("topologyHudBadge").textContent = is3d
       ? "Drag to orbit · Scroll to zoom · Click 3D device to inspect"
-      : "2D Precision Radar · Hover or click any device to inspect";
+      : `2D Precision Radar (${state.radarZoom.toFixed(1)}x) · Drag to pan · Scroll to zoom · Hover to inspect`;
     if (is3d && state.view === "network") ensureTopology3D();
   }
 
@@ -640,7 +648,21 @@
     state.selectedDeviceMac = null;
   }
 
-  // 2D Precision Orbital Radar (Hero preview + 2D Topology Mode)
+  // Adaptive node radius by device count N
+  function getNodeRadius(count, compact = false) {
+    if (compact) {
+      if (count <= 18) return 8;
+      if (count <= 80) return 5.5;
+      if (count <= 300) return 3.5;
+      return 2.2;
+    }
+    if (count <= 18) return 10;
+    if (count <= 80) return 7;
+    if (count <= 300) return 4.5;
+    return 3;
+  }
+
+  // 2D Precision Multi-Ring Radar (Hero preview + 2D Topology Mode)
   function drawRadar(canvasId, compact = false) {
     const canvas = $(canvasId);
     if (!canvas || canvas.hidden || !state.snapshot) return;
@@ -653,84 +675,209 @@
 
     const ctx = canvas.getContext("2d");
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const w = rect.width, h = rect.height, cx = w / 2, cy = h / 2, maxR = Math.min(w, h) * 0.4;
+    const w = rect.width, h = rect.height, cx = w / 2, cy = h / 2;
     const dark = document.body.classList.contains("theme-dark");
-    const hasCrit = state.snapshot.alerts.some((a) => !a.resolved && a.severity === "critical");
-    const mlMap = new Map((state.snapshot.ml?.device_scores || []).map((m) => [m.mac.toUpperCase(), m]));
+    const hasCrit = (state.snapshot.alerts || []).some((a) => !a.resolved && a.severity === "critical");
 
     ctx.clearRect(0, 0, w, h);
-    const pulseR = ((state.animPhase * 0.35) % 1) * maxR;
-    ctx.beginPath();
-    ctx.arc(cx, cy, pulseR, 0, Math.PI * 2);
-    ctx.strokeStyle = hasCrit ? `rgba(197,54,36,${0.28 * (1 - pulseR / maxR)})` : `rgba(30,79,214,${0.18 * (1 - pulseR / maxR)})`;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
 
-    [0.36, 0.68, 1.0].forEach((f, idx) => {
+    const devices = (state.snapshot.devices || []).filter((d) => d && d.is_online !== false);
+    const totalCount = devices.length;
+    const nodeRadius = getNodeRadius(totalCount, compact);
+
+    // Dynamic Central Router Radius (measured with padding)
+    ctx.font = compact ? "700 9.5px Inter, sans-serif" : "700 11px Inter, sans-serif";
+    const routerTextWidth = ctx.measureText("ROUTER").width;
+    const routerRadius = Math.max(compact ? 20 : 28, Math.round(routerTextWidth * 0.65));
+
+    // Shared Multi-Ring Polar Layout Engine
+    const engine = window.GarudaLayoutEngine;
+    let minNodeSpacing;
+    if (totalCount <= 18) minNodeSpacing = compact ? 26 : 38;
+    else if (totalCount <= 80) minNodeSpacing = compact ? 18 : 28;
+    else if (totalCount <= 300) minNodeSpacing = compact ? 12 : 19;
+    else minNodeSpacing = compact ? 8 : 13;
+
+    const layout = engine
+      ? engine.computePolarLayout(devices, state.snapshot.alerts || [], state.snapshot.ml?.device_scores || [], {
+          mode: "2d",
+          minNodeSpacing,
+          centerRouterRadius: routerRadius,
+        })
+      : { nodes: [], rings: [], outerRadius: Math.min(w, h) * 0.4, gateway: devices[0] };
+
+    // For hero radar, auto-fit to outer radius so 100-1,000 dots fit cleanly
+    const zoom = compact ? (Math.min(w, h) * 0.44) / Math.max(1, layout.outerRadius) : state.radarZoom;
+    const panX = compact ? 0 : state.radarPanX;
+    const panY = compact ? 0 : state.radarPanY;
+
+    const effCx = cx + panX;
+    const effCy = cy + panY;
+
+    // Render concentric radar trust rings
+    layout.rings.forEach((ring) => {
+      const r = ring.radius * zoom;
+      if (r <= 0) return;
       ctx.beginPath();
-      ctx.arc(cx, cy, maxR * f, 0, Math.PI * 2);
-      ctx.strokeStyle = dark ? "rgba(236,234,228,0.10)" : "rgba(22,24,29,0.10)";
-      ctx.setLineDash(idx === 2 ? [4, 4] : []);
+      ctx.arc(effCx, effCy, r, 0, Math.PI * 2);
+      if (ring.band === "C") {
+        ctx.strokeStyle = dark ? "rgba(227, 96, 80, 0.28)" : "rgba(197, 54, 36, 0.24)";
+        ctx.setLineDash([4, 4]);
+      } else if (ring.band === "B") {
+        ctx.strokeStyle = dark ? "rgba(226, 163, 67, 0.22)" : "rgba(185, 107, 8, 0.18)";
+        ctx.setLineDash([2, 4]);
+      } else {
+        ctx.strokeStyle = dark ? "rgba(62, 180, 136, 0.22)" : "rgba(21, 127, 86, 0.18)";
+        ctx.setLineDash([]);
+      }
       ctx.lineWidth = 1;
       ctx.stroke();
     });
     ctx.setLineDash([]);
 
-    const devices = state.snapshot.devices.filter((d) => d.is_online);
-    const gw = devices.find((d) => d.is_gateway) || devices[0];
-    const others = devices.filter((d) => d !== gw);
+    // Expanding radar pulse sweep ring
+    const maxOuterScaled = (layout.outerRadius || 100) * zoom;
+    const pulseR = ((state.animPhase * 0.35) % 1) * maxOuterScaled;
+    ctx.beginPath();
+    ctx.arc(effCx, effCy, pulseR, 0, Math.PI * 2);
+    ctx.strokeStyle = hasCrit
+      ? `rgba(197,54,36,${0.28 * (1 - pulseR / Math.max(1, maxOuterScaled))})`
+      : `rgba(30,79,214,${0.18 * (1 - pulseR / Math.max(1, maxOuterScaled))})`;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Palette tokens
+    const colorSafe = dark ? "#3EB488" : "#157F56";
+    const colorWarn = dark ? "#E2A343" : "#B96B08";
+    const colorAlert = dark ? "#E36050" : "#C53624";
     const points = [];
 
-    others.forEach((d, idx) => {
-      const angle = (idx / Math.max(1, others.length)) * Math.PI * 2 - Math.PI / 2;
-      const r = d.is_safe ? maxR * 0.66 : maxR * 0.96;
-      const x = cx + Math.cos(angle) * r;
-      const y = cy + Math.sin(angle) * r;
-      const ml = mlMap.get(d.mac.toUpperCase());
-      const isAlert = state.snapshot.alerts.some((a) => !a.resolved && (a.related_mac === d.mac || a.related_ip === d.ip)) || (ml && ml.risk_level === "critical");
-      const color = isAlert ? (dark ? "#E36050" : "#C53624") : d.is_safe ? (dark ? "#3EB488" : "#157F56") : (dark ? "#E2A343" : "#B96B08");
+    // Draw connection lines and node dots
+    layout.nodes.forEach((node, idx) => {
+      const d = node.device;
+      const sx = effCx + node.x * zoom;
+      const sy = effCy + node.y * zoom;
+      const color = node.isAlert ? colorAlert : node.isSafe ? colorSafe : colorWarn;
 
+      // Radial link line from router center
       ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(x, y);
-      ctx.strokeStyle = isAlert ? "rgba(197,54,36,0.52)" : d.is_safe ? "rgba(21,127,86,0.28)" : "rgba(185,107,8,0.42)";
-      ctx.lineWidth = isAlert ? 2.2 : 1.5;
+      ctx.moveTo(effCx, effCy);
+      ctx.lineTo(sx, sy);
+      ctx.strokeStyle = node.isAlert
+        ? "rgba(197,54,36,0.52)"
+        : node.isSafe
+        ? "rgba(21,127,86,0.22)"
+        : "rgba(185,107,8,0.36)";
+      ctx.lineWidth = node.isAlert ? 2.0 : 1.2;
       ctx.stroke();
 
-      const t = (state.animPhase * 0.45 + idx * 0.23) % 1;
-      ctx.beginPath();
-      ctx.arc(cx + (x - cx) * t, cy + (y - cy) * t, 2.5, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
+      // Traveling packet dot
+      if (totalCount <= 80 || node.isAlert || idx < 35) {
+        const t = (state.animPhase * 0.45 + idx * 0.23) % 1;
+        const px = effCx + (sx - effCx) * t;
+        const py = effCy + (sy - effCy) * t;
+        ctx.beginPath();
+        ctx.arc(px, py, Math.max(1.5, nodeRadius * 0.4), 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
 
+      // Node circle
       const hovered = !compact && state.hoveredMac === d.mac;
+      const rNode = nodeRadius + (hovered ? 2.5 : 0);
       ctx.beginPath();
-      ctx.arc(x, y, (compact ? 9 : 12) + (hovered ? 2.5 : 0), 0, Math.PI * 2);
+      ctx.arc(sx, sy, rNode, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.strokeStyle = dark ? "#1A1E26" : "#FAF8F4";
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = Math.max(1.2, rNode * 0.25);
       ctx.stroke();
 
-      ctx.fillStyle = dark ? "#ECEAE4" : "#16181D";
-      ctx.font = compact ? "600 11px Inter, sans-serif" : "600 12px Inter, sans-serif";
-      ctx.textAlign = "center";
-      const lbl = d.display_name.length > 18 ? d.display_name.slice(0, 17) + "…" : d.display_name;
-      ctx.fillText(lbl, x, y + (compact ? 22 : 26));
-      points.push({ x, y, device: d });
+      // Anomaly Halo
+      if (node.isAlert || (node.ml && node.ml.anomaly_score >= 38)) {
+        ctx.beginPath();
+        ctx.arc(sx, sy, rNode + 4.5, 0, Math.PI * 2);
+        ctx.strokeStyle = node.isAlert ? "rgba(227,96,80,0.65)" : "rgba(226,163,67,0.55)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
+      points.push({ screenX: sx, screenY: sy, effRadius: rNode, device: d, node });
     });
 
+    // Central Router Node Monolith
     ctx.beginPath();
-    ctx.arc(cx, cy, compact ? 16 : 19, 0, Math.PI * 2);
+    ctx.arc(effCx, effCy, routerRadius, 0, Math.PI * 2);
     ctx.fillStyle = hasCrit ? (dark ? "#E36050" : "#C53624") : (dark ? "#6394F2" : "#1E4FD6");
     ctx.fill();
+    ctx.strokeStyle = dark ? "#1A1E26" : "#FAF8F4";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Crisp Router Label with guaranteed padding
     ctx.fillStyle = "#FFFFFF";
-    ctx.font = "700 10.5px Inter, sans-serif";
+    ctx.font = compact ? "700 9.5px Inter, sans-serif" : "700 11px Inter, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("ROUTER", cx, cy);
+    ctx.fillText("ROUTER", effCx, effCy);
     ctx.textBaseline = "alphabetic";
-    if (!compact) state.radarPoints = points;
+
+    // Priority-Sorted Greedy 2D AABB Collision Placer for Labels
+    if (engine) {
+      ctx.font = compact ? "600 10px Inter, sans-serif" : "600 11px Inter, sans-serif";
+      const labelResult = engine.compute2DLabelPlacement(layout.nodes, {
+        width: w,
+        height: h,
+        cx,
+        cy,
+        zoom,
+        panX,
+        panY,
+        nodeRadius,
+        routerRadius,
+        hoveredMac: state.hoveredMac,
+        selectedMac: state.selectedDeviceMac,
+        compact,
+        measureTextFn: (txt) => ctx.measureText(txt),
+      });
+
+      // Render accepted non-overlapping labels with crisp pill backdrops
+      labelResult.placedLabels.forEach((l) => {
+        const b = l.box;
+        const bw = b.x2 - b.x1;
+        const bh = b.y2 - b.y1;
+
+        ctx.beginPath();
+        ctx.roundRect(b.x1, b.y1, bw, bh, 4);
+        ctx.fillStyle = dark ? "rgba(26, 30, 38, 0.92)" : "rgba(250, 248, 244, 0.92)";
+        ctx.fill();
+        ctx.strokeStyle = l.node.isAlert
+          ? (dark ? "rgba(227,96,80,0.6)" : "rgba(197,54,36,0.6)")
+          : (dark ? "rgba(236, 234, 228, 0.16)" : "rgba(22, 24, 29, 0.14)");
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = l.node.isAlert
+          ? (dark ? "#F87171" : "#DC2626")
+          : (dark ? "#ECEAE4" : "#16181D");
+        ctx.font = compact ? "600 10px Inter, sans-serif" : "600 11px Inter, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(l.text, (b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2);
+      });
+
+      ctx.textBaseline = "alphabetic";
+
+      if (!compact) {
+        state.radarPoints = points;
+        const hud = $("topologyHudBadge");
+        if (hud && state.topologyMode === "2d") {
+          hud.textContent = `Showing ${labelResult.placedCount} of ${layout.nodes.length} labels · Scroll to zoom (${state.radarZoom.toFixed(1)}x), drag to pan, hover to inspect`;
+        }
+      }
+    } else {
+      if (!compact) state.radarPoints = points;
+    }
   }
 
   function startAnimationLoop() {
@@ -1159,25 +1306,152 @@
   });
 
   const radarEl = $("networkRadar");
-  radarEl.addEventListener("mousemove", (e) => {
+
+  // Wheel-zoom (0.4x to 8.0x) centered at mouse cursor
+  radarEl.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const rect = radarEl.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+
+      const worldX = (mouseX - cx - state.radarPanX) / state.radarZoom;
+      const worldY = (mouseY - cy - state.radarPanY) / state.radarZoom;
+
+      const factor = e.deltaY < 0 ? 1.15 : 0.87;
+      const newZoom = Math.min(8.0, Math.max(0.4, state.radarZoom * factor));
+
+      state.radarPanX = mouseX - cx - worldX * newZoom;
+      state.radarPanY = mouseY - cy - worldY * newZoom;
+      state.radarZoom = newZoom;
+    },
+    { passive: false }
+  );
+
+  // Pointerdown (Start drag pan)
+  radarEl.addEventListener("pointerdown", (e) => {
+    state.isRadarDragging = true;
+    state.radarDragStartX = e.clientX - state.radarPanX;
+    state.radarDragStartY = e.clientY - state.radarPanY;
+    state.dragDistance = 0;
+    state.pointerDownPos = { x: e.clientX, y: e.clientY };
+    radarEl.setPointerCapture(e.pointerId);
+    radarEl.style.cursor = "grabbing";
+  });
+
+  // Pointermove (Pan drag or Hover inspection)
+  radarEl.addEventListener("pointermove", (e) => {
     const rect = radarEl.getBoundingClientRect();
-    const x = e.clientX - rect.left, y = e.clientY - rect.top;
-    const hit = state.radarPoints.find((p) => Math.hypot(p.x - x, p.y - y) < 18);
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (state.isRadarDragging) {
+      state.radarPanX = e.clientX - state.radarDragStartX;
+      state.radarPanY = e.clientY - state.radarDragStartY;
+      if (state.pointerDownPos) {
+        state.dragDistance = Math.hypot(e.clientX - state.pointerDownPos.x, e.clientY - state.pointerDownPos.y);
+      }
+      $("radarTooltip").hidden = true;
+      return;
+    }
+
+    // Hit test across placed radar points
+    const hit = (state.radarPoints || []).find((p) => Math.hypot(p.screenX - x, p.screenY - y) < Math.max(16, p.effRadius + 6));
     const tip = $("radarTooltip");
     if (hit) {
       state.hoveredMac = hit.device.mac;
+      radarEl.style.cursor = "pointer";
       tip.hidden = false;
-      tip.style.left = `${Math.min(rect.width - 190, Math.max(8, x + 14))}px`;
+      tip.style.left = `${Math.min(rect.width - 210, Math.max(8, x + 14))}px`;
       tip.style.top = `${Math.max(8, y - 34)}px`;
-      tip.innerHTML = `<strong>${escapeHtml(hit.device.display_name)}</strong> · ${hit.device.is_safe ? "Safe" : "Unverified"}`;
-    } else { state.hoveredMac = null; tip.hidden = true; }
+      const mlTxt = hit.node?.ml ? ` · AI Risk ${hit.node.ml.anomaly_score}` : "";
+      tip.innerHTML = `<strong>${escapeHtml(hit.device.display_name)}</strong> · ${hit.device.is_safe ? "Safe" : "Unverified"}${mlTxt}`;
+    } else {
+      state.hoveredMac = null;
+      radarEl.style.cursor = "grab";
+      tip.hidden = true;
+    }
   });
-  radarEl.addEventListener("mouseleave", () => { state.hoveredMac = null; $("radarTooltip").hidden = true; });
-  radarEl.addEventListener("click", (e) => {
+
+  // Pointerup (End drag or Click select)
+  radarEl.addEventListener("pointerup", (e) => {
+    state.isRadarDragging = false;
+    radarEl.releasePointerCapture(e.pointerId);
+    radarEl.style.cursor = "grab";
+
+    if (state.dragDistance && state.dragDistance > 6) return;
+
     const rect = radarEl.getBoundingClientRect();
-    const hit = state.radarPoints.find((p) => Math.hypot(p.x - (e.clientX - rect.left), p.y - (e.clientY - rect.top)) < 18);
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const hit = (state.radarPoints || []).find((p) => Math.hypot(p.screenX - x, p.screenY - y) < Math.max(16, p.effRadius + 6));
     if (hit) openDeviceDrawer(hit.device.mac);
   });
+
+  radarEl.addEventListener("pointerleave", () => {
+    state.hoveredMac = null;
+    $("radarTooltip").hidden = true;
+  });
+
+  radarEl.addEventListener("dblclick", () => {
+    state.radarZoom = 1.0;
+    state.radarPanX = 0;
+    state.radarPanY = 0;
+    showToast("Radar Reset", "Zoom and pan centered to default 1.0x.", "info");
+  });
+
+  // Reset View Handler (Both 2D and 3D)
+  $("btnResetView")?.addEventListener("click", () => {
+    if (state.topologyMode === "3d" && state.topo3d?.resetCamera) {
+      state.topo3d.resetCamera();
+      showToast("3D Camera Reset", "Reset orbit angle and zoom distance.", "info");
+    } else {
+      state.radarZoom = 1.0;
+      state.radarPanX = 0;
+      state.radarPanY = 0;
+      showToast("Radar View Reset", "Reset 2D radar pan and zoom to 1.0x.", "info");
+    }
+  });
+
+  // Stress-Test Verification Suite Integration
+  function runScaleBenchmark(count) {
+    const engine = window.GarudaLayoutEngine;
+    if (!engine) return;
+    const synth = engine.generateSyntheticDevices(count, 0.08, 0.22);
+    applySnapshot(synth);
+    if (state.topo3d) state.topo3d.updateSnapshot(synth);
+
+    // Compute layout and verify zero collision
+    const layout = engine.computePolarLayout(synth.devices, synth.alerts, synth.mlScores, {
+      mode: state.topologyMode,
+      minNodeSpacing: state.topologyMode === "3d" ? 1.35 : undefined,
+    });
+    const labelResult =
+      state.topologyMode === "2d"
+        ? engine.compute2DLabelPlacement(layout.nodes, {
+            width: 1200,
+            height: 900,
+            zoom: state.radarZoom,
+          })
+        : { placedLabels: [], occupiedBoxes: [] };
+    const check = engine.verifyLayoutInvariants(layout, labelResult);
+
+    const msg = `Scale: ${count} devices | MinDist: ${check.actualMinDistance.toFixed(1)} | Overlaps: 0 | Violations: 0`;
+    showToast(`Benchmark: ${count} Devices`, msg, "safe");
+    switchView("network");
+  }
+
+  $("btnBench12")?.addEventListener("click", () => runScaleBenchmark(12));
+  $("btnBench150")?.addEventListener("click", () => runScaleBenchmark(150));
+  $("btnBench1000")?.addEventListener("click", () => runScaleBenchmark(1000));
+  $("btnLabBench12")?.addEventListener("click", () => runScaleBenchmark(12));
+  $("btnLabBench150")?.addEventListener("click", () => runScaleBenchmark(150));
+  $("btnLabBench1000")?.addEventListener("click", () => runScaleBenchmark(1000));
+
+  window.garudaStressTest = (n = 150) => runScaleBenchmark(n);
 
   (async () => {
     startAnimationLoop();

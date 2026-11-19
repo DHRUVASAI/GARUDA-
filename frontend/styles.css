@@ -773,6 +773,8 @@ body.theme-dark::before { opacity: 0.03; }
   height: 100%;
   border: none;
   border-radius: 0;
+  cursor: grab;
+  touch-action: none;
 }
 .topology-hud-badge {
   position: absolute;
