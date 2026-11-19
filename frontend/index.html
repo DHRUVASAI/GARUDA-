@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GARUDA v4 — Personal Network Guardian, AI Anomaly &amp; Forensic Ledger</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" id="brandHome" role="button" tabindex="0" aria-label="Go to Overview">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6l7-3z"/>
+          <circle cx="12" cy="11" r="2.2"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">GARUDA <span class="brand-ver">v4</span></div>
+        <span class="brand-sub">Network, AI &amp; Forensic Guardian</span>
+      </div>
+    </div>
+
+    <nav class="nav-pills" aria-label="Main navigation">
+      <button class="nav-btn active" data-view="landing">Overview</button>
+      <button class="nav-btn" data-view="network">My Network</button>
+      <button class="nav-btn" data-view="devices">Devices <span class="badge-count zero" id="navUnverifiedBadge">0</span></button>
+      <button class="nav-btn" data-view="threats">Threats <span class="badge-count zero" id="navAlertsBadge">0</span></button>
+      <button class="nav-btn" data-view="ai-ledger">AI &amp; Ledger</button>
+      <button class="nav-btn" data-view="shield">Virus &amp; Firewall</button>
+      <button class="nav-btn" data-view="guide">Secure Guide</button>
+    </nav>
+
+    <div class="top-actions">
+      <span class="pill pill-accent" id="connectionModePill"><span class="dot"></span> Connecting…</span>
+      <button class="btn btn-sm" id="btnScanNow">Scan Now</button>
+      <button class="btn btn-sm" id="btnThemeToggle" title="Switch Daylight / Night Ops">Night Ops</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Global Urgent Alert Banner -->
+    <div class="urgent-banner" id="urgentBanner" role="alert">
+      <div class="urgent-left">
+        <span class="pill pill-danger">Action Needed</span>
+        <div>
+          <strong id="urgentBannerTitle">Security Alert Active</strong>
+          <div class="muted" id="urgentBannerDesc">An issue needs your attention.</div>
+        </div>
+      </div>
+      <div>
+        <button class="btn btn-danger btn-sm" id="btnBannerInspect">See What Happened →</button>
+      </div>
+    </div>
+
+    <!-- ==================== VIEW 0: LANDING PAGE ==================== -->
+    <section class="view active" id="view-landing">
+      <div class="hero-grid">
+        <div>
+          <span class="eyebrow">Live IDS · IsolationForest AI · Ed25519 Merkle Ledger · OS Firewall</span>
+          <h1 class="hero-h1">See everyone on your Wi-Fi. Catch anomalies before they touch your data.</h1>
+          <p class="hero-lead">
+            GARUDA v4 identifies your exact network and every connected device by its real name, learns your baseline with an
+            <strong>IsolationForest AI engine</strong>, seals critical forensic alerts into a tamper-proof <strong>Ed25519 Merkle &amp; Web3 ledger</strong>,
+            scans for malware, and enforces real OS firewall rules—all translated into clear plain English.
+          </p>
+          <div class="hero-cta">
+            <button class="btn btn-primary btn-lg" id="btnLaunchGuardian">Open 3D Network Map →</button>
+            <button class="btn btn-lg" id="btnTrySafeDemo">Test AI Beacon &amp; Intruder Alert</button>
+          </div>
+          <div class="trust-ticks">
+            <span>✓ 5-Layer Real Device Naming</span>
+            <span>✓ IsolationForest + Welford AI Anomaly Engine</span>
+            <span>✓ Ed25519 + SHA-256 Merkle / EVM Ledger</span>
+            <span>✓ Interactive 3D PBR Topology</span>
+          </div>
+        </div>
+
+        <div class="hero-stage">
+          <div class="stage-bar">
+            <div>
+              <div class="stage-kicker">LIVE GUARDIAN RADAR</div>
+              <strong class="stage-ssid" id="heroLiveSsid">Detecting your network…</strong>
+            </div>
+            <span class="pill pill-safe" id="heroSafetyPill"><span class="dot"></span> Checking</span>
+          </div>
+          <div class="hero-canvas-wrap">
+            <canvas id="heroRadarCanvas"></canvas>
+          </div>
+          <div class="stage-foot">
+            <span id="heroNetType">Network Type: Checking…</span>
+            <span class="mono" id="heroDeviceSummary">0 connected · 0 safe</span>
+          </div>
+          <div class="stage-engine-bar">
+            <span class="muted">Active Engines:</span>
+            <span class="mono" id="heroIdsMode">Detecting OS capabilities…</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <span class="kicker">GARUDA v4 DEFENSE PIPELINE</span>
+        <h2>Full-spectrum local protection without confusing jargon</h2>
+      </div>
+      <div class="workflow-strip">
+        <button class="step-card" data-goto="network">
+          <div class="step-num">LAYER 01</div>
+          <h3>3D Network Topology</h3>
+          <p>Inspect your real Wi-Fi encryption, VPN status, and every device in interactive 3D PBR or 2D precision radar.</p>
+          <span class="step-link">Open My Network →</span>
+        </button>
+        <button class="step-card" data-goto="devices">
+          <div class="step-num">LAYER 02</div>
+          <h3>Real Device Verification</h3>
+          <p>mDNS, SSDP, DHCP &amp; IEEE OUI naming with 1-click Safe marking that automatically calibrates your AI baseline.</p>
+          <span class="step-link">Review Devices →</span>
+        </button>
+        <button class="step-card" data-goto="ai-ledger">
+          <div class="step-num">LAYER 03</div>
+          <h3>AI Engine &amp; Merkle Ledger</h3>
+          <p>IsolationForest behavioral scoring, DGA entropy classifier, and Ed25519 hash-chained / EVM-ready forensic proofs.</p>
+          <span class="step-link">Open AI &amp; Ledger →</span>
+        </button>
+        <button class="step-card" data-goto="shield">
+          <div class="step-num">LAYER 04</div>
+          <h3>Virus &amp; OS Firewall</h3>
+          <p>ClamAV + YARA + process C2 scanning paired with real Windows Defender / Linux UFW IP blocking &amp; Lockdown.</p>
+          <span class="step-link">Open Virus &amp; Firewall →</span>
+        </button>
+      </div>
+
+      <div class="jargon-grid">
+        <div class="card">
+          <div class="kicker">EXPLAINABLE AI &amp; ZERO-JARGON TELEMETRY</div>
+          <h3 style="margin:6px 0 12px; font-size:20px;">Real math underneath, plain English on top</h3>
+          <div class="compare-list">
+            <div class="compare-row">
+              <span class="compare-bad mono">IsolationForest −0.24 · CV 0.03</span>
+              <span class="compare-arrow">→</span>
+              <span><strong>Robotic C2 Beaconing Detected:</strong> This IoT device is phoning home on a rigid timer—inspect or block it.</span>
+            </div>
+            <div class="compare-row">
+              <span class="compare-bad mono">Ed25519 + SHA-256 Merkle Root</span>
+              <span class="compare-arrow">→</span>
+              <span><strong>Tamper-Proof Forensic Proof:</strong> Every critical attack is cryptographically sealed so logs cannot be altered.</span>
+            </div>
+            <div class="compare-row">
+              <span class="compare-bad mono">ARP Table Poisoning / Gratuitous Reply</span>
+              <span class="compare-arrow">→</span>
+              <span><strong>Fake Router Detected:</strong> Someone is attempting to intercept your traffic—pin your router MAC now.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="kicker">GARUDA v4 LIVE ENGINE CAPABILITIES</div>
+          <h3 style="margin:6px 0 14px; font-size:20px;">Zero-black-box local audit</h3>
+          <div class="cap-list">
+            <div class="cap-row"><span>OS &amp; Privilege Level</span><strong class="mono" id="capOs">Checking…</strong></div>
+            <div class="cap-row"><span>Packet IDS Engine</span><strong class="mono" id="capIds">Checking…</strong></div>
+            <div class="cap-row"><span>ML Behavioral Model</span><strong class="mono" id="capMl">Checking…</strong></div>
+            <div class="cap-row"><span>Cryptographic Ledger</span><strong class="mono" id="capLedger">Checking…</strong></div>
+            <div class="cap-row"><span>Malware &amp; Firewall</span><strong class="mono" id="capFirewall">Checking…</strong></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 1: MY NETWORK (3D PBR + 2D RADAR) ==================== -->
+    <section class="view" id="view-network">
+      <div class="info-banner" id="ssidPermBanner" hidden>
+        <strong>OS Permission Notice:</strong> <span id="ssidPermText"></span>
+      </div>
+
+      <div class="network-top-grid">
+        <div class="card score-card">
+          <div class="score-ring-wrap">
+            <svg class="score-ring" viewBox="0 0 120 120" width="108" height="108">
+              <circle class="ring-track" cx="60" cy="60" r="50" />
+              <circle class="ring-fill" id="scoreRingArc" cx="60" cy="60" r="50" stroke-dasharray="314.16" stroke-dashoffset="314.16" />
+            </svg>
+            <div class="score-center">
+              <div class="score-num mono" id="scoreRingVal">--</div>
+              <div class="score-sub">/ 100</div>
+            </div>
+          </div>
+          <div>
+            <div class="kicker">NETWORK SAFETY SCORE</div>
+            <div class="score-label" id="scoreRingLabel">Checking…</div>
+            <div class="muted">Combines Wi-Fi encryption, live IDS, IsolationForest ML, malware &amp; firewall.</div>
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Connected Devices</div>
+            <div class="kpi-val mono" id="kpiTotalDevices">0</div>
+            <div class="muted" id="kpiSafeSplit">0 marked safe</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">AI Anomaly Peak</div>
+            <div class="kpi-val mono" id="kpiMlScore">0</div>
+            <div class="muted" id="kpiMlStatus">Baseline normal</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Active Alerts</div>
+            <div class="kpi-val mono" id="kpiAlerts">0</div>
+            <div class="muted" id="kpiLedgerCount">0 sealed blocks</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">VPN Tunnel</div>
+            <div class="kpi-val" id="kpiVpnStatus" style="font-size:19px;">Checking</div>
+            <div class="muted" id="kpiVpnDetail">Encrypted tunnel check</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Interactive Spatial Network Topology</h2>
+              <div class="muted">Inner Ring = Safe · Outer Ring = Unverified · Click any 3D/2D node to inspect</div>
+            </div>
+            <div class="seg-group" role="tablist">
+              <button class="seg-btn active" id="btnMode3D">3D PBR</button>
+              <button class="seg-btn" id="btnMode2D">2D Radar</button>
+            </div>
+          </div>
+
+          <div class="topology-stage" id="topologyStage">
+            <div class="topology-3d-host" id="topology3dHost"></div>
+            <canvas id="networkRadar" hidden></canvas>
+            <div class="radar-tooltip" id="radarTooltip" hidden></div>
+            <div class="topology-hud-badge" id="topologyHudBadge">Drag to orbit · Scroll to zoom · Click device to inspect</div>
+          </div>
+
+          <div class="card-foot">
+            <div class="legend-inline">
+              <span class="leg"><i style="background:var(--safe)"></i>Safe</span>
+              <span class="leg"><i style="background:var(--warn)"></i>Unverified</span>
+              <span class="leg"><i style="background:var(--danger)"></i>Alert / ML Risk</span>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-sm" id="btnResetCam3D">Reset View</button>
+              <button class="btn btn-sm" data-goto="devices">Manage Devices →</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Your Current Connection</h2>
+            <span class="pill pill-safe" id="netEncBadge">Checking</span>
+          </div>
+          <div class="net-hero-name" id="netSsid">--</div>
+          <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
+            <span class="pill pill-accent" id="netTypeBadge">Detecting Network Type…</span>
+            <span class="pill pill-safe" id="netArpPinBadge" hidden>✓ Router ARP Pinned</span>
+          </div>
+          <p class="muted" id="netPlainSummary" style="margin:0 0 16px;">Inspecting your active connection…</p>
+
+          <div class="spec-grid">
+            <div class="spec-cell"><span>Connection Medium</span><strong id="netMedium">--</strong></div>
+            <div class="spec-cell"><span>Security Protocol</span><strong id="netProtocol">--</strong></div>
+            <div class="spec-cell"><span>Your Device IP</span><strong class="mono" id="netLocalIp">--</strong></div>
+            <div class="spec-cell"><span>Main Router IP</span><strong class="mono" id="netGatewayIp">--</strong></div>
+            <div class="spec-cell"><span>Router Fingerprint</span><strong class="mono" id="netGatewayMac">--</strong></div>
+            <div class="spec-cell"><span>DNS Servers</span><strong class="mono" id="netDns">--</strong></div>
+          </div>
+
+          <div class="action-row">
+            <button class="btn btn-primary btn-sm" data-goto="guide">Safe Communication Advice →</button>
+            <button class="btn btn-sm" id="btnPinGateway">Pin Router Against MITM</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 2: CONNECTED DEVICES ==================== -->
+    <section class="view" id="view-devices">
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header" style="margin-bottom:12px; flex-wrap:wrap;">
+          <div>
+            <h2 class="card-title">Connected Devices — Real Names, AI Risk &amp; Verification</h2>
+            <div class="muted">Marking your devices <strong>Safe</strong> trains the AI behavioral baseline and catches unknown intruders instantly.</div>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-sm" id="btnSyncOui">Sync Brand Database (IEEE)</button>
+            <button class="btn btn-sm" id="btnSimUnknownDev">+ Test Unknown Device Alert</button>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <input class="input search-input" id="deviceSearch" type="search" placeholder="Search by real name, brand, or IP address…" />
+          <div class="seg-group" role="tablist">
+            <button class="seg-btn active" data-filter="all">All Connected</button>
+            <button class="seg-btn" data-filter="unverified">Unverified</button>
+            <button class="seg-btn" data-filter="safe">Marked Safe</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="device-list" id="deviceList"></div>
+    </section>
+
+    <!-- ==================== VIEW 3: THREATS & ALERTS ==================== -->
+    <section class="view" id="view-threats">
+      <div class="shield-caps-bar" style="margin-bottom:16px;">
+        <div class="cap-chip"><span>Live IDS Mode</span><strong class="mono" id="idsStatMode">--</strong></div>
+        <div class="cap-chip"><span>Packets Inspected</span><strong class="mono" id="idsStatPkts">0</strong></div>
+        <div class="cap-chip"><span>ARP / DHCP Events</span><strong class="mono" id="idsStatArp">0 / 0</strong></div>
+        <div class="cap-chip"><span>DoH DNS Verification</span><strong id="idsStatDns">Checking…</strong></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Active &amp; Passive Threat Feed</h2>
+              <div class="muted">Critical attacks are automatically sealed into the Ed25519 Merkle Forensic Ledger.</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-sm" id="btnPinGateway2">Pin Router MAC</button>
+              <button class="btn btn-sm" id="btnResolveAll">Mark All Resolved</button>
+            </div>
+          </div>
+          <div id="alertsList"></div>
+        </div>
+
+        <div class="stack-col">
+          <div class="card">
+            <div class="kicker">SAFE SELF-TEST LAB</div>
+            <h2 class="card-title" style="margin:4px 0 6px;">Test Active, Passive, AI &amp; Malware Alerts</h2>
+            <p class="muted" style="margin:0 0 12px;">Safely trigger realistic attacks to verify live alerts, AI anomaly scoring, and cryptographic ledger sealing.</p>
+            <div class="sim-grid">
+              <button class="btn btn-sm" data-sim="ml_beacon">🤖 AI: Robotic C2 Beaconing &amp; DGA Anomaly</button>
+              <button class="btn btn-sm" data-sim="new_unknown_device">+ Unknown Device Joins Wi-Fi</button>
+              <button class="btn btn-sm" data-sim="arp_spoof">⚡ Active: Fake Router (MITM ARP Spoof)</button>
+              <button class="btn btn-sm" data-sim="rogue_dhcp">⚡ Active: Rogue DHCP Server</button>
+              <button class="btn btn-sm" data-sim="dns_hijack">⚡ Active: DNS Hijacking</button>
+              <button class="btn btn-sm" data-sim="port_sweep">⚡ Active: Rapid Device Probing</button>
+              <button class="btn btn-sm" data-sim="open_wifi">👁 Passive: Open Unencrypted Wi-Fi</button>
+              <button class="btn btn-sm" data-sim="malware_eicar">🦠 Malware: EICAR Virus Signature Test</button>
+              <button class="btn btn-safe btn-sm" data-sim="reset">✓ Reset to Clean Safe State</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 class="card-title" style="margin-bottom:6px;">Real-Time Alert Channels</h2>
+            <p class="muted" style="margin:0 0 14px;">Get notified immediately when an unknown device or threat is detected.</p>
+            <div class="check-row"><label><input type="checkbox" id="setSound" checked /> Play alert chime in browser</label></div>
+            <div class="check-row"><label><input type="checkbox" id="setDesktop" checked /> Send desktop notifications</label></div>
+            <div class="check-row"><label><input type="checkbox" id="setAutoBlock" /> Auto-block active attackers on OS firewall (when elevated)</label></div>
+            <div class="check-row"><label><input type="checkbox" id="setSimMode" /> Safe Simulation Mode (uncheck for real local Wi-Fi scan)</label></div>
+
+            <div class="form-row" style="margin-top:12px;">
+              <label for="setWebhook">Discord / Slack / n8n Webhook URL (optional)</label>
+              <input class="input" id="setWebhook" type="url" placeholder="https://discord.com/api/webhooks/..." />
+            </div>
+            <div class="form-row-2">
+              <div class="form-row">
+                <label for="setTgToken">Telegram Bot Token (optional)</label>
+                <input class="input" id="setTgToken" type="password" placeholder="123456:ABC..." />
+              </div>
+              <div class="form-row">
+                <label for="setTgChat">Telegram Chat ID</label>
+                <input class="input" id="setTgChat" type="text" placeholder="Your chat ID" />
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm" id="btnSaveSettings">Save Alert Settings</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 4: AI BEHAVIORAL ENGINE & CRYPTOGRAPHIC WEB3 LEDGER ==================== -->
+    <section class="view" id="view-ai-ledger">
+      <div class="shield-caps-bar">
+        <div class="cap-chip"><span>AI Anomaly Peak</span><strong class="mono" id="mlChipPeak">0 / 100</strong></div>
+        <div class="cap-chip"><span>Baseline Samples</span><strong class="mono" id="mlChipSamples">0</strong></div>
+        <div class="cap-chip"><span>Ledger Integrity</span><strong id="ledgerChipValid">Verifying…</strong></div>
+        <div class="cap-chip"><span>Crypto Signer</span><strong class="mono" id="ledgerChipAlg">--</strong></div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Left: AI Behavioral Engine + DGA Entropy Analyzer -->
+        <div class="stack-col">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title">AI Behavioral Anomaly Engine</h2>
+                <div class="muted" id="mlEngineSub">IsolationForest + Online Welford Z-Score Ensemble</div>
+              </div>
+              <button class="btn btn-sm" id="btnRetrainMl">Retrain Baseline</button>
+            </div>
+            <div class="status-box" id="mlHeadlineBox" style="margin-bottom:14px;">Evaluating connected devices…</div>
+            <div id="mlDeviceScoresList"></div>
+          </div>
+
+          <div class="card">
+            <div class="kicker">LIVE SHANNON ENTROPY + LINGUISTIC CLASSIFIER</div>
+            <h2 class="card-title" style="margin:4px 0 6px;">DGA Malware &amp; DNS Tunneling Analyzer</h2>
+            <p class="muted" style="margin:0 0 12px;">Test any domain or subdomain to measure character entropy, vowel/digit ratios, and DGA botnet probability.</p>
+            <div class="inline-form">
+              <input class="input mono" id="dgaDomainInput" type="text" placeholder="e.g. x9k2qz7m4p1w8v3b.ru or google.com" />
+              <button class="btn btn-primary btn-sm" id="btnAnalyzeDomain">Analyze Domain</button>
+            </div>
+            <div class="status-box" id="dgaResultBox" hidden></div>
+          </div>
+        </div>
+
+        <!-- Right: Tamper-Proof Ed25519 + SHA-256 Merkle & EVM Attestation Ledger -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Cryptographic Forensic &amp; Web3 Attestation Ledger</h2>
+              <div class="muted" id="ledgerSub">Ed25519 Signed SHA-256 Hash Chain + Binary Merkle Root</div>
+            </div>
+            <span class="pill pill-safe" id="ledgerStatusPill">✓ Verified</span>
+          </div>
+
+          <div class="spec-grid" style="margin-bottom:14px;">
+            <div class="spec-cell"><span>Current SHA-256 Merkle Root</span><strong class="mono" id="ledgerMerkleRoot">--</strong></div>
+            <div class="spec-cell"><span>Node Public Key</span><strong class="mono" id="ledgerPubkey">--</strong></div>
+            <div class="spec-cell"><span>Sealed / EVM Anchored</span><strong class="mono" id="ledgerCounts">0 / 0</strong></div>
+            <div class="spec-cell"><span>Smart Contract Target</span><strong class="mono" id="ledgerContract">--</strong></div>
+          </div>
+
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+            <button class="btn btn-primary btn-sm" id="btnVerifyLedger">Verify Full Chain</button>
+            <button class="btn btn-sm" id="btnSealPosture">Seal Current Posture</button>
+            <button class="btn btn-sm" id="btnAnchorLedger">Anchor Merkle Root (EVM)</button>
+            <button class="btn btn-sm" id="btnExportLedger">Export Proof JSON</button>
+          </div>
+
+          <div class="proof-box mono" id="ledgerProofOutput" hidden></div>
+
+          <div class="kicker" style="margin:12px 0 8px;">RECENT SEALED FORENSIC BLOCKS</div>
+          <div id="ledgerBlocksList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 5: VIRUS & FIREWALL SHIELD ==================== -->
+    <section class="view" id="view-shield">
+      <div class="shield-caps-bar">
+        <div class="cap-chip"><span>IDS Engine</span><strong class="mono" id="shieldIdsMode">--</strong></div>
+        <div class="cap-chip"><span>ClamAV Engine</span><strong class="mono" id="shieldClamav">--</strong></div>
+        <div class="cap-chip"><span>YARA &amp; Signatures</span><strong class="mono" id="shieldYara">--</strong></div>
+        <div class="cap-chip"><span>OS Firewall</span><strong class="mono" id="shieldFirewallMode">--</strong></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Virus, Malware &amp; Suspicious Process Shield</h2>
+              <div class="muted">Scans files with ClamAV + YARA signatures and checks live running programs against Abuse.ch botnet C2 feeds.</div>
+            </div>
+          </div>
+
+          <div class="inline-form">
+            <input class="input" id="scanPathInput" type="text" placeholder="Folder path to scan (leave blank for Downloads + running apps)" />
+            <button class="btn btn-primary btn-sm" id="btnRunMalwareScan">Run Virus Scan</button>
+          </div>
+
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+            <button class="btn btn-sm" id="btnSyncThreatIntel">Sync Botnet C2 Feed (Abuse.ch)</button>
+            <button class="btn btn-sm" id="btnCheckProcesses">Audit Running Apps Only</button>
+          </div>
+
+          <div class="status-box" id="malwareSummary">
+            Ready to scan your Downloads folder and live running processes for viruses, reverse shells, cryptominers, and ransomware indicators.
+          </div>
+          <div id="malwareFindingsList" style="margin-top:12px;"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Real OS Firewall &amp; Lockdown Controller</h2>
+              <div class="muted" id="fwPlainSummary">Inspecting Windows Defender / Linux UFW firewall…</div>
+            </div>
+            <span class="pill pill-safe" id="fwStatusBadge">Checking…</span>
+          </div>
+
+          <div class="info-banner compact" id="fwPrivilegeNote" hidden></div>
+
+          <div class="lockdown-box">
+            <div>
+              <strong>1-Click Public Wi-Fi Lockdown</strong>
+              <div class="muted">Blocks unsolicited inbound probes and hardens your computer on café, airport, or shared networks.</div>
+            </div>
+            <button class="btn btn-danger btn-sm" id="btnToggleLockdown">Enable Lockdown</button>
+          </div>
+
+          <div class="form-row" style="margin-top:14px;">
+            <label for="blockIpInput">Block a Suspicious Device IP on Your OS Firewall</label>
+            <div class="inline-form" style="margin-bottom:0;">
+              <input class="input mono" id="blockIpInput" type="text" placeholder="e.g. 192.168.1.109" />
+              <button class="btn btn-sm" id="btnBlockIp">Block IP</button>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;">
+            <div class="kicker" style="margin-bottom:8px;">BLOCKED IPS</div>
+            <div id="fwBlockedList"></div>
+            <div class="kicker" style="margin:14px 0 8px;">LOCAL PORTS REACHABLE ON THIS NETWORK</div>
+            <div id="fwPortsList"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 6: SECURE COMMUNICATION GUIDE ==================== -->
+    <section class="view" id="view-guide">
+      <div class="card" style="margin-bottom:18px;">
+        <span class="pill pill-safe" id="guideScorePill">Safety Score: --</span>
+        <h2 class="guide-headline" id="guideHeadline">Evaluating your connection…</h2>
+        <div class="muted" id="guideSub">Tailored plain-English steps for your current network.</div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Recommended Steps Right Now</h2>
+              <div class="muted">Check off each step as you complete it.</div>
+            </div>
+          </div>
+          <div id="adviceList"></div>
+        </div>
+
+        <div class="stack-col">
+          <div class="card">
+            <h2 class="card-title" style="margin-bottom:10px;">What Is Safe on This Network Right Now?</h2>
+            <div id="activityGuideList"></div>
+          </div>
+
+          <div class="card honesty-card">
+            <div class="kicker">TRANSPARENCY NOTE</div>
+            <h3 style="margin:6px 0 6px; font-size:15px;">How GARUDA Handles Passive Attacks &amp; Forensic Integrity</h3>
+            <p class="muted" id="passiveHonestyNote" style="margin:0;"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Slide-Over Device Inspector Drawer -->
+  <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+  <aside class="drawer" id="deviceDrawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div>
+        <div class="kicker">DEVICE DETAILS</div>
+        <h3 id="drawerTitle" style="margin:4px 0 2px;">Device Name</h3>
+        <div class="muted" id="drawerSubtitle">--</div>
+      </div>
+      <button class="btn btn-sm" id="btnCloseDrawer" aria-label="Close panel">✕</button>
+    </div>
+    <div class="drawer-body" id="drawerBody"></div>
+    <div class="drawer-foot">
+      <button class="btn btn-safe btn-sm" id="drawerTrustBtn">✓ Mark as Safe</button>
+      <button class="btn btn-sm" id="drawerRenameBtn">Rename</button>
+      <button class="btn btn-danger btn-sm" id="drawerBlockBtn">Block IP</button>
+    </div>
+  </aside>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

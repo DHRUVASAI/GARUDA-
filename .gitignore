@@ -1,8 +1,38 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+dist/
+*.egg-info/
+
+# Virtual Environments
 .venv/
-node_modules/
-.DS_Store
+venv/
+ENV/
+
+# Local runtime data, sqlite databases & private keys
+data/
+*.db
+*.db-journal
+*.sqlite3
+*.pem
+*.key
+
+# Logs & test caches
 *.log
 scratch/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node & Editor
+node_modules/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
 .agents/

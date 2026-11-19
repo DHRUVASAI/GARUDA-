@@ -1,13 +1,15 @@
 services:
   - type: web
-    name: garuda-x-backend
+    name: garuda-v4-guardian
     env: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn garuda_backend:app --bind 0.0.0.0:$PORT --workers 2 --threads 4"
+    startCommand: "uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
-      - key: MONAD_RPC_URL
+      - key: GARUDA_WEB3_RPC_URL
         value: "https://testnet-rpc.monad.xyz/"
-      - key: MONAD_CHAIN_ID
-        value: "10143"
+      - key: GARUDA_WEB3_CHAIN_NAME
+        value: "Monad Testnet"
+      - key: GARUDA_WEB3_CONTRACT
+        value: "0x1014300000000000000000000000000000000001"

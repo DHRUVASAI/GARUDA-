@@ -1,0 +1,13 @@
+services:
+  garuda-v3:
+    build: .
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - GARUDA_SCAN_INTERVAL=15
+      - GARUDA_SIMULATION_MODE=false
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
