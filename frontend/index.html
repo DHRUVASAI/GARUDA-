@@ -7,6 +7,83 @@
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
+  <!-- Tactical Boot Initialization Sequence (Spec-Verified Hardware Telemetry) -->
+  <div id="garudaBootOverlay" class="boot-overlay" role="dialog" aria-modal="true" aria-label="System Initializing">
+    <div class="boot-modal">
+      <div class="boot-header">
+        <div class="boot-brand">
+          <div class="boot-mark">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6l7-3z"/>
+              <circle cx="12" cy="11" r="2.2"/>
+            </svg>
+            <div class="boot-radar-ping" aria-hidden="true"></div>
+          </div>
+          <div>
+            <div class="boot-title">GARUDA // SENTINEL CORE</div>
+            <div class="boot-subtitle">MIL-STD SECURE BOOT &bull; AIRGAP SENSOR BUS</div>
+          </div>
+        </div>
+        <button class="boot-skip-btn" id="bootSkipBtn" title="Skip Sequence (Esc)">Skip [ESC]</button>
+      </div>
+
+      <div class="boot-viewport">
+        <!-- Reticle & Vector Scanline -->
+        <div class="boot-grid-bg" aria-hidden="true"></div>
+        <div class="boot-scanline" aria-hidden="true"></div>
+        <div class="boot-crosshair" aria-hidden="true"></div>
+
+        <div class="boot-telemetry">
+          <div class="boot-step active" id="bootStep1">
+            <span class="boot-step-icon">01</span>
+            <div class="boot-step-info">
+              <div class="boot-step-name">L2-L7 SENSOR TAP</div>
+              <div class="boot-step-desc">Binding Scapy promisc filter &bull; Raw socket pipeline</div>
+            </div>
+            <span class="boot-step-status" id="bootStep1Status">SYNCING</span>
+          </div>
+
+          <div class="boot-step" id="bootStep2">
+            <span class="boot-step-icon">02</span>
+            <div class="boot-step-info">
+              <div class="boot-step-name">ISOLATION FOREST TENSOR</div>
+              <div class="boot-step-desc">Loading 8D anomaly weights &bull; Streaming RRCF tree</div>
+            </div>
+            <span class="boot-step-status" id="bootStep2Status">QUEUED</span>
+          </div>
+
+          <div class="boot-step" id="bootStep3">
+            <span class="boot-step-icon">03</span>
+            <div class="boot-step-info">
+              <div class="boot-step-name">MERKLE FORENSIC LEDGER</div>
+              <div class="boot-step-desc">RFC 6962 tree head &bull; Ed25519 tamper-proof seal</div>
+            </div>
+            <span class="boot-step-status" id="bootStep3Status">QUEUED</span>
+          </div>
+
+          <div class="boot-step" id="bootStep4">
+            <span class="boot-step-icon">04</span>
+            <div class="boot-step-info">
+              <div class="boot-step-name">ZERO-TRUST KERNEL BARRIER</div>
+              <div class="boot-step-desc">Active containment bus &bull; eBPF drop rules primed</div>
+            </div>
+            <span class="boot-step-status" id="bootStep4Status">QUEUED</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="boot-footer">
+        <div class="boot-progress-bar">
+          <div class="boot-progress-fill" id="bootProgressFill"></div>
+        </div>
+        <div class="boot-meta">
+          <span class="boot-metric">SYS TELEMETRY // 60 FPS &bull; INP &lt; 16ms</span>
+          <span class="boot-pct" id="bootPercent">0%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <header class="topbar">
     <div class="brand" id="brandHome" role="button" tabindex="0" aria-label="Go to Overview">
       <div class="brand-mark" aria-hidden="true">
@@ -34,6 +111,7 @@
     <div class="top-actions">
       <span class="pill pill-accent" id="connectionModePill"><span class="dot"></span> Connecting…</span>
       <button class="btn btn-sm" id="btnScanNow">Scan Now</button>
+      <button class="btn btn-sm" id="btnReplayBoot" title="Replay Tactical Boot Sequence">Intro</button>
       <button class="btn btn-sm" id="btnThemeToggle" title="Switch Daylight / Night Ops">Night Ops</button>
     </div>
   </header>

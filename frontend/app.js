@@ -1444,16 +1444,121 @@
     switchView("network");
   }
 
+  /* ==========================================================================
+     Tactical Boot Initialization Sequence Controller
+     Spec-verified timeline with Bringhurst tabular numerals & zero-CLS metrics
+     ========================================================================== */
+  let bootAnimationTimer = null;
+  function playBootAnimation(force = false) {
+    const overlay = $("garudaBootOverlay");
+    if (!overlay) return;
+
+    if (!force && sessionStorage.getItem("garuda_boot_done")) {
+      overlay.classList.add("boot-hidden");
+      return;
+    }
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches && !force) {
+      overlay.classList.add("boot-hidden");
+      sessionStorage.setItem("garuda_boot_done", "1");
+      return;
+    }
+
+    overlay.classList.remove("boot-hidden", "boot-exit");
+    if (bootAnimationTimer) clearTimeout(bootAnimationTimer);
+
+    const step1 = $("bootStep1");
+    const step2 = $("bootStep2");
+    const step3 = $("bootStep3");
+    const step4 = $("bootStep4");
+    const s1 = $("bootStep1Status");
+    const s2 = $("bootStep2Status");
+    const s3 = $("bootStep3Status");
+    const s4 = $("bootStep4Status");
+    const fill = $("bootProgressFill");
+    const pct = $("bootPercent");
+
+    const setStep = (stepEl, statusEl, statusText, stateClass) => {
+      if (stepEl) {
+        stepEl.classList.remove("active", "completed");
+        if (stateClass) stepEl.classList.add(stateClass);
+      }
+      if (statusEl) statusEl.textContent = statusText;
+    };
+
+    setStep(step1, s1, "SYNCING", "active");
+    setStep(step2, s2, "QUEUED", "");
+    setStep(step3, s3, "QUEUED", "");
+    setStep(step4, s4, "QUEUED", "");
+    if (fill) fill.style.width = "12%";
+    if (pct) pct.textContent = "12%";
+
+    const finishBoot = () => {
+      sessionStorage.setItem("garuda_boot_done", "1");
+      overlay.classList.add("boot-exit");
+      setTimeout(() => {
+        overlay.classList.add("boot-hidden");
+      }, 500);
+    };
+
+    setTimeout(() => {
+      if (overlay.classList.contains("boot-hidden")) return;
+      setStep(step1, s1, "ONLINE", "completed");
+      setStep(step2, s2, "EVALUATING", "active");
+      if (fill) fill.style.width = "42%";
+      if (pct) pct.textContent = "42%";
+    }, 400);
+
+    setTimeout(() => {
+      if (overlay.classList.contains("boot-hidden")) return;
+      setStep(step2, s2, "INFERENCE OK", "completed");
+      setStep(step3, s3, "VERIFYING", "active");
+      if (fill) fill.style.width = "72%";
+      if (pct) pct.textContent = "72%";
+    }, 850);
+
+    setTimeout(() => {
+      if (overlay.classList.contains("boot-hidden")) return;
+      setStep(step3, s3, "CHAIN VALID", "completed");
+      setStep(step4, s4, "ENFORCING", "active");
+      if (fill) fill.style.width = "94%";
+      if (pct) pct.textContent = "94%";
+    }, 1300);
+
+    setTimeout(() => {
+      if (overlay.classList.contains("boot-hidden")) return;
+      setStep(step4, s4, "ARMED", "completed");
+      if (fill) fill.style.width = "100%";
+      if (pct) pct.textContent = "100%";
+    }, 1700);
+
+    bootAnimationTimer = setTimeout(() => {
+      finishBoot();
+    }, 2150);
+
+    const skipHandler = (e) => {
+      if (e.key === "Escape" || e.key === " ") {
+        finishBoot();
+        window.removeEventListener("keydown", skipHandler);
+      }
+    };
+    window.addEventListener("keydown", skipHandler);
+    $("bootSkipBtn")?.addEventListener("click", finishBoot, { once: true });
+  }
+
   $("btnBench12")?.addEventListener("click", () => runScaleBenchmark(12));
   $("btnBench150")?.addEventListener("click", () => runScaleBenchmark(150));
   $("btnBench1000")?.addEventListener("click", () => runScaleBenchmark(1000));
   $("btnLabBench12")?.addEventListener("click", () => runScaleBenchmark(12));
   $("btnLabBench150")?.addEventListener("click", () => runScaleBenchmark(150));
   $("btnLabBench1000")?.addEventListener("click", () => runScaleBenchmark(1000));
+  $("btnReplayBoot")?.addEventListener("click", () => playBootAnimation(true));
 
   window.garudaStressTest = (n = 150) => runScaleBenchmark(n);
+  window.replayIntro = () => playBootAnimation(true);
 
   (async () => {
+    playBootAnimation(false);
     startAnimationLoop();
     try {
       const snap = await api("/api/snapshot");

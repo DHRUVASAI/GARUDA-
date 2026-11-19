@@ -848,3 +848,331 @@ body.theme-dark::before { opacity: 0.03; }
   font-size: 12px;
   overflow-x: auto;
 }
+
+/* ==========================================================================
+   Tactical Opening Animation (Spec-Verified Hardware Telemetry)
+   Adhering to OKLCH/APCA contrast, 4-layer tactile bevel, and zero-CLS metrics
+   ========================================================================== */
+
+.boot-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background-color: #0b0e14;
+  background-image:
+    radial-gradient(circle at 50% 40%, rgba(30, 79, 214, 0.12) 0%, transparent 60%),
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 100% 100%, 32px 32px, 32px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.48s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.48s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.48s cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 0.48s;
+}
+
+.boot-overlay.boot-exit {
+  opacity: 0;
+  transform: scale(1.035);
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+.boot-overlay.boot-hidden {
+  display: none !important;
+}
+
+.boot-modal {
+  width: 100%;
+  max-width: 580px;
+  background: #141821;
+  color: #ECEAE4;
+  border-radius: var(--r-outer, 18px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.15) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.5) inset,
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    0 32px 64px -16px rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: bootModalIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes bootModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.boot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.boot-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.boot-mark {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-mid, 12px);
+  background: linear-gradient(135deg, rgba(30, 79, 214, 0.25), rgba(30, 79, 214, 0.05));
+  border: 1px solid rgba(99, 148, 242, 0.35);
+  color: #6394F2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.boot-radar-ping {
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 1.5px solid #6394F2;
+  opacity: 0;
+  animation: bootRadarPulse 2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+@keyframes bootRadarPulse {
+  0% { transform: scale(0.85); opacity: 0.9; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.boot-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #ECEAE4;
+  text-transform: uppercase;
+}
+
+.boot-subtitle {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: #98A0AE;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  margin-top: 2px;
+}
+
+.boot-skip-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #98A0AE;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--r-inner, 8px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.boot-skip-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ECEAE4;
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.boot-viewport {
+  position: relative;
+  padding: 20px 22px;
+  overflow: hidden;
+  background: #0E1218;
+}
+
+.boot-grid-bg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(99, 148, 242, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 148, 242, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+}
+
+.boot-scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(99, 148, 242, 0.7), transparent);
+  box-shadow: 0 0 12px rgba(99, 148, 242, 0.5);
+  animation: bootScanAnim 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes bootScanAnim {
+  0% { top: -2px; opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.boot-crosshair {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  width: 14px;
+  height: 14px;
+  border-top: 1px solid rgba(99, 148, 242, 0.35);
+  border-right: 1px solid rgba(99, 148, 242, 0.35);
+  pointer-events: none;
+}
+
+.boot-telemetry {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.boot-step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-radius: var(--r-inner, 8px);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+}
+
+.boot-step.active {
+  background: rgba(30, 79, 214, 0.12);
+  border-color: rgba(99, 148, 242, 0.38);
+  box-shadow: 0 0 16px -4px rgba(30, 79, 214, 0.35);
+}
+
+.boot-step.completed {
+  background: rgba(62, 180, 136, 0.08);
+  border-color: rgba(62, 180, 136, 0.3);
+}
+
+.boot-step-icon {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #98A0AE;
+  width: 22px;
+  text-align: center;
+}
+
+.boot-step.active .boot-step-icon {
+  color: #6394F2;
+}
+
+.boot-step.completed .boot-step-icon {
+  color: #3EB488;
+}
+
+.boot-step-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.boot-step-name {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #ECEAE4;
+}
+
+.boot-step-desc {
+  font-size: 10.5px;
+  color: #98A0AE;
+  margin-top: 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.boot-step-status {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #98A0AE;
+}
+
+.boot-step.active .boot-step-status {
+  background: rgba(99, 148, 242, 0.2);
+  color: #6394F2;
+}
+
+.boot-step.completed .boot-step-status {
+  background: rgba(62, 180, 136, 0.2);
+  color: #3EB488;
+}
+
+.boot-footer {
+  padding: 16px 22px;
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.boot-progress-bar {
+  width: 100%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.boot-progress-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1E4FD6, #6394F2, #3EB488);
+  box-shadow: 0 0 10px rgba(99, 148, 242, 0.6);
+  transition: width 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.boot-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  color: #98A0AE;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+}
+
+.boot-pct {
+  font-weight: 700;
+  color: #ECEAE4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-overlay {
+    display: none !important;
+  }
+}
