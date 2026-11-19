@@ -1,5 +1,5 @@
 /**
- * GARUDA v4 — Studio PBR 3D Spatial Network Topology (High-Scale Multi-Ring Engine)
+ * GARUDA — Studio PBR 3D Spatial Network Topology (High-Scale Multi-Ring Engine)
  * 
  * Features:
  * - Shared Multi-Ring Collision-Free Polar Layout Engine (minSpacing3D = 1.35 world units)

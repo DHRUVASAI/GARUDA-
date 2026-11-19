@@ -71,7 +71,7 @@
   function sendDesktopNotification(alert) {
     if (!state.desktopNotifications || !("Notification" in window)) return;
     if (Notification.permission === "granted") {
-      new Notification(`GARUDA v4 Alert: ${alert.title}`, { body: alert.plain_explanation });
+      new Notification(`GARUDA Alert: ${alert.title}`, { body: alert.plain_explanation });
     }
   }
 
@@ -1019,7 +1019,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `garuda-v4-forensic-proof-${Date.now()}.json`;
+      a.download = `garuda-forensic-proof-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
       showToast("Forensic Proof Exported", "Downloaded signed Ed25519 + SHA-256 Merkle bundle.", "info");

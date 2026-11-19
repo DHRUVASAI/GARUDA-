@@ -1,5 +1,5 @@
 /**
- * GARUDA v4 — Multi-Ring Collision-Free Layout & AABB Collision Placer Engine
+ * GARUDA — Multi-Ring Collision-Free Layout & AABB Collision Placer Engine
  * 
  * Provides guaranteed non-overlapping polar coordinates in 2D and 3D at ANY scale
  * (10, 100, 500, 1,000+ devices). Implements:
