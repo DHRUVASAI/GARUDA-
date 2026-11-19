@@ -27,6 +27,57 @@
     0 14px 32px -18px rgba(22, 24, 29, 0.14);
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-light) {
+    --bg: #12151B;
+    --surface: #1A1E26;
+    --surface-2: #222833;
+    --ink: #ECEAE4;
+    --ink-muted: #98A0AE;
+    --hairline: rgba(236, 234, 228, 0.10);
+    --hairline-strong: rgba(236, 234, 228, 0.22);
+
+    --accent: #6394F2;
+    --safe: #3EB488;
+    --warn: #E2A343;
+    --danger: #E36050;
+
+    --accent-soft: rgba(99, 148, 242, 0.15);
+    --safe-soft: rgba(62, 180, 136, 0.15);
+    --warn-soft: rgba(226, 163, 67, 0.15);
+    --danger-soft: rgba(227, 96, 80, 0.16);
+
+    --shadow-surface:
+      0 1px 0 rgba(255, 255, 255, 0.05) inset,
+      0 14px 34px -16px rgba(0, 0, 0, 0.72);
+  }
+}
+
+body.theme-light {
+  --bg: #F3F0EA;
+  --surface: #FAF8F4;
+  --surface-2: #E8E3DA;
+  --ink: #16181D;
+  --ink-muted: #575C66;
+  --hairline: rgba(22, 24, 29, 0.11);
+  --hairline-strong: rgba(22, 24, 29, 0.22);
+
+  --accent: #1E4FD6;
+  --safe: #157F56;
+  --warn: #B96B08;
+  --danger: #C53624;
+
+  --accent-soft: rgba(30, 79, 214, 0.10);
+  --safe-soft: rgba(21, 127, 86, 0.11);
+  --warn-soft: rgba(185, 107, 8, 0.12);
+  --danger-soft: rgba(197, 54, 36, 0.12);
+
+  --shadow-surface:
+    0 1px 0 rgba(255, 255, 255, 0.72) inset,
+    0 1px 2px rgba(22, 24, 29, 0.05),
+    0 14px 32px -18px rgba(22, 24, 29, 0.14);
+}
+
 body.theme-dark {
   --bg: #12151B;
   --surface: #1A1E26;
@@ -851,35 +902,37 @@ body.theme-dark::before { opacity: 0.03; }
 
 /* ==========================================================================
    Tactical Opening Animation (Spec-Verified Hardware Telemetry)
-   Adhering to OKLCH/APCA contrast, 4-layer tactile bevel, and zero-CLS metrics
+   Adaptive Daylight & Night Ops modes conforming to system settings & OS preference
    ========================================================================== */
 
 .boot-overlay {
   position: fixed;
   inset: 0;
   z-index: 99999;
-  background-color: #0b0e14;
+  background-color: var(--bg);
   background-image:
-    radial-gradient(circle at 50% 40%, rgba(30, 79, 214, 0.12) 0%, transparent 60%),
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 100% 100%, 32px 32px, 32px 32px;
+    radial-gradient(circle at 50% 38%, var(--accent-soft) 0%, transparent 65%),
+    linear-gradient(var(--hairline) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hairline) 1px, transparent 1px);
+  background-size: 100% 100%, 28px 28px, 28px 28px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
   opacity: 1;
   visibility: visible;
-  transition: opacity 0.48s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.48s cubic-bezier(0.16, 1, 0.3, 1),
-              filter 0.48s cubic-bezier(0.16, 1, 0.3, 1),
-              visibility 0.48s;
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 0.45s;
 }
 
 .boot-overlay.boot-exit {
   opacity: 0;
-  transform: scale(1.035);
-  filter: blur(8px);
+  transform: scale(1.03);
+  filter: blur(6px);
   pointer-events: none;
 }
 
@@ -889,26 +942,34 @@ body.theme-dark::before { opacity: 0.03; }
 
 .boot-modal {
   width: 100%;
-  max-width: 580px;
-  background: #141821;
-  color: #ECEAE4;
+  max-width: 560px;
+  background: var(--surface);
+  color: var(--ink);
   border-radius: var(--r-outer, 18px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--hairline-strong);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.15) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.5) inset,
-    0 4px 12px rgba(0, 0, 0, 0.4),
-    0 32px 64px -16px rgba(0, 0, 0, 0.85);
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 -1px 0 var(--hairline) inset,
+    0 4px 16px rgba(0, 0, 0, 0.08),
+    0 30px 60px -15px rgba(0, 0, 0, 0.22);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  animation: bootModalIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: bootModalIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+body.theme-dark .boot-modal {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.5) inset,
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    0 32px 64px -16px rgba(0, 0, 0, 0.85);
 }
 
 @keyframes bootModalIn {
   from {
     opacity: 0;
-    transform: translateY(18px) scale(0.97);
+    transform: translateY(14px) scale(0.975);
   }
   to {
     opacity: 1;
@@ -921,8 +982,8 @@ body.theme-dark::before { opacity: 0.03; }
   align-items: center;
   justify-content: space-between;
   padding: 18px 22px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--surface-2);
 }
 
 .boot-brand {
@@ -936,9 +997,9 @@ body.theme-dark::before { opacity: 0.03; }
   width: 38px;
   height: 38px;
   border-radius: var(--r-mid, 12px);
-  background: linear-gradient(135deg, rgba(30, 79, 214, 0.25), rgba(30, 79, 214, 0.05));
-  border: 1px solid rgba(99, 148, 242, 0.35);
-  color: #6394F2;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -948,36 +1009,36 @@ body.theme-dark::before { opacity: 0.03; }
   position: absolute;
   inset: -3px;
   border-radius: inherit;
-  border: 1.5px solid #6394F2;
+  border: 1.5px solid var(--accent);
   opacity: 0;
   animation: bootRadarPulse 2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
 }
 
 @keyframes bootRadarPulse {
-  0% { transform: scale(0.85); opacity: 0.9; }
+  0% { transform: scale(0.85); opacity: 0.85; }
   100% { transform: scale(1.6); opacity: 0; }
 }
 
 .boot-title {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  color: #ECEAE4;
+  letter-spacing: 0.05em;
+  color: var(--ink);
   text-transform: uppercase;
 }
 
 .boot-subtitle {
   font-size: 10px;
-  letter-spacing: 0.08em;
-  color: #98A0AE;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   margin-top: 2px;
 }
 
 .boot-skip-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #98A0AE;
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  color: var(--ink-muted);
   font-size: 11px;
   font-weight: 600;
   padding: 5px 12px;
@@ -988,25 +1049,26 @@ body.theme-dark::before { opacity: 0.03; }
 }
 
 .boot-skip-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #ECEAE4;
-  border-color: rgba(255, 255, 255, 0.24);
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--accent);
 }
 
 .boot-viewport {
   position: relative;
   padding: 20px 22px;
   overflow: hidden;
-  background: #0E1218;
+  background: var(--surface);
 }
 
 .boot-grid-bg {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(99, 148, 242, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(99, 148, 242, 0.04) 1px, transparent 1px);
+    linear-gradient(var(--hairline) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hairline) 1px, transparent 1px);
   background-size: 24px 24px;
+  opacity: 0.5;
   pointer-events: none;
 }
 
@@ -1015,8 +1077,8 @@ body.theme-dark::before { opacity: 0.03; }
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(99, 148, 242, 0.7), transparent);
-  box-shadow: 0 0 12px rgba(99, 148, 242, 0.5);
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  box-shadow: 0 0 10px var(--accent-soft);
   animation: bootScanAnim 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   pointer-events: none;
   z-index: 1;
@@ -1024,8 +1086,8 @@ body.theme-dark::before { opacity: 0.03; }
 
 @keyframes bootScanAnim {
   0% { top: -2px; opacity: 0; }
-  15% { opacity: 1; }
-  85% { opacity: 1; }
+  15% { opacity: 0.9; }
+  85% { opacity: 0.9; }
   100% { top: 100%; opacity: 0; }
 }
 
@@ -1035,8 +1097,8 @@ body.theme-dark::before { opacity: 0.03; }
   right: 18px;
   width: 14px;
   height: 14px;
-  border-top: 1px solid rgba(99, 148, 242, 0.35);
-  border-right: 1px solid rgba(99, 148, 242, 0.35);
+  border-top: 1px solid var(--hairline-strong);
+  border-right: 1px solid var(--hairline-strong);
   pointer-events: none;
 }
 
@@ -1054,39 +1116,39 @@ body.theme-dark::before { opacity: 0.03; }
   gap: 14px;
   padding: 10px 14px;
   border-radius: var(--r-inner, 8px);
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "zero" 1;
 }
 
 .boot-step.active {
-  background: rgba(30, 79, 214, 0.12);
-  border-color: rgba(99, 148, 242, 0.38);
-  box-shadow: 0 0 16px -4px rgba(30, 79, 214, 0.35);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  box-shadow: 0 0 14px -3px var(--accent-soft);
 }
 
 .boot-step.completed {
-  background: rgba(62, 180, 136, 0.08);
-  border-color: rgba(62, 180, 136, 0.3);
+  background: var(--safe-soft);
+  border-color: var(--safe);
 }
 
 .boot-step-icon {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
   font-weight: 700;
-  color: #98A0AE;
+  color: var(--ink-muted);
   width: 22px;
   text-align: center;
 }
 
 .boot-step.active .boot-step-icon {
-  color: #6394F2;
+  color: var(--accent);
 }
 
 .boot-step.completed .boot-step-icon {
-  color: #3EB488;
+  color: var(--safe);
 }
 
 .boot-step-info {
@@ -1098,12 +1160,12 @@ body.theme-dark::before { opacity: 0.03; }
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: #ECEAE4;
+  color: var(--ink);
 }
 
 .boot-step-desc {
   font-size: 10.5px;
-  color: #98A0AE;
+  color: var(--ink-muted);
   margin-top: 2px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
@@ -1112,44 +1174,45 @@ body.theme-dark::before { opacity: 0.03; }
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   padding: 3px 8px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05);
-  color: #98A0AE;
+  background: var(--hairline);
+  color: var(--ink-muted);
 }
 
 .boot-step.active .boot-step-status {
-  background: rgba(99, 148, 242, 0.2);
-  color: #6394F2;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
 }
 
 .boot-step.completed .boot-step-status {
-  background: rgba(62, 180, 136, 0.2);
-  color: #3EB488;
+  background: var(--safe-soft);
+  color: var(--safe);
+  border: 1px solid var(--safe);
 }
 
 .boot-footer {
   padding: 16px 22px;
-  background: rgba(255, 255, 255, 0.02);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-2);
+  border-top: 1px solid var(--hairline);
 }
 
 .boot-progress-bar {
   width: 100%;
   height: 5px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--hairline-strong);
   border-radius: 999px;
   overflow: hidden;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .boot-progress-fill {
   width: 0%;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #1E4FD6, #6394F2, #3EB488);
-  box-shadow: 0 0 10px rgba(99, 148, 242, 0.6);
+  background: linear-gradient(90deg, var(--accent), var(--safe));
+  box-shadow: 0 0 10px var(--accent-soft);
   transition: width 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -1160,7 +1223,7 @@ body.theme-dark::before { opacity: 0.03; }
   margin-top: 10px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 10px;
-  color: #98A0AE;
+  color: var(--ink-muted);
   letter-spacing: 0.05em;
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "zero" 1;
@@ -1168,7 +1231,7 @@ body.theme-dark::before { opacity: 0.03; }
 
 .boot-pct {
   font-weight: 700;
-  color: #ECEAE4;
+  color: var(--ink);
 }
 
 @media (prefers-reduced-motion: reduce) {

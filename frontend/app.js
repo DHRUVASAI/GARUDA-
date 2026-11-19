@@ -935,19 +935,45 @@
     finally { btn.textContent = "Scan Now"; }
   });
 
-  // Restore saved theme preference
-  const savedTheme = localStorage.getItem("garuda_v4_theme");
-  if (savedTheme === "dark") {
-    document.body.classList.add("theme-dark");
-    $("btnThemeToggle").textContent = "Daylight";
+  // System Theme & Saved Preference Detection (Supports Daylight & Night Ops)
+  function getEffectiveTheme() {
+    const saved = localStorage.getItem("garuda_v4_theme");
+    if (saved === "dark" || saved === "light") return saved;
+    const sysDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    return sysDark ? "dark" : "light";
+  }
+
+  function applyThemeMode(theme) {
+    const isDark = theme === "dark";
+    if (isDark) {
+      document.body.classList.remove("theme-light");
+      document.body.classList.add("theme-dark");
+      if ($("btnThemeToggle")) $("btnThemeToggle").textContent = "Daylight";
+    } else {
+      document.body.classList.remove("theme-dark");
+      document.body.classList.add("theme-light");
+      if ($("btnThemeToggle")) $("btnThemeToggle").textContent = "Night Ops";
+    }
+    if (state.topo3d) state.topo3d.applyTheme(isDark);
+  }
+
+  // Initialize theme according to system setting or saved preference immediately
+  applyThemeMode(getEffectiveTheme());
+
+  // Watch system setting changes dynamically if no manual preference has been chosen
+  if (window.matchMedia) {
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+      if (!localStorage.getItem("garuda_v4_theme")) {
+        applyThemeMode(e.matches ? "dark" : "light");
+      }
+    });
   }
 
   $("btnThemeToggle").addEventListener("click", () => {
-    document.body.classList.toggle("theme-dark");
-    const dark = document.body.classList.contains("theme-dark");
-    $("btnThemeToggle").textContent = dark ? "Daylight" : "Night Ops";
-    localStorage.setItem("garuda_v4_theme", dark ? "dark" : "light");
-    if (state.topo3d) state.topo3d.applyTheme(dark);
+    const isCurrentlyDark = document.body.classList.contains("theme-dark");
+    const nextTheme = isCurrentlyDark ? "light" : "dark";
+    applyThemeMode(nextTheme);
+    localStorage.setItem("garuda_v4_theme", nextTheme);
   });
 
   // ML Engine Actions
