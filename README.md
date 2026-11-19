@@ -17,9 +17,20 @@
   <a href="#official-6-pillar-security--prevention-audit-report"><img src="https://img.shields.io/badge/Security_Prevention_Rating-9.3%20%2F%2010%20(Grade%20A%2B)-10b981.svg?style=for-the-badge&logo=checkmarx" alt="Security Grade A+" /></a>
 </p>
 
+<p align="center">
+  <a href="brag-output/brag.mp4">
+    <img src="brag-output/brag.jpg" width="900" alt="GARUDA v4 Official Launch Video" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(14,165,233,0.25);" />
+  </a>
+</p>
+<p align="center">
+  🎬 <strong><a href="brag-output/brag.mp4">Watch the Official 20-Second GARUDA v4 Cinematic Launch Video (1080p · 120 BPM Cyber Soundtrack)</a></strong><br />
+  <em>Generated via <code>/brag</code> · High-impact visual storyboard · Frame 0 baked poster thumbnail</em>
+</p>
+
 ---
 
 ## 📑 Table of Contents
+- [Official Launch Video & Storyboard](#-official-launch-video--storyboard)
 - [Executive Overview](#-executive-overview)
 - [System Architecture & Data Flow](#-system-architecture--data-flow)
 - [Competitive Landscape & Comparison Matrix](#-competitive-landscape--comparison-matrix)
@@ -40,6 +51,26 @@
 - [REST API & WebSocket Documentation](#-rest-api--websocket-documentation)
 - [Smart Contract Specification (`GarudaAttestation.sol`)](#-smart-contract-specification-garudaattestationsol)
 - [License & Contributing](#-license--contributing)
+
+---
+
+## 🎬 Official Launch Video & Storyboard
+
+A 20-second cinematic launch video was produced for GARUDA v4 using the `/brag` engine with a 120 BPM cyber-electronic soundtrack, custom procedural motion graphics, and audio beat matching.
+
+- **Direct Video File**: [`brag-output/brag.mp4`](brag-output/brag.mp4) *(1080p · 30 FPS · AAC Stereo · Frame 0 Baked Poster)*
+- **Poster Frame**: [`brag-output/brag.jpg`](brag-output/brag.jpg)
+- **Storyboard Plan**: [`brag-output/brag-plan.md`](brag-output/brag-plan.md)
+- **Official Share Copy**: [`brag-output/share-copy.txt`](brag-output/share-copy.txt)
+
+```
+0.0s ───[ The Hook ]───▶ "YOUR WI-FI ROUTER IS BLIND. Enterprise SIEMs cost $100k/yr."
+3.2s ───[ Hardware ]───▶ 5-Layer Device Recognition (No more 'Unknown Device' MACs)
+6.8s ───[ Packet IDS ]─▶ Real-time L2-L7 Detection (Shannon entropy 4.21 bits/char -> C2 Flagged in 10.7ms)
+10.4s ──[ Ledger ]─────▶ Ed25519 Merkle Proofs & Web3 Attestation (58/58 Verified Blocks)
+14.0s ──[ Firewall ]───▶ Dynamic Host Firewall Block & Static ARP Pinning (Grade A+ Prevention)
+17.2s ──[ Outro ]──────▶ "GARUDA v4 — TAKE BACK YOUR WI-FI." (Open Source MIT)
+```
 
 ---
 
