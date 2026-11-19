@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="public/assets/garuda_icon_192.png" width="100" height="100" alt="GARUDA" />
-</p>
-
 <h1 align="center">GARUDA</h1>
 <p align="center"><strong>Autonomous Wi-Fi Threat Containment System</strong></p>
 
