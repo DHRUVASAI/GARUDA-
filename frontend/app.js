@@ -897,9 +897,9 @@
   $("btnBannerInspect").addEventListener("click", () => switchView("threats"));
   $("btnCloseDrawer").addEventListener("click", closeDeviceDrawer);
   $("drawerBackdrop").addEventListener("click", closeDeviceDrawer);
-  $("btnMode3D").addEventListener("click", () => setTopologyMode("3d"));
-  $("btnMode2D").addEventListener("click", () => setTopologyMode("2d"));
-  $("btnResetCam3D").addEventListener("click", () => state.topo3d?.resetCamera());
+  $("btnMode3D")?.addEventListener("click", () => setTopologyMode("3d"));
+  $("btnMode2D")?.addEventListener("click", () => setTopologyMode("2d"));
+  $("btnResetCam3D")?.addEventListener("click", () => state.topo3d?.resetCamera());
 
   $("deviceSearch").addEventListener("input", (e) => { state.search = e.target.value; renderDevices(); });
   $("deviceSearch").addEventListener("search", (e) => { state.search = e.target.value; renderDevices(); });

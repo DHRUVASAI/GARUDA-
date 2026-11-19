@@ -8,6 +8,10 @@
   <a href="#api"><img src="https://img.shields.io/badge/-API_Reference-f59e0b?style=flat-square" alt="API" /></a>
 </p>
 
+<p align="center">
+  <img src="public/assets/garuda_walkthrough.gif" alt="GARUDA v4 Real Dashboard Walkthrough" width="900" style="border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);" />
+</p>
+
 <br />
 
 > Your router sees MAC addresses. GARUDA sees threats.
