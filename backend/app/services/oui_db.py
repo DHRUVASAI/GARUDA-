@@ -158,22 +158,34 @@ async def sync_ieee_oui_database() -> dict:
     import httpx
 
     url = "https://standards-oui.ieee.org/oui/oui.csv"
-    async with httpx.AsyncClient(timeout=25.0, follow_redirects=True) as client:
-        resp = await client.get(url, headers={"User-Agent": "GARUDA-Network-Guardian/3.0"})
-        resp.raise_for_status()
-        text = resp.text
+    try:
+        import asyncio
+        timeout_cfg = httpx.Timeout(2.5, connect=2.0, read=2.5)
+        async with httpx.AsyncClient(timeout=timeout_cfg, follow_redirects=True) as client:
+            resp = await asyncio.wait_for(client.get(url, headers={"User-Agent": "GARUDA-Network-Guardian/4.0"}), timeout=2.5)
+            resp.raise_for_status()
+            text = resp.text
 
-    reader = csv.DictReader(io.StringIO(text))
-    parsed: Dict[str, str] = {}
-    for row in reader:
-        assignment = (row.get("Assignment") or "").strip().upper()
-        org = (row.get("Organization Name") or "").strip()
-        if len(assignment) == 6 and org:
-            prefix = f"{assignment[0:2]}:{assignment[2:4]}:{assignment[4:6]}"
-            parsed[prefix] = org
+        reader = csv.DictReader(io.StringIO(text))
+        parsed: Dict[str, str] = {}
+        for row in reader:
+            assignment = (row.get("Assignment") or "").strip().upper()
+            org = (row.get("Organization Name") or "").strip()
+            if len(assignment) == 6 and org:
+                prefix = f"{assignment[0:2]}:{assignment[2:4]}:{assignment[4:6]}"
+                parsed[prefix] = org
 
-    if parsed:
-        IEEE_OUI_CACHE_PATH.write_text(json.dumps(parsed), encoding="utf-8")
-        _IEEE_CACHE = parsed
-        _CACHE_LOADED = True
-    return {"synced": len(parsed), "cache_path": str(IEEE_OUI_CACHE_PATH)}
+        if parsed:
+            IEEE_OUI_CACHE_PATH.write_text(json.dumps(parsed), encoding="utf-8")
+            _IEEE_CACHE = parsed
+            _CACHE_LOADED = True
+        return {"synced": len(parsed), "cache_path": str(IEEE_OUI_CACHE_PATH), "source": "IEEE Standards Association (Live)"}
+    except Exception as exc:
+        _load_ieee_cache()
+        cached_count = len(_IEEE_CACHE) if _IEEE_CACHE else len(BUILTIN_OUI)
+        return {
+            "synced": cached_count,
+            "cache_path": str(IEEE_OUI_CACHE_PATH),
+            "source": "Local Hardware Registry (Offline)",
+            "warning": f"Could not reach IEEE servers ({exc}), active local database of {cached_count} vendors remains enforced.",
+        }

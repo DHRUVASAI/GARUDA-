@@ -63,7 +63,13 @@ def shannon_entropy(text: str) -> float:
 
 def analyze_domain_dga(domain: str) -> dict:
     """Classify whether a domain looks like a DGA botnet or DNS-tunneling payload."""
-    clean = (domain or "").strip().lower().strip(".")
+    clean = (domain or "").strip().lower()
+    if "://" in clean:
+        clean = clean.split("://", 1)[1]
+    clean = clean.split("/")[0].split("?")[0].split("#")[0]
+    if ":" in clean:
+        clean = clean.split(":")[0]
+    clean = clean.strip(".")
     if not clean:
         return {
             "domain": domain,

@@ -591,7 +591,7 @@
   }
 
   function openDeviceDrawer(mac) {
-    const dev = state.snapshot?.devices.find((d) => d.mac === mac);
+    const dev = state.snapshot?.devices.find((d) => (d.mac || "").toUpperCase() === (mac || "").toUpperCase());
     if (!dev) return;
     const ml = (state.snapshot?.ml?.device_scores || []).find((m) => m.mac.toUpperCase() === mac.toUpperCase());
     state.selectedDeviceMac = mac;
@@ -745,6 +745,8 @@
   $("btnResetCam3D").addEventListener("click", () => state.topo3d?.resetCamera());
 
   $("deviceSearch").addEventListener("input", (e) => { state.search = e.target.value; renderDevices(); });
+  $("deviceSearch").addEventListener("search", (e) => { state.search = e.target.value; renderDevices(); });
+  $("heroRadarCanvas")?.addEventListener("click", () => switchView("network"));
 
   $("btnTrySafeDemo").addEventListener("click", async () => {
     switchView("ai-ledger");
@@ -761,6 +763,7 @@
     try {
       const snap = await api("/api/simulate", { method: "POST", body: JSON.stringify({ scenario: "new_unknown_device" }) });
       applySnapshot(snap);
+      showToast("Unknown Intruder Simulated", "Simulated unverified IoT device joined network.", "warning");
     } catch (err) { showToast("Error", err.message, "warning"); }
   });
 
@@ -775,10 +778,18 @@
     finally { btn.textContent = "Scan Now"; }
   });
 
+  // Restore saved theme preference
+  const savedTheme = localStorage.getItem("garuda_v4_theme");
+  if (savedTheme === "dark") {
+    document.body.classList.add("theme-dark");
+    $("btnThemeToggle").textContent = "Daylight";
+  }
+
   $("btnThemeToggle").addEventListener("click", () => {
     document.body.classList.toggle("theme-dark");
     const dark = document.body.classList.contains("theme-dark");
     $("btnThemeToggle").textContent = dark ? "Daylight" : "Night Ops";
+    localStorage.setItem("garuda_v4_theme", dark ? "dark" : "light");
     if (state.topo3d) state.topo3d.applyTheme(dark);
   });
 
@@ -789,6 +800,10 @@
       if (res.snapshot) applySnapshot(res.snapshot);
       showToast("AI Model Retrained", `${res.result.engine} calibrated on ${res.result.baseline_samples} vectors.`, "info");
     } catch (err) { showToast("Retrain Failed", err.message, "warning"); }
+  });
+
+  $("dgaDomainInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("btnAnalyzeDomain").click();
   });
 
   $("btnAnalyzeDomain").addEventListener("click", async () => {
@@ -870,7 +885,11 @@
     try {
       const res = await api("/api/oui/sync", { method: "POST" });
       applySnapshot(await api("/api/snapshot"));
-      showToast("Brand Database Updated", `Synced ${Number(res.synced || 0).toLocaleString()} official IEEE vendors.`, "info");
+      if (res.warning) {
+        showToast("Brand Database", res.warning, "info");
+      } else {
+        showToast("Brand Database Updated", `Synced ${Number(res.synced || 0).toLocaleString()} official IEEE vendors.`, "info");
+      }
     } catch (err) { showToast("OUI Sync Failed", err.message, "warning"); }
     finally { btn.textContent = "Sync Brand Database (IEEE)"; }
   });
@@ -881,24 +900,43 @@
     try {
       const res = await api("/api/threat-intel/sync", { method: "POST" });
       applySnapshot(await api("/api/snapshot"));
-      showToast("Threat Feed Synced", `Loaded ${Number(res.synced_ips || 0).toLocaleString()} C2 IPs.`, "info");
+      if (res.warning) {
+        showToast("Threat Feed", res.warning, "info");
+      } else {
+        showToast("Threat Feed Synced", `Loaded ${Number(res.synced_ips || 0).toLocaleString()} C2 IPs (${res.source}).`, "info");
+      }
     } catch (err) { showToast("Feed Sync Failed", err.message, "warning"); }
     finally { btn.textContent = "Sync Botnet C2 Feed (Abuse.ch)"; }
   });
 
   async function runMalwareScan(processesOnly = false) {
-    const btn = $("btnRunMalwareScan");
+    const btn = processesOnly ? $("btnCheckProcesses") : $("btnRunMalwareScan");
     const targetPath = processesOnly ? null : ($("scanPathInput").value.trim() || null);
+    const oldText = btn.textContent;
     btn.textContent = "Scanning…";
     try {
-      const res = await api("/api/malware/scan", { method: "POST", body: JSON.stringify({ target_path: targetPath, scan_processes: true }) });
+      const res = await api("/api/malware/scan", {
+        method: "POST",
+        body: JSON.stringify({
+          target_path: targetPath,
+          scan_processes: true,
+          scan_files: !processesOnly,
+        }),
+      });
       if (res.snapshot) applySnapshot(res.snapshot);
-      showToast("Malware Scan Finished", `${res.scan.threats_found} threat(s) found.`, res.scan.threats_found ? "critical" : "info");
+      showToast(
+        "Malware Scan Finished",
+        `${res.scan.threats_found} threat(s) found (${res.scan.processes_scanned} procs, ${res.scan.files_scanned} files).`,
+        res.scan.threats_found ? "critical" : "info"
+      );
     } catch (err) { showToast("Scan Failed", err.message, "warning"); }
-    finally { btn.textContent = "Run Virus Scan"; }
+    finally { btn.textContent = oldText; }
   }
   $("btnRunMalwareScan").addEventListener("click", () => runMalwareScan(false));
   $("btnCheckProcesses").addEventListener("click", () => runMalwareScan(true));
+  $("scanPathInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") runMalwareScan(false);
+  });
 
   async function blockIp(ip) {
     if (!ip) return;
@@ -909,6 +947,9 @@
     } catch (err) { showToast("Firewall Block Failed", err.message, "warning"); }
   }
   $("btnBlockIp").addEventListener("click", () => { const ip = $("blockIpInput").value.trim(); if (ip) { blockIp(ip); $("blockIpInput").value = ""; } });
+  $("blockIpInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("btnBlockIp").click();
+  });
 
   $("btnToggleLockdown").addEventListener("click", async () => {
     const next = !Boolean(state.snapshot?.firewall?.lockdown_active);
@@ -920,8 +961,11 @@
   });
 
   $("btnResolveAll").addEventListener("click", async () => {
-    try { applySnapshot((await api("/api/alerts/resolve-all", { method: "POST" })).snapshot); }
-    catch (err) { showToast("Error", err.message, "warning"); }
+    try {
+      const res = await api("/api/alerts/resolve-all", { method: "POST" });
+      applySnapshot(res.snapshot);
+      showToast("All Alerts Resolved", "Cleared active threats from review feed.", "info");
+    } catch (err) { showToast("Error", err.message, "warning"); }
   });
 
   $("btnSaveSettings").addEventListener("click", async () => {
@@ -943,7 +987,7 @@
   });
 
   $("drawerTrustBtn").addEventListener("click", async () => {
-    const dev = state.snapshot?.devices.find((d) => d.mac === state.selectedDeviceMac);
+    const dev = state.snapshot?.devices.find((d) => (d.mac || "").toUpperCase() === (state.selectedDeviceMac || "").toUpperCase());
     if (!dev) return;
     try {
       const res = await api(`/api/devices/${encodeURIComponent(dev.mac)}/trust`, { method: "POST", body: JSON.stringify({ is_safe: !dev.is_safe }) });
@@ -952,18 +996,19 @@
   });
 
   $("drawerRenameBtn").addEventListener("click", async () => {
-    const dev = state.snapshot?.devices.find((d) => d.mac === state.selectedDeviceMac);
+    const dev = state.snapshot?.devices.find((d) => (d.mac || "").toUpperCase() === (state.selectedDeviceMac || "").toUpperCase());
     const val = ($("drawerRenameInput")?.value || "").trim();
     if (!dev || !val) return;
     try {
       const res = await api(`/api/devices/${encodeURIComponent(dev.mac)}/rename`, { method: "PATCH", body: JSON.stringify({ custom_name: val }) });
+      $("drawerTitle").textContent = res.device.display_name;
       applySnapshot(res.snapshot);
       showToast("Device Renamed", `Saved as "${res.device.display_name}".`, "info");
     } catch (err) { showToast("Rename Failed", err.message, "warning"); }
   });
 
   $("drawerBlockBtn").addEventListener("click", () => {
-    const dev = state.snapshot?.devices.find((d) => d.mac === state.selectedDeviceMac);
+    const dev = state.snapshot?.devices.find((d) => (d.mac || "").toUpperCase() === (state.selectedDeviceMac || "").toUpperCase());
     if (dev) blockIp(dev.ip);
   });
 
@@ -1037,15 +1082,60 @@
       try {
         const res = await api("/api/firewall/unblock", { method: "POST", body: JSON.stringify({ ip: unblock.dataset.unblock }) });
         if (res.snapshot) applySnapshot(res.snapshot);
+        showToast("Firewall Unblock", res.result?.message || `Unblocked ${unblock.dataset.unblock}.`, "info");
       } catch (err) { showToast("Unblock Failed", err.message, "warning"); }
       return;
     }
 
     const simBtn = e.target.closest("[data-sim]");
     if (simBtn) {
-      try { applySnapshot(await api("/api/simulate", { method: "POST", body: JSON.stringify({ scenario: simBtn.dataset.sim }) })); }
-      catch (err) { showToast("Simulation Error", err.message, "warning"); }
+      try {
+        const snap = await api("/api/simulate", { method: "POST", body: JSON.stringify({ scenario: simBtn.dataset.sim }) });
+        applySnapshot(snap);
+        const labels = {
+          reset: "Network posture reset to clean safe state.",
+          ml_beacon: "Robotic C2 Beaconing & DGA anomaly triggered.",
+          new_unknown_device: "New unknown device alert triggered.",
+          arp_spoof: "Fake router MITM attack triggered.",
+          rogue_dhcp: "Rogue DHCP server attack triggered.",
+          dns_hijack: "DNS hijacking attack triggered.",
+          port_sweep: "Rapid port sweep attack triggered.",
+          open_wifi: "Unencrypted open Wi-Fi posture simulated.",
+          malware_eicar: "EICAR test malware signature injected.",
+        };
+        showToast("Simulation Active", labels[simBtn.dataset.sim] || "Scenario simulated.", simBtn.dataset.sim === "reset" ? "info" : "warning");
+      } catch (err) { showToast("Simulation Error", err.message, "warning"); }
       return;
+    }
+  });
+
+  // Global Keyboard Navigation & Form Shortcuts
+  document.addEventListener("keydown", async (e) => {
+    if (e.key === "Escape") {
+      if ($("deviceDrawer")?.classList.contains("open")) {
+        closeDeviceDrawer();
+      }
+      if (state.renamingMac) {
+        state.renamingMac = null;
+        renderDevices();
+      }
+    } else if (e.key === "Enter") {
+      if (document.activeElement === $("drawerRenameInput")) {
+        $("drawerRenameBtn")?.click();
+      } else if (document.activeElement === $("inlineRenameInput") && state.renamingMac) {
+        const val = ($("inlineRenameInput")?.value || "").trim();
+        if (val) {
+          try {
+            const res = await api(`/api/devices/${encodeURIComponent(state.renamingMac)}/rename`, {
+              method: "PATCH",
+              body: JSON.stringify({ custom_name: val }),
+            });
+            state.renamingMac = null;
+            applySnapshot(res.snapshot);
+            showToast("Device Renamed", `Saved as "${res.device.display_name}".`, "info");
+          } catch (err) { showToast("Rename Failed", err.message, "warning"); }
+        }
+      }
     }
   });
 

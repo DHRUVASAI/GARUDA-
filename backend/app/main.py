@@ -3,6 +3,7 @@ import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -159,6 +160,17 @@ def verify_ledger(db: Session = Depends(get_db)):
     return verify_ledger_integrity(db)
 
 
+@app.get("/api/ledger/blocks")
+def get_ledger_blocks(db: Session = Depends(get_db)):
+    summary = get_ledger_summary(db)
+    return {
+        "total_blocks": summary["total_blocks"],
+        "anchored_blocks": summary["anchored_blocks"],
+        "merkle_root": summary["merkle_root"],
+        "blocks": summary["recent_blocks"],
+    }
+
+
 @app.get("/api/ledger/proof/{block_index}")
 def get_merkle_proof(block_index: int, db: Session = Depends(get_db)):
     proof = get_block_merkle_proof(db, block_index)
@@ -237,7 +249,7 @@ async def pin_gateway(db: Session = Depends(get_db)):
 async def trigger_malware_scan(body: MalwareScanRequest, db: Session = Depends(get_db)):
     started = datetime.now(timezone.utc)
     result = await asyncio.to_thread(
-        run_host_malware_scan, body.target_path, body.scan_processes
+        run_host_malware_scan, body.target_path, body.scan_processes, body.scan_files
     )
     completed = datetime.now(timezone.utc)
     run_row = MalwareScanRun(
@@ -413,7 +425,8 @@ async def websocket_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
     db = SessionLocal()
     try:
-        await websocket.send_json({"type": "snapshot", "data": monitor.get_snapshot(db)})
+        snap = jsonable_encoder(monitor.get_snapshot(db))
+        await websocket.send_text(json.dumps({"type": "snapshot", "data": snap}))
     finally:
         db.close()
     try:
