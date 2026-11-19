@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI):
     monitor.ids.start()
     db = SessionLocal()
     try:
-        await monitor.run_scan(db, active_sweep=False, check_doh=False)
+        await monitor.run_scan(db, active_sweep=True, check_doh=False)
     finally:
         db.close()
     monitor._bg_task = asyncio.create_task(monitor.background_loop())

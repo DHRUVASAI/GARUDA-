@@ -180,10 +180,20 @@
     if (!state.snapshot) return;
     if (state.snapshot.mode === "simulation") {
       pill.className = "pill pill-warn";
-      pill.innerHTML = `<span class="dot"></span> Safe Simulation`;
+      pill.innerHTML = `<span class="dot"></span> Safe Simulation <button id="btnSwitchLivePill" style="margin-left:8px;padding:2px 8px;font-size:10px;font-weight:600;cursor:pointer;background:#0ea5e9;color:#0b1120;border:none;border-radius:999px;">Switch to Live</button>`;
+      $("btnSwitchLivePill")?.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        try {
+          await fetchJSON("/api/simulate", { method: "POST", body: JSON.stringify({ scenario: "reset" }) });
+          await fetchJSON("/api/scan", { method: "POST" });
+          showToast("Live Mode Active", "Switched to 100% real network scanning.", "info");
+        } catch (err) {
+          showToast("Error", err.message, "warning");
+        }
+      });
     } else {
       pill.className = "pill pill-safe";
-      pill.innerHTML = `<span class="dot"></span> Live v4 Shield`;
+      pill.innerHTML = `<span class="dot"></span> Live Real Network`;
     }
   }
 

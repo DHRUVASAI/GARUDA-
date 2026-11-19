@@ -236,8 +236,9 @@ class GarudaV4Monitor:
             net_info = dict(self._sim_network_override or self._default_sim_network())
             observed = list(self._default_sim_devices()) + list(self._sim_extra_devices)
         else:
-            net_info = await asyncio.to_thread(detect_network_environment)
-            observed = await asyncio.to_thread(discover_lan_devices, net_info, self.ids.dhcp_hostnames, active_sweep)
+            net_info = dict(self._sim_network_override or (await asyncio.to_thread(detect_network_environment)))
+            real_devs = await asyncio.to_thread(discover_lan_devices, net_info, self.ids.dhcp_hostnames, active_sweep)
+            observed = real_devs + list(self._sim_extra_devices)
 
         ensure_genesis_block(db, net_info["ssid"])
         net_info["arp_pinned"] = net_info["ssid"] in self.arp_pinned_ssids
@@ -469,18 +470,25 @@ class GarudaV4Monitor:
 
     async def trigger_simulation(self, db: Session, scenario: str) -> dict:
         settings = _get_or_create_settings(db)
-        settings.simulation_mode = True
-        db.commit()
         now = datetime.now(timezone.utc)
 
         if scenario == "reset":
+            settings.simulation_mode = False
+            db.commit()
             self._sim_network_override = None
             self._sim_extra_devices = []
             ml_engine.inject_simulated_anomaly("", None)
             db.query(Alert).update({Alert.resolved: True})
-            db.query(Device).filter(Device.mac.in_(["DE:AD:BE:9F:01:22", "28:6C:07:55:AA:91", "B8:27:EB:88:11:09"])).delete(synchronize_session=False)
+            fake_macs = [
+                "70:85:C2:44:10:01", "A4:83:E7:21:9B:04", "F0:18:98:77:3A:11",
+                "34:23:BA:50:12:88", "3C:D9:2B:99:40:12", "DE:AD:BE:9F:01:22",
+                "28:6C:07:55:AA:91", "B8:27:EB:88:11:09"
+            ]
+            db.query(Device).filter(Device.mac.in_(fake_macs)).delete(synchronize_session=False)
             db.commit()
-            return await self.run_scan(db, active_sweep=False, check_doh=False)
+            return await self.run_scan(db, active_sweep=True, check_doh=False)
+
+        current_net = dict(self.last_network or self._sim_network_override or detect_network_environment())
 
         if scenario == "ml_beacon":
             self._sim_extra_devices = [d for d in self._sim_extra_devices if d["mac"] != "B8:27:EB:88:11:09"]
@@ -524,7 +532,7 @@ class GarudaV4Monitor:
             return await self.run_scan(db, active_sweep=False, check_doh=False)
 
         if scenario == "arp_spoof":
-            base = self._default_sim_network()
+            base = dict(current_net)
             base["gateway_mac"] = "DE:AD:BE:9F:01:22"
             self._sim_network_override = base
             self._sim_extra_devices = [d for d in self._sim_extra_devices if d["mac"] != "DE:AD:BE:9F:01:22"]
@@ -537,10 +545,8 @@ class GarudaV4Monitor:
             return await self.run_scan(db, active_sweep=False, check_doh=False)
 
         if scenario == "open_wifi":
-            base = self._default_sim_network()
+            base = dict(current_net)
             base.update({
-                "ssid": "Airport_Free_WiFi_Guest (Simulated)",
-                "network_type": "Public / Open Wi-Fi (Unencrypted)",
                 "security_protocol": "Open (Unencrypted)",
                 "encryption_grade": "None",
                 "is_public_or_untrusted": True,
@@ -550,7 +556,7 @@ class GarudaV4Monitor:
             return await self.run_scan(db, active_sweep=False, check_doh=False)
 
         if scenario == "dns_hijack":
-            base = self._default_sim_network()
+            base = dict(current_net)
             base["dns_servers"] = ["185.220.101.45"]
             self._sim_network_override = base
             return await self.run_scan(db, active_sweep=False, check_doh=False)

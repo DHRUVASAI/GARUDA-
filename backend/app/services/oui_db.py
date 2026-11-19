@@ -47,6 +47,7 @@ BUILTIN_OUI: Dict[str, Tuple[str, str]] = {
     "A0:04:60": ("Netgear", "router"), "28:C6:8E": ("Netgear", "router"), "C4:04:15": ("Netgear", "router"),
     "00:1A:2B": ("Cisco", "router"), "00:1E:F7": ("Cisco", "router"), "34:6F:90": ("Cisco", "router"),
     "70:85:C2": ("Nokia / Airtel Fiber", "router"), "68:15:90": ("Nokia / Airtel Fiber", "router"),
+    "6C:4F:89": ("Zyxel / Airtel Fiber Router", "router"),
     "C4:A8:1D": ("D-Link", "router"), "1C:7E:E5": ("D-Link", "router"), "B8:A3:86": ("D-Link", "router"),
     "48:8F:5A": ("MikroTik", "router"), "64:D1:54": ("MikroTik", "router"),
     "74:83:C2": ("Ubiquiti", "router"), "F0:9F:C2": ("Ubiquiti", "router"), "B4:FB:E4": ("Ubiquiti", "router"),
@@ -70,16 +71,21 @@ BUILTIN_OUI: Dict[str, Tuple[str, str]] = {
     "24:6F:28": ("Espressif Smart IoT", "iot"), "30:AE:A4": ("Espressif Smart IoT", "iot"),
     "84:CC:A8": ("Espressif Smart IoT", "iot"), "44:65:0D": ("Amazon Echo / Fire TV", "tv"),
     "FC:65:DE": ("Amazon Echo / Fire TV", "tv"), "68:54:FD": ("Amazon Fire TV", "tv"),
+    "90:A8:22": ("Amazon Echo / Fire TV", "tv"),
     "00:09:DF": ("LG Smart TV", "tv"), "78:5D:C8": ("LG Smart TV", "tv"), "A8:23:FE": ("LG Smart TV", "tv"),
+    "BC:30:D9": ("LG Smart TV / Arcadyan", "tv"),
     "00:04:1F": ("Sony PlayStation / TV", "tv"), "FC:0F:E6": ("Sony Bravia TV", "tv"),
-    "00:1E:8F": ("Canon Printer", "printer"), "00:26:AB": ("Epson Printer", "printer"),
-    "00:1B:A9": ("Brother Printer", "printer"), "00:0C:29": ("VMware Virtual Machine", "unknown"),
+    "00:1E:8F": ("Canon Printer", "printer"), "50:03:CF": ("Canon Printer", "printer"),
+    "00:26:AB": ("Epson Printer", "printer"), "00:1B:A9": ("Brother Printer", "printer"),
+    "C0:BF:BE": ("AzureWave / HP Wi-Fi", "laptop"), "2C:71:FF": ("Realtek / MediaTek", "unknown"),
+    "00:0C:29": ("VMware Virtual Machine", "unknown"),
     "08:00:27": ("VirtualBox VM", "unknown"), "00:15:5D": ("Microsoft Hyper-V VM", "unknown"),
     "DE:AD:BE": ("Spoofed / Test MAC", "unknown"),
 }
 
 _IEEE_CACHE: Dict[str, str] = {}
 _CACHE_LOADED = False
+_LIVE_VENDOR_CACHE: Dict[str, str] = {}
 
 
 def _load_ieee_cache():
@@ -148,6 +154,22 @@ def lookup_mac_vendor(mac: str) -> Tuple[str, str, bool]:
 
     if is_locally_administered_mac(clean):
         return "Private Wi-Fi Address (Randomized MAC)", "phone", True
+
+    if prefix in _LIVE_VENDOR_CACHE:
+        lv = _LIVE_VENDOR_CACHE[prefix]
+        if lv:
+            return lv, infer_device_type_from_vendor_or_name(lv, "unknown"), False
+
+    try:
+        import urllib.request as _urlreq
+        req = _urlreq.Request(f"https://api.macvendors.com/{prefix}", headers={"User-Agent": "GARUDA/4.0"})
+        with _urlreq.urlopen(req, timeout=1.5) as r:
+            live_name = r.read().decode("utf-8").strip()
+            if live_name and len(live_name) < 90:
+                _LIVE_VENDOR_CACHE[prefix] = live_name
+                return live_name, infer_device_type_from_vendor_or_name(live_name, "unknown"), False
+    except Exception:
+        _LIVE_VENDOR_CACHE[prefix] = ""
 
     return "Unknown Manufacturer", "unknown", False
 
