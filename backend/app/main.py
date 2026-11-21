@@ -1,9 +1,9 @@
+from typing import Optional
 import asyncio
 import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -41,6 +41,18 @@ from .services.ml_engine import analyze_domain_dga, ml_engine
 from .services.monitor import _get_or_create_settings, _serialize_device, _serialize_settings, monitor
 from .services.notifier import ws_manager
 from .services.oui_db import sync_ieee_oui_database
+from .services.capability_probe import probe_network_environment
+from .services.device_scanner import read_os_arp_table
+from .services.network_detector import detect_network_environment
+from .services.plugin_engine import plugin_orchestrator
+from .services.rule_updater import rule_manager
+from .services.campaign_correlator import correlate_attack_campaigns
+from .services.aws_bridge import (
+    SAMPLE_VPC_FLOW_LOGS,
+    dispatch_aws_finding,
+    parse_vpc_flow_logs,
+    to_aws_security_hub_asff,
+)
 
 
 @asynccontextmanager
@@ -48,31 +60,12 @@ async def lifespan(app: FastAPI):
     init_db()
     monitor.bind_loop(asyncio.get_running_loop())
     monitor.ids.start()
-
-    async def _initial_scan_task():
-        await asyncio.sleep(0.1)
-        db = SessionLocal()
-        try:
-            await monitor.run_scan(db, active_sweep=True, check_doh=False)
-        except Exception:
-            pass
-        finally:
-            db.close()
-
-    asyncio.create_task(_initial_scan_task())
+    db = SessionLocal()
+    try:
+        await monitor.run_scan(db, active_sweep=False, check_doh=False)
+    finally:
+        db.close()
     monitor._bg_task = asyncio.create_task(monitor.background_loop())
-
-    def _open_browser_when_ready():
-        import os
-        import webbrowser
-        if os.getenv("GARUDA_NO_BROWSER") != "1":
-            try:
-                webbrowser.open("http://localhost:8000")
-            except Exception:
-                pass
-
-    asyncio.get_running_loop().call_later(0.4, _open_browser_when_ready)
-
     try:
         yield
     finally:
@@ -82,8 +75,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="GARUDA v4 — Network Guardian, Live IDS, ML Anomaly, Web3 Ledger & Firewall API",
-    version="4.0.0",
+    title="GARUDA v6 — Adversarial-Hardened Auto-Adapting Network Guardian, Live IDS, ML Anomaly, AWS Bridge & Web3 Ledger API",
+    version="6.0.0",
     description=(
         "Cross-platform personal network guardian with 5-layer real device naming, live Scapy packet IDS, "
         "IsolationForest + Welford ML behavioral engine, Ed25519 + SHA-256 Merkle Web3 attestation ledger, "
@@ -103,7 +96,7 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "GARUDA v4 Engine", "version": "4.0.0"}
+    return {"status": "ok", "service": "GARUDA v6 Engine", "version": "6.0.0"}
 
 
 @app.get("/api/capabilities", response_model=CapabilitiesOut)
@@ -177,17 +170,6 @@ async def retrain_ml_baseline(db: Session = Depends(get_db)):
 @app.get("/api/ledger/verify")
 def verify_ledger(db: Session = Depends(get_db)):
     return verify_ledger_integrity(db)
-
-
-@app.get("/api/ledger/blocks")
-def get_ledger_blocks(db: Session = Depends(get_db)):
-    summary = get_ledger_summary(db)
-    return {
-        "total_blocks": summary["total_blocks"],
-        "anchored_blocks": summary["anchored_blocks"],
-        "merkle_root": summary["merkle_root"],
-        "blocks": summary["recent_blocks"],
-    }
 
 
 @app.get("/api/ledger/proof/{block_index}")
@@ -268,7 +250,7 @@ async def pin_gateway(db: Session = Depends(get_db)):
 async def trigger_malware_scan(body: MalwareScanRequest, db: Session = Depends(get_db)):
     started = datetime.now(timezone.utc)
     result = await asyncio.to_thread(
-        run_host_malware_scan, body.target_path, body.scan_processes, body.scan_files
+        run_host_malware_scan, body.target_path, body.scan_processes
     )
     completed = datetime.now(timezone.utc)
     run_row = MalwareScanRun(
@@ -434,6 +416,107 @@ async def update_settings(body: AlertSettingsIn, db: Session = Depends(get_db)):
     return _serialize_settings(s)
 
 
+
+# =====================================================================
+# GARUDA v5 Future-Proof Resilience, Plugin & AWS Edge-to-Cloud Routes
+# =====================================================================
+
+@app.get("/api/v5/environment")
+def v5_environment_probe():
+    """Run the v5 Startup Capability Probe (Home / Campus-Safe / VPN + Proxy-ARP + Plugin health)."""
+    net_info = detect_network_environment()
+    arp_entries = read_os_arp_table()
+    env = probe_network_environment(net_info, arp_entries)
+    monitor.ids.set_proxy_arp_mode(bool(env["proxy_arp_detected"]), net_info.get("gateway_mac"))
+    env["plugin_health"] = plugin_orchestrator.last_run_report
+    env["proxy_arp_suppressed_events"] = monitor.ids.proxy_arp_suppressed_count
+    env["ssid"] = net_info.get("ssid", "Unknown")
+    return env
+
+
+@app.get("/api/v5/rules")
+def v5_get_rules():
+    """Return the active externalized v5 threat & OS signature manifest summary."""
+    return rule_manager.summary()
+
+
+@app.post("/api/v5/rules/reload")
+def v5_reload_rules():
+    """Hot-reload externalized JSON rules without restarting GARUDA."""
+    rule_manager.reload()
+    return {"status": "reloaded", "manifest": rule_manager.summary()}
+
+
+@app.post("/api/v5/aws/asff-preview")
+def v5_aws_asff_preview(db: Session = Depends(get_db)):
+    """Convert the latest GARUDA alert (or a sample finding) into official AWS Security Hub ASFF."""
+    latest = db.query(Alert).order_by(Alert.id.desc()).first()
+    if latest:
+        alert_dict = {
+            "id": latest.id,
+            "severity": latest.severity,
+            "category": latest.category,
+            "attack_type": latest.attack_type,
+            "title": latest.title,
+            "plain_explanation": latest.plain_explanation,
+            "what_to_do": latest.what_to_do,
+            "related_ip": latest.related_ip,
+            "related_mac": latest.related_mac,
+        }
+    else:
+        alert_dict = {
+            "id": "demo-001",
+            "severity": "critical",
+            "category": "active_attack",
+            "attack_type": "arp_spoof",
+            "title": "Active Gateway ARP Spoofing Detected (GARUDA Edge Sensor)",
+            "plain_explanation": "A rogue host attempted to impersonate the local Wi-Fi gateway MAC address.",
+            "what_to_do": "Pin static gateway ARP or isolate the offending MAC.",
+            "related_ip": "192.168.1.1",
+            "related_mac": "DE:AD:BE:EF:00:01",
+        }
+    asff = to_aws_security_hub_asff(alert_dict)
+    return dispatch_aws_finding(asff, dry_run=True)
+
+
+@app.post("/api/v5/aws/vpc-flow-analyze")
+def v5_aws_vpc_flow_analyze(payload: Optional[dict] = None):
+    """Analyze AWS VPC Flow Logs (user-supplied or built-in sample) for port sweeps & exfiltration spikes."""
+    raw_logs = (payload or {}).get("raw_logs") or SAMPLE_VPC_FLOW_LOGS
+    result = parse_vpc_flow_logs(raw_logs)
+    result["used_sample"] = not bool((payload or {}).get("raw_logs"))
+    return result
+
+
+
+# =====================================================================
+# GARUDA v6 Purple-Team Campaign Correlation & Adversarial IDS Routes
+# =====================================================================
+
+@app.get("/api/v6/campaigns")
+def v6_correlate_campaigns(db: Session = Depends(get_db)):
+    """Correlate active/historical alerts, devices, firewall logs & ledger blocks into Purple Team campaigns (PT-01..PT-08)."""
+    from .models import AttestationBlock
+
+    alerts = [
+        {
+            "id": a.id,
+            "severity": a.severity,
+            "category": a.category,
+            "attack_type": a.attack_type,
+            "title": a.title,
+            "related_ip": a.related_ip,
+            "related_mac": a.related_mac,
+            "created_at": a.created_at.isoformat() if a.created_at else "",
+        }
+        for a in db.query(Alert).order_by(Alert.created_at.asc()).limit(200).all()
+    ]
+    devices = [{"mac": d.mac, "ip": d.ip, "is_safe": d.is_safe} for d in db.query(Device).all()]
+    fw_logs = [{"target_ip": f.target_ip, "action": f.action, "enforced": f.enforced} for f in db.query(FirewallRuleLog).all()]
+    blocks = [{"block_index": b.block_index, "block_hash": b.block_hash} for b in db.query(AttestationBlock).all()]
+    return correlate_attack_campaigns(alerts, devices=devices, firewall_logs=fw_logs, ledger_blocks=blocks)
+
+
 @app.post("/api/simulate", response_model=DashboardSnapshotOut)
 async def simulate_event(body: SimulateScenarioIn, db: Session = Depends(get_db)):
     return await monitor.trigger_simulation(db, body.scenario)
@@ -444,8 +527,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
     db = SessionLocal()
     try:
-        snap = jsonable_encoder(monitor.get_snapshot(db))
-        await websocket.send_text(json.dumps({"type": "snapshot", "data": snap}))
+        await websocket.send_json({"type": "snapshot", "data": monitor.get_snapshot(db)})
     finally:
         db.close()
     try:

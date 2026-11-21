@@ -206,7 +206,6 @@ class MalwareSummaryOut(BaseModel):
 class MalwareScanRequest(BaseModel):
     target_path: Optional[str] = None
     scan_processes: bool = True
-    scan_files: bool = True
     check_malwarebazaar_hashes: bool = False
 
 

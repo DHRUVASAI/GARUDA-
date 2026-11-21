@@ -9,6 +9,7 @@
 import collections
 import json
 import platform
+import re
 import socket
 import subprocess
 import threading
@@ -44,6 +45,23 @@ class LivePacketIDS:
         self._arp_reply_times: Dict[str, Deque[float]] = collections.defaultdict(lambda: collections.deque(maxlen=40))
         self._syn_ports: Dict[str, Deque[Tuple[float, int]]] = collections.defaultdict(lambda: collections.deque(maxlen=80))
         self._cooldowns: Dict[str, float] = {}
+        # v5 Proxy-ARP False-Positive Shield (for campus/enterprise Wi-Fi)
+        self.proxy_arp_enabled: bool = False
+        self.proxy_mac: Optional[str] = None
+        self.proxy_arp_suppressed_count: int = 0
+
+        # v6 Advanced Adversarial Detection State (RT-01..RT-12)
+        self._slow_syn_ports: Dict[str, Deque[Tuple[float, int]]] = collections.defaultdict(lambda: collections.deque(maxlen=400))
+        self._dist_syn_events: Dict[str, Deque[Tuple[float, str, int]]] = collections.defaultdict(lambda: collections.deque(maxlen=400))
+        self._dns_queries: Dict[str, Deque[Tuple[float, str]]] = collections.defaultdict(lambda: collections.deque(maxlen=250))
+        self._beacon_flows: Dict[Tuple[str, str], Deque[float]] = collections.defaultdict(lambda: collections.deque(maxlen=40))
+        self._dhcp_servers_seen: Dict[str, str] = {}   # server_ip -> mac
+        self._arp_spoof_history: Dict[str, List[float]] = collections.defaultdict(list)
+
+    def set_proxy_arp_mode(self, enabled: bool, proxy_mac: Optional[str] = None):
+        with self._lock:
+            self.proxy_arp_enabled = bool(enabled)
+            self.proxy_mac = normalize_mac(proxy_mac) if proxy_mac else None
 
     def update_network_context(self, local_ip: str, gateway_ip: str, gateway_mac: str):
         with self._lock:
@@ -96,7 +114,7 @@ class LivePacketIDS:
             self.active_sniffer_running = True
             self.mode = "live_packet_sniffer"
             sniff(
-                filter="arp or (udp and (port 67 or port 68)) or tcp",
+                filter="arp or (udp and (port 53 or port 67 or port 68)) or tcp",
                 prn=self.process_packet,
                 store=False,
                 stop_filter=lambda _: self._stop_event.is_set(),
@@ -143,15 +161,30 @@ class LivePacketIDS:
             self.inspect_dhcp_event(msg_type, src_ip, src_mac, hostname)
             return
 
-        # 3. TCP SYN Port Sweep & Cleartext Outbound Monitoring
+        # 2b. Live DNS Query Inspection (RT-08 DNS Tunneling & RT-09 DGA)
+        try:
+            from scapy.all import DNS, DNSQR  # type: ignore
+            if pkt.haslayer(DNS) and pkt.haslayer(DNSQR) and pkt.haslayer(IP):
+                qname = pkt[DNSQR].qname
+                domain = qname.decode("utf-8", errors="ignore").rstrip(".") if isinstance(qname, bytes) else str(qname).rstrip(".")
+                src_ip = str(pkt[IP].src)
+                src_mac = normalize_mac(str(pkt[Ether].src)) if pkt.haslayer(Ether) else ""
+                if domain:
+                    self.inspect_dns_query(src_ip, src_mac, domain, now)
+        except Exception:
+            pass
+
+        # 3. TCP SYN Port Sweep, Slow/Distributed Scan, Cleartext & C2 Beaconing
         if pkt.haslayer(TCP) and pkt.haslayer(IP):
             src_ip = str(pkt[IP].src)
             dst_ip = str(pkt[IP].dst)
+            src_mac = normalize_mac(str(pkt[Ether].src)) if pkt.haslayer(Ether) else ""
             dport = int(pkt[TCP].dport)
             flags = int(pkt[TCP].flags)
             is_syn_only = (flags & 0x02) != 0 and (flags & 0x10) == 0
             if is_syn_only:
                 self.inspect_tcp_syn(src_ip, dst_ip, dport, now)
+                self.inspect_outbound_flow(src_ip, src_mac, dst_ip, dport, now)
 
     def inspect_arp_event(self, src_ip: str, src_mac: str, op: int, now: Optional[float] = None) -> List[dict]:
         """Pure-Python testable ARP anomaly detector."""
@@ -190,7 +223,12 @@ class LivePacketIDS:
                 triggered.append(alert)
                 self._emit_alert(f"arp_gw_{src_mac}", alert, cooldown_sec=30.0)
 
-            # 1b. ARP Reply Flood (gratuitous poisoning burst)
+            # 1b. v5 Proxy-ARP Shield: enterprise AP/gateway legitimately replies for many client IPs
+            elif self.proxy_arp_enabled and src_ip != gw_ip and src_mac in (gw_mac, self.proxy_mac):
+                self.proxy_arp_suppressed_count += 1
+                return triggered
+
+            # 1c. ARP Reply Flood (gratuitous poisoning burst)
             elif recent_replies >= 15:
                 alert = {
                     "severity": "warning",
@@ -209,6 +247,27 @@ class LivePacketIDS:
                 triggered.append(alert)
                 self._emit_alert(f"arp_storm_{src_mac}", alert, cooldown_sec=60.0)
 
+            # 1d. RT-12 MAC Spoofing / Sudden Device Identity Change on non-gateway IP
+            elif prev_mac and prev_mac != src_mac and src_ip != gw_ip and not self.proxy_arp_enabled:
+                with self._lock:
+                    self._ip_to_mac[src_ip] = src_mac
+                alert = {
+                    "severity": "high",
+                    "category": "active_attack",
+                    "attack_type": "mac_spoof",
+                    "title": f"Suspicious MAC Identity Change Detected on {src_ip}",
+                    "plain_explanation": (
+                        f"Host {src_ip} abruptly changed its hardware MAC address from {prev_mac} to {src_mac}. "
+                        "This indicates potential MAC spoofing or unauthorized device impersonation."
+                    ),
+                    "what_to_do": "Inspect this device in Connected Devices and verify whether it belongs to you.",
+                    "technical_evidence": json.dumps({"ip": src_ip, "previous_mac": prev_mac, "new_mac": src_mac}),
+                    "related_mac": src_mac,
+                    "related_ip": src_ip,
+                }
+                triggered.append(alert)
+                self._emit_alert(f"mac_spoof_{src_ip}_{src_mac}", alert, cooldown_sec=60.0)
+
         return triggered
 
     def inspect_dhcp_event(self, msg_type: Optional[int], src_ip: str, src_mac: str, hostname: Optional[str]) -> List[dict]:
@@ -225,7 +284,12 @@ class LivePacketIDS:
                 gw_ip = self.gateway_ip
                 gw_mac = self.gateway_mac
 
-            if gw_ip and src_ip and src_ip != gw_ip and (not gw_mac or src_mac != gw_mac):
+            with self._lock:
+                if src_ip:
+                    self._dhcp_servers_seen[src_ip] = src_mac
+                competing_servers = len(self._dhcp_servers_seen)
+
+            if (gw_ip and src_ip and src_ip != gw_ip and (not gw_mac or src_mac != gw_mac)) or competing_servers >= 2:
                 alert = {
                     "severity": "critical",
                     "category": "active_attack",
@@ -253,12 +317,24 @@ class LivePacketIDS:
         with self._lock:
             local_ip = self.local_ip
 
-        # Active Port Scan hitting this device
+        # Active Port Scans hitting this device (RT-04 Fast, RT-05 Slow, RT-06 Distributed)
         if local_ip and dst_ip == local_ip and src_ip != local_ip:
             with self._lock:
                 dq = self._syn_ports[src_ip]
                 dq.append((now, dport))
                 recent_ports: Set[int] = {p for t, p in dq if now - t <= 10.0}
+
+                slow_dq = self._slow_syn_ports[src_ip]
+                slow_dq.append((now, dport))
+                slow_ports: Set[int] = {p for t, p in slow_dq if now - t <= 900.0}
+                slow_span = (max(t for t, _ in slow_dq if now - t <= 900.0) - min(t for t, _ in slow_dq if now - t <= 900.0)) if len(slow_dq) >= 2 else 0.0
+
+                dist_dq = self._dist_syn_events[dst_ip]
+                dist_dq.append((now, src_ip, dport))
+                dist_recent = [(s, p) for t, s, p in dist_dq if now - t <= 120.0]
+                dist_sources = {s for s, _ in dist_recent}
+                dist_ports = {p for _, p in dist_recent}
+
             if len(recent_ports) >= 12:
                 alert = {
                     "severity": "critical",
@@ -276,6 +352,41 @@ class LivePacketIDS:
                 }
                 triggered.append(alert)
                 self._emit_alert(f"syn_sweep_{src_ip}", alert, cooldown_sec=60.0)
+            elif len(slow_ports) >= 10 and slow_span >= 30.0:
+                alert = {
+                    "severity": "high",
+                    "category": "active_attack",
+                    "attack_type": "slow_port_scan",
+                    "title": f"Stealth Slow Port Scan Detected from {src_ip}",
+                    "plain_explanation": (
+                        f"Host {src_ip} slowly probed {len(slow_ports)} distinct ports across {int(slow_span)} seconds "
+                        "to evade standard fast-sweep thresholds."
+                    ),
+                    "what_to_do": "Inspect and block this host in Firewall Shield before reconnaissance turns into exploitation.",
+                    "technical_evidence": json.dumps({"attacker_ip": src_ip, "distinct_ports_15m": sorted(list(slow_ports))[:25], "span_sec": round(slow_span, 1)}),
+                    "related_mac": None,
+                    "related_ip": src_ip,
+                }
+                triggered.append(alert)
+                self._emit_alert(f"slow_scan_{src_ip}", alert, cooldown_sec=120.0)
+
+            if len(dist_sources) >= 3 and len(dist_ports) >= 9:
+                alert = {
+                    "severity": "critical",
+                    "category": "active_attack",
+                    "attack_type": "distributed_port_scan",
+                    "title": f"Coordinated Distributed Port Scan ({len(dist_sources)} Sources Targeting {dst_ip})",
+                    "plain_explanation": (
+                        f"{len(dist_sources)} different hosts ({', '.join(sorted(dist_sources)[:5])}) coordinated to probe "
+                        f"{len(dist_ports)} distinct ports on your device within 2 minutes."
+                    ),
+                    "what_to_do": "Activate 1-Click Firewall Lockdown immediately and inspect all participating hosts.",
+                    "technical_evidence": json.dumps({"sources": sorted(dist_sources), "distinct_ports": sorted(dist_ports)[:30], "target_ip": dst_ip}),
+                    "related_mac": None,
+                    "related_ip": src_ip,
+                }
+                triggered.append(alert)
+                self._emit_alert(f"dist_scan_{dst_ip}", alert, cooldown_sec=90.0)
 
         # Passive Leak Risk: Cleartext protocol leaving this machine (HTTP/FTP/Telnet)
         elif local_ip and src_ip == local_ip and dport in CLEARTEXT_PORTS:
@@ -299,6 +410,106 @@ class LivePacketIDS:
                 }
                 triggered.append(alert)
                 self._emit_alert(f"cleartext_{proto_name}_{dst_ip}", alert, cooldown_sec=120.0)
+
+        return triggered
+
+
+    def inspect_dns_query(self, src_ip: str, src_mac: str, domain: str, now: Optional[float] = None) -> List[dict]:
+        """RT-08 DNS Tunneling & RT-09 DGA domain detection directly on DNS query stream."""
+        from .ml_engine import analyze_domain_dga, shannon_entropy
+
+        now = now if now is not None else time.monotonic()
+        clean = (domain or "").strip().lower().rstrip(".")
+        if not clean:
+            return []
+        triggered: List[dict] = []
+
+        parts = [p for p in clean.split(".") if p]
+        base_domain = ".".join(parts[-2:]) if len(parts) >= 2 else clean
+        subdomain = ".".join(parts[:-2]) if len(parts) > 2 else ""
+
+        with self._lock:
+            dq = self._dns_queries[src_ip]
+            dq.append((now, clean))
+            recent_same_base = [d for t, d in dq if now - t <= 60.0 and d.endswith(base_domain)]
+            unique_subdomains = len(set(recent_same_base))
+
+        # RT-08: DNS Tunneling (long encoded subdomain labels, hex/base32 payload, or burst of unique subdomains)
+        max_label = max((len(p) for p in parts[:-1]), default=0)
+        sub_entropy = shannon_entropy(subdomain.replace(".", "")) if subdomain else 0.0
+        is_encoded_sub = bool(subdomain and len(subdomain) >= 26 and re.fullmatch(r"[a-z0-9._-]+", subdomain) and sub_entropy >= 3.3)
+        if is_encoded_sub or max_label >= 36 or (unique_subdomains >= 8 and len(subdomain) >= 12):
+            alert = {
+                "severity": "critical",
+                "category": "active_attack",
+                "attack_type": "dns_tunneling",
+                "title": f"DNS Tunneling / Data Exfiltration Pattern Detected ({base_domain})",
+                "plain_explanation": (
+                    f"Host {src_ip} queried encoded high-entropy DNS subdomain payloads under '{base_domain}' "
+                    f"(max label {max_label} chars, {unique_subdomains} unique queries/min). Attackers abuse DNS to exfiltrate data past firewalls."
+                ),
+                "what_to_do": "Isolate the host immediately, inspect running processes in Virus Shield, and block the base domain.",
+                "technical_evidence": json.dumps({"src_ip": src_ip, "domain": clean, "max_label": max_label, "sub_entropy": round(sub_entropy, 3), "unique_subdomains_60s": unique_subdomains}),
+                "related_mac": src_mac or None,
+                "related_ip": src_ip,
+            }
+            triggered.append(alert)
+            self._emit_alert(f"dns_tunnel_{src_ip}_{base_domain}", alert, cooldown_sec=60.0)
+            return triggered
+
+        # RT-09: Algorithmic DGA Domain Generation
+        dga = analyze_domain_dga(clean)
+        if dga["verdict"] == "malicious_dga":
+            alert = {
+                "severity": "critical",
+                "category": "active_attack",
+                "attack_type": "dga_domain",
+                "title": f"Algorithmic DGA Malware Domain Queried ({clean})",
+                "plain_explanation": dga["plain_explanation"],
+                "what_to_do": "Run a host malware scan and block outbound C2 connections from this device.",
+                "technical_evidence": json.dumps(dga),
+                "related_mac": src_mac or None,
+                "related_ip": src_ip,
+            }
+            triggered.append(alert)
+            self._emit_alert(f"dga_{src_ip}_{clean}", alert, cooldown_sec=60.0)
+
+        return triggered
+
+    def inspect_outbound_flow(self, src_ip: str, src_mac: str, dst_ip: str, dport: int, now: Optional[float] = None) -> List[dict]:
+        """RT-10 Live C2 Beaconing correlation directly from outbound packet timestamps."""
+        from .ml_engine import compute_beacon_regularity, ml_engine
+
+        now = now if now is not None else time.monotonic()
+        triggered: List[dict] = []
+        key = (src_ip, f"{dst_ip}:{dport}")
+        with self._lock:
+            dq = self._beacon_flows[key]
+            dq.append(now)
+            ts_list = list(dq)
+
+        if src_mac:
+            ml_engine.record_beacon_observation(src_mac, now)
+
+        if len(ts_list) >= 5:
+            reg = compute_beacon_regularity(ts_list)
+            if reg >= 0.82:
+                alert = {
+                    "severity": "critical",
+                    "category": "active_attack",
+                    "attack_type": "c2_beacon",
+                    "title": f"Periodic C2 Beaconing Detected ({src_ip} -> {dst_ip}:{dport})",
+                    "plain_explanation": (
+                        f"Host {src_ip} is contacting {dst_ip}:{dport} on a robotic periodic schedule "
+                        f"(regularity score {reg:.2f} across {len(ts_list)} callbacks), characteristic of Cobalt Strike / malware implants."
+                    ),
+                    "what_to_do": "Block the destination IP in Firewall Shield and run an immediate Malware & Process scan.",
+                    "technical_evidence": json.dumps({"src_ip": src_ip, "dst": f"{dst_ip}:{dport}", "regularity": reg, "samples": len(ts_list)}),
+                    "related_mac": src_mac or None,
+                    "related_ip": src_ip,
+                }
+                triggered.append(alert)
+                self._emit_alert(f"c2_beacon_{src_ip}_{dst_ip}_{dport}", alert, cooldown_sec=60.0)
 
         return triggered
 

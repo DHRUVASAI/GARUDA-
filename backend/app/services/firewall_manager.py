@@ -228,7 +228,7 @@ def enforce_lockdown_mode(enable: bool) -> dict:
     """1-Click Public Wi-Fi Lockdown: blocks all unsolicited inbound connections."""
     backend = detect_firewall_backend()
     if backend == "windows_netsh":
-        policy = "blockinbound,allowoutbound" if enable else "blockinbound,allowoutbound"
+        policy = "blockinboundalways,allowoutbound" if enable else "blockinbound,allowoutbound"
         cmd = ["netsh", "advfirewall", "set", "publicprofile", "state", "on"]
         cmd2 = ["netsh", "advfirewall", "set", "publicprofile", "firewallpolicy", policy]
         cmd_str = f"{' '.join(cmd)} && {' '.join(cmd2)}"
@@ -237,7 +237,8 @@ def enforce_lockdown_mode(enable: bool) -> dict:
         rc1, _, e1 = _run(cmd)
         rc2, _, e2 = _run(cmd2)
         ok = (rc1 == 0 and rc2 == 0)
-        return {"enforced": ok, "command": cmd_str, "message": "Public Wi-Fi Firewall Lockdown ACTIVE." if ok else (e1 or e2)}
+        msg = "Public Wi-Fi Firewall Lockdown ACTIVE." if enable else "Public Wi-Fi Firewall Lockdown DISABLED (standard policy restored)."
+        return {"enforced": ok, "command": cmd_str, "message": msg if ok else (e1 or e2)}
 
     if backend == "linux_ufw":
         cmd = ["ufw", "default", "deny", "incoming"] if enable else ["ufw", "default", "allow", "routed"]
@@ -247,6 +248,22 @@ def enforce_lockdown_mode(enable: bool) -> dict:
         rc, _, err = _run(cmd)
         if enable and rc == 0:
             _run(["ufw", "--force", "enable"])
-        return {"enforced": rc == 0, "command": cmd_str, "message": "Linux UFW Inbound Lockdown ACTIVE." if rc == 0 else err}
+        msg = "Linux UFW Inbound Lockdown ACTIVE." if enable else "Linux UFW Lockdown DISABLED (connectivity restored)."
+        return {"enforced": rc == 0, "command": cmd_str, "message": msg if rc == 0 else err}
 
     return {"enforced": False, "command": "", "message": f"1-Click Lockdown not supported on backend '{backend}'."}
+
+
+def replay_persisted_blocked_ips(rule_logs: List[dict]) -> List[str]:
+    """Reconstruct active blocked IP state from persisted SQLite FirewallRuleLog rows across restarts (BT-06)."""
+    blocked = set()
+    for row in rule_logs:
+        action = row.get("action")
+        ip = row.get("target_ip")
+        if not ip or ip == "0.0.0.0/0":
+            continue
+        if action == "block" and row.get("enforced"):
+            blocked.add(ip)
+        elif action == "unblock" and row.get("enforced", True):
+            blocked.discard(ip)
+    return sorted(blocked)

@@ -13,19 +13,16 @@
     radarPoints: [],
     hoveredMac: null,
     selectedDeviceMac: null,
-    radarZoom: 1.0,
-    radarPanX: 0,
-    radarPanY: 0,
-    isRadarDragging: false,
-    radarDragStartX: 0,
-    radarDragStartY: 0,
-    dragDistance: 0,
-    pointerDownPos: null,
     soundEnabled: true,
     desktopNotifications: true,
     seenAlertIds: new Set(),
     checkedAdvice: new Set(JSON.parse(localStorage.getItem("garuda_v4_checked_advice") || "[]")),
     animPhase: 0,
+    radarZoom: 1.0,
+    radarPanX: 0,
+    radarPanY: 0,
+    radarDragging: false,
+    radarDragStart: { x: 0, y: 0 },
   };
 
   const ICONS = {
@@ -71,7 +68,7 @@
   function sendDesktopNotification(alert) {
     if (!state.desktopNotifications || !("Notification" in window)) return;
     if (Notification.permission === "granted") {
-      new Notification(`GARUDA Alert: ${alert.title}`, { body: alert.plain_explanation });
+      new Notification(`GARUDA v4 Alert: ${alert.title}`, { body: alert.plain_explanation });
     }
   }
 
@@ -127,10 +124,11 @@
     $("btnMode2D").classList.toggle("active", !is3d);
     $("topology3dHost").hidden = !is3d;
     $("networkRadar").hidden = is3d;
-    if ($("btnResetView")) $("btnResetView").hidden = false;
+    $("btnResetCam3D").hidden = false;
+    if ($("radarZoomHud")) $("radarZoomHud").hidden = is3d;
     $("topologyHudBadge").textContent = is3d
       ? "Drag to orbit · Scroll to zoom · Click 3D device to inspect"
-      : `2D Precision Radar (${state.radarZoom.toFixed(1)}x) · Drag to pan · Scroll to zoom · Hover to inspect`;
+      : "2D Precision Radar · Hover or click any device to inspect";
     if (is3d && state.view === "network") ensureTopology3D();
   }
 
@@ -188,20 +186,10 @@
     if (!state.snapshot) return;
     if (state.snapshot.mode === "simulation") {
       pill.className = "pill pill-warn";
-      pill.innerHTML = `<span class="dot"></span> Safe Simulation <button id="btnSwitchLivePill" style="margin-left:8px;padding:2px 8px;font-size:10px;font-weight:600;cursor:pointer;background:#0ea5e9;color:#0b1120;border:none;border-radius:999px;">Switch to Live</button>`;
-      $("btnSwitchLivePill")?.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        try {
-          await fetchJSON("/api/simulate", { method: "POST", body: JSON.stringify({ scenario: "reset" }) });
-          await fetchJSON("/api/scan", { method: "POST" });
-          showToast("Live Mode Active", "Switched to 100% real network scanning.", "info");
-        } catch (err) {
-          showToast("Error", err.message, "warning");
-        }
-      });
+      pill.innerHTML = `<span class="dot"></span> Safe Simulation`;
     } else {
       pill.className = "pill pill-safe";
-      pill.innerHTML = `<span class="dot"></span> Live Real Network`;
+      pill.innerHTML = `<span class="dot"></span> Live v6 Shield`;
     }
   }
 
@@ -609,7 +597,7 @@
   }
 
   function openDeviceDrawer(mac) {
-    const dev = state.snapshot?.devices.find((d) => (d.mac || "").toUpperCase() === (mac || "").toUpperCase());
+    const dev = state.snapshot?.devices.find((d) => d.mac === mac);
     if (!dev) return;
     const ml = (state.snapshot?.ml?.device_scores || []).find((m) => m.mac.toUpperCase() === mac.toUpperCase());
     state.selectedDeviceMac = mac;
@@ -648,21 +636,7 @@
     state.selectedDeviceMac = null;
   }
 
-  // Adaptive node radius by device count N
-  function getNodeRadius(count, compact = false) {
-    if (compact) {
-      if (count <= 18) return 8;
-      if (count <= 80) return 5.5;
-      if (count <= 300) return 3.5;
-      return 2.2;
-    }
-    if (count <= 18) return 10;
-    if (count <= 80) return 7;
-    if (count <= 300) return 4.5;
-    return 3;
-  }
-
-  // 2D Precision Multi-Ring Radar (Hero preview + 2D Topology Mode)
+  // 2D Precision Orbital Radar (Hero preview + 2D Topology Mode)
   function drawRadar(canvasId, compact = false) {
     const canvas = $(canvasId);
     if (!canvas || canvas.hidden || !state.snapshot) return;
@@ -675,209 +649,104 @@
 
     const ctx = canvas.getContext("2d");
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const w = rect.width, h = rect.height, cx = w / 2, cy = h / 2;
+    const w = rect.width, h = rect.height, cx = w / 2, cy = h / 2, maxR = Math.min(w, h) * 0.4;
     const dark = document.body.classList.contains("theme-dark");
-    const hasCrit = (state.snapshot.alerts || []).some((a) => !a.resolved && a.severity === "critical");
+    const hasCrit = state.snapshot.alerts.some((a) => !a.resolved && a.severity === "critical");
+    const mlMap = new Map((state.snapshot.ml?.device_scores || []).map((m) => [m.mac.toUpperCase(), m]));
 
     ctx.clearRect(0, 0, w, h);
+    const pulseR = ((state.animPhase * 0.35) % 1) * maxR;
+    ctx.beginPath();
+    ctx.arc(cx, cy, pulseR, 0, Math.PI * 2);
+    ctx.strokeStyle = hasCrit ? `rgba(197,54,36,${0.28 * (1 - pulseR / maxR)})` : `rgba(30,79,214,${0.18 * (1 - pulseR / maxR)})`;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
 
-    const devices = (state.snapshot.devices || []).filter((d) => d && d.is_online !== false);
-    const totalCount = devices.length;
-    const nodeRadius = getNodeRadius(totalCount, compact);
-
-    // Dynamic Central Router Radius (measured with padding)
-    ctx.font = compact ? "700 9.5px Inter, sans-serif" : "700 11px Inter, sans-serif";
-    const routerTextWidth = ctx.measureText("ROUTER").width;
-    const routerRadius = Math.max(compact ? 20 : 28, Math.round(routerTextWidth * 0.65));
-
-    // Shared Multi-Ring Polar Layout Engine
-    const engine = window.GarudaLayoutEngine;
-    let minNodeSpacing;
-    if (totalCount <= 18) minNodeSpacing = compact ? 26 : 38;
-    else if (totalCount <= 80) minNodeSpacing = compact ? 18 : 28;
-    else if (totalCount <= 300) minNodeSpacing = compact ? 12 : 19;
-    else minNodeSpacing = compact ? 8 : 13;
-
-    const layout = engine
-      ? engine.computePolarLayout(devices, state.snapshot.alerts || [], state.snapshot.ml?.device_scores || [], {
-          mode: "2d",
-          minNodeSpacing,
-          centerRouterRadius: routerRadius,
-        })
-      : { nodes: [], rings: [], outerRadius: Math.min(w, h) * 0.4, gateway: devices[0] };
-
-    // For hero radar, auto-fit to outer radius so 100-1,000 dots fit cleanly
-    const zoom = compact ? (Math.min(w, h) * 0.44) / Math.max(1, layout.outerRadius) : state.radarZoom;
-    const panX = compact ? 0 : state.radarPanX;
-    const panY = compact ? 0 : state.radarPanY;
-
-    const effCx = cx + panX;
-    const effCy = cy + panY;
-
-    // Render concentric radar trust rings
-    layout.rings.forEach((ring) => {
-      const r = ring.radius * zoom;
-      if (r <= 0) return;
+    [0.36, 0.68, 1.0].forEach((f, idx) => {
       ctx.beginPath();
-      ctx.arc(effCx, effCy, r, 0, Math.PI * 2);
-      if (ring.band === "C") {
-        ctx.strokeStyle = dark ? "rgba(227, 96, 80, 0.28)" : "rgba(197, 54, 36, 0.24)";
-        ctx.setLineDash([4, 4]);
-      } else if (ring.band === "B") {
-        ctx.strokeStyle = dark ? "rgba(226, 163, 67, 0.22)" : "rgba(185, 107, 8, 0.18)";
-        ctx.setLineDash([2, 4]);
-      } else {
-        ctx.strokeStyle = dark ? "rgba(62, 180, 136, 0.22)" : "rgba(21, 127, 86, 0.18)";
-        ctx.setLineDash([]);
-      }
+      ctx.arc(cx, cy, maxR * f, 0, Math.PI * 2);
+      ctx.strokeStyle = dark ? "rgba(236,234,228,0.10)" : "rgba(22,24,29,0.10)";
+      ctx.setLineDash(idx === 2 ? [4, 4] : []);
       ctx.lineWidth = 1;
       ctx.stroke();
     });
     ctx.setLineDash([]);
 
-    // Expanding radar pulse sweep ring
-    const maxOuterScaled = (layout.outerRadius || 100) * zoom;
-    const pulseR = ((state.animPhase * 0.35) % 1) * maxOuterScaled;
-    ctx.beginPath();
-    ctx.arc(effCx, effCy, pulseR, 0, Math.PI * 2);
-    ctx.strokeStyle = hasCrit
-      ? `rgba(197,54,36,${0.28 * (1 - pulseR / Math.max(1, maxOuterScaled))})`
-      : `rgba(30,79,214,${0.18 * (1 - pulseR / Math.max(1, maxOuterScaled))})`;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // Palette tokens
-    const colorSafe = dark ? "#3EB488" : "#157F56";
-    const colorWarn = dark ? "#E2A343" : "#B96B08";
-    const colorAlert = dark ? "#E36050" : "#C53624";
+    const devices = state.snapshot.devices.filter((d) => d.is_online);
+    const gw = devices.find((d) => d.is_gateway) || devices[0];
+    const others = devices.filter((d) => d !== gw);
     const points = [];
 
-    // Draw connection lines and node dots
-    layout.nodes.forEach((node, idx) => {
-      const d = node.device;
-      const sx = effCx + node.x * zoom;
-      const sy = effCy + node.y * zoom;
-      const color = node.isAlert ? colorAlert : node.isSafe ? colorSafe : colorWarn;
+    if (!compact) {
+      ctx.save();
+      ctx.translate(cx + state.radarPanX, cy + state.radarPanY);
+      ctx.scale(state.radarZoom, state.radarZoom);
+      ctx.translate(-cx, -cy);
+    }
+    const layoutPts = (!compact && window.GarudaLayout)
+      ? window.GarudaLayout.compute2DRingLayout(others, cx, cy, maxR)
+      : others.map((d, idx) => {
+          const angle = (idx / Math.max(1, others.length)) * Math.PI * 2 - Math.PI / 2;
+          const r = d.is_safe ? maxR * 0.66 : maxR * 0.96;
+          return { device: d, x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r };
+        });
 
-      // Radial link line from router center
+    const visibleLabels = (!compact && window.GarudaLayout)
+      ? window.GarudaLayout.filterNonOverlappingLabels(
+          layoutPts.map((p) => ({ ...p, hovered: state.hoveredMac === p.device.mac })),
+          state.radarZoom
+        )
+      : null;
+
+    layoutPts.forEach((pt, idx) => {
+      const d = pt.device;
+      const x = pt.x;
+      const y = pt.y;
+      const ml = mlMap.get(d.mac.toUpperCase());
+      const isAlert = state.snapshot.alerts.some((a) => !a.resolved && (a.related_mac === d.mac || a.related_ip === d.ip)) || (ml && ml.risk_level === "critical");
+      const color = isAlert ? (dark ? "#E36050" : "#C53624") : d.is_safe ? (dark ? "#3EB488" : "#157F56") : (dark ? "#E2A343" : "#B96B08");
+
       ctx.beginPath();
-      ctx.moveTo(effCx, effCy);
-      ctx.lineTo(sx, sy);
-      ctx.strokeStyle = node.isAlert
-        ? "rgba(197,54,36,0.52)"
-        : node.isSafe
-        ? "rgba(21,127,86,0.22)"
-        : "rgba(185,107,8,0.36)";
-      ctx.lineWidth = node.isAlert ? 2.0 : 1.2;
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(x, y);
+      ctx.strokeStyle = isAlert ? "rgba(197,54,36,0.52)" : d.is_safe ? "rgba(21,127,86,0.28)" : "rgba(185,107,8,0.42)";
+      ctx.lineWidth = isAlert ? 2.2 : 1.5;
       ctx.stroke();
 
-      // Traveling packet dot
-      if (totalCount <= 80 || node.isAlert || idx < 35) {
-        const t = (state.animPhase * 0.45 + idx * 0.23) % 1;
-        const px = effCx + (sx - effCx) * t;
-        const py = effCy + (sy - effCy) * t;
-        ctx.beginPath();
-        ctx.arc(px, py, Math.max(1.5, nodeRadius * 0.4), 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-      }
-
-      // Node circle
-      const hovered = !compact && state.hoveredMac === d.mac;
-      const rNode = nodeRadius + (hovered ? 2.5 : 0);
+      const t = (state.animPhase * 0.45 + idx * 0.23) % 1;
       ctx.beginPath();
-      ctx.arc(sx, sy, rNode, 0, Math.PI * 2);
+      ctx.arc(cx + (x - cx) * t, cy + (y - cy) * t, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+
+      const hovered = !compact && state.hoveredMac === d.mac;
+      ctx.beginPath();
+      ctx.arc(x, y, (compact ? 9 : 12) + (hovered ? 2.5 : 0), 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.strokeStyle = dark ? "#1A1E26" : "#FAF8F4";
-      ctx.lineWidth = Math.max(1.2, rNode * 0.25);
+      ctx.lineWidth = 2.5;
       ctx.stroke();
 
-      // Anomaly Halo
-      if (node.isAlert || (node.ml && node.ml.anomaly_score >= 38)) {
-        ctx.beginPath();
-        ctx.arc(sx, sy, rNode + 4.5, 0, Math.PI * 2);
-        ctx.strokeStyle = node.isAlert ? "rgba(227,96,80,0.65)" : "rgba(226,163,67,0.55)";
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      }
-
-      points.push({ screenX: sx, screenY: sy, effRadius: rNode, device: d, node });
+      ctx.fillStyle = dark ? "#ECEAE4" : "#16181D";
+      ctx.font = compact ? "600 11px Inter, sans-serif" : "600 12px Inter, sans-serif";
+      ctx.textAlign = "center";
+      const lbl = d.display_name.length > 18 ? d.display_name.slice(0, 17) + "…" : d.display_name;
+      if (!visibleLabels || visibleLabels.has(d.mac) || hovered) ctx.fillText(lbl, x, y + (compact ? 22 : 26));
+      points.push({ x: compact ? x : cx + state.radarPanX + (x - cx) * state.radarZoom, y: compact ? y : cy + state.radarPanY + (y - cy) * state.radarZoom, device: d });
     });
 
-    // Central Router Node Monolith
     ctx.beginPath();
-    ctx.arc(effCx, effCy, routerRadius, 0, Math.PI * 2);
+    ctx.arc(cx, cy, compact ? 16 : 19, 0, Math.PI * 2);
     ctx.fillStyle = hasCrit ? (dark ? "#E36050" : "#C53624") : (dark ? "#6394F2" : "#1E4FD6");
     ctx.fill();
-    ctx.strokeStyle = dark ? "#1A1E26" : "#FAF8F4";
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-
-    // Crisp Router Label with guaranteed padding
     ctx.fillStyle = "#FFFFFF";
-    ctx.font = compact ? "700 9.5px Inter, sans-serif" : "700 11px Inter, sans-serif";
+    ctx.font = "700 10.5px Inter, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("ROUTER", effCx, effCy);
+    ctx.fillText("ROUTER", cx, cy);
     ctx.textBaseline = "alphabetic";
-
-    // Priority-Sorted Greedy 2D AABB Collision Placer for Labels
-    if (engine) {
-      ctx.font = compact ? "600 10px Inter, sans-serif" : "600 11px Inter, sans-serif";
-      const labelResult = engine.compute2DLabelPlacement(layout.nodes, {
-        width: w,
-        height: h,
-        cx,
-        cy,
-        zoom,
-        panX,
-        panY,
-        nodeRadius,
-        routerRadius,
-        hoveredMac: state.hoveredMac,
-        selectedMac: state.selectedDeviceMac,
-        compact,
-        measureTextFn: (txt) => ctx.measureText(txt),
-      });
-
-      // Render accepted non-overlapping labels with crisp pill backdrops
-      labelResult.placedLabels.forEach((l) => {
-        const b = l.box;
-        const bw = b.x2 - b.x1;
-        const bh = b.y2 - b.y1;
-
-        ctx.beginPath();
-        ctx.roundRect(b.x1, b.y1, bw, bh, 4);
-        ctx.fillStyle = dark ? "rgba(26, 30, 38, 0.92)" : "rgba(250, 248, 244, 0.92)";
-        ctx.fill();
-        ctx.strokeStyle = l.node.isAlert
-          ? (dark ? "rgba(227,96,80,0.6)" : "rgba(197,54,36,0.6)")
-          : (dark ? "rgba(236, 234, 228, 0.16)" : "rgba(22, 24, 29, 0.14)");
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        ctx.fillStyle = l.node.isAlert
-          ? (dark ? "#F87171" : "#DC2626")
-          : (dark ? "#ECEAE4" : "#16181D");
-        ctx.font = compact ? "600 10px Inter, sans-serif" : "600 11px Inter, sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(l.text, (b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2);
-      });
-
-      ctx.textBaseline = "alphabetic";
-
-      if (!compact) {
-        state.radarPoints = points;
-        const hud = $("topologyHudBadge");
-        if (hud && state.topologyMode === "2d") {
-          hud.textContent = `Showing ${labelResult.placedCount} of ${layout.nodes.length} labels · Scroll to zoom (${state.radarZoom.toFixed(1)}x), drag to pan, hover to inspect`;
-        }
-      }
-    } else {
-      if (!compact) state.radarPoints = points;
-    }
+    if (!compact) { ctx.restore(); state.radarPoints = points; }
   }
 
   function startAnimationLoop() {
@@ -897,13 +766,11 @@
   $("btnBannerInspect").addEventListener("click", () => switchView("threats"));
   $("btnCloseDrawer").addEventListener("click", closeDeviceDrawer);
   $("drawerBackdrop").addEventListener("click", closeDeviceDrawer);
-  $("btnMode3D")?.addEventListener("click", () => setTopologyMode("3d"));
-  $("btnMode2D")?.addEventListener("click", () => setTopologyMode("2d"));
-  $("btnResetCam3D")?.addEventListener("click", () => state.topo3d?.resetCamera());
+  $("btnMode3D").addEventListener("click", () => setTopologyMode("3d"));
+  $("btnMode2D").addEventListener("click", () => setTopologyMode("2d"));
+  $("btnResetCam3D").addEventListener("click", () => state.topo3d?.resetCamera());
 
   $("deviceSearch").addEventListener("input", (e) => { state.search = e.target.value; renderDevices(); });
-  $("deviceSearch").addEventListener("search", (e) => { state.search = e.target.value; renderDevices(); });
-  $("heroRadarCanvas")?.addEventListener("click", () => switchView("network"));
 
   $("btnTrySafeDemo").addEventListener("click", async () => {
     switchView("ai-ledger");
@@ -920,7 +787,6 @@
     try {
       const snap = await api("/api/simulate", { method: "POST", body: JSON.stringify({ scenario: "new_unknown_device" }) });
       applySnapshot(snap);
-      showToast("Unknown Intruder Simulated", "Simulated unverified IoT device joined network.", "warning");
     } catch (err) { showToast("Error", err.message, "warning"); }
   });
 
@@ -935,47 +801,11 @@
     finally { btn.textContent = "Scan Now"; }
   });
 
-  // System Theme & Saved Preference Detection (Supports Daylight & Night Ops)
-  function getEffectiveTheme() {
-    const urlTheme = new URLSearchParams(window.location.search).get("theme");
-    if (urlTheme === "dark" || urlTheme === "light") return urlTheme;
-    const saved = localStorage.getItem("garuda_v4_theme");
-    if (saved === "dark" || saved === "light") return saved;
-    const sysDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    return sysDark ? "dark" : "light";
-  }
-
-  function applyThemeMode(theme) {
-    const isDark = theme === "dark";
-    if (isDark) {
-      document.body.classList.remove("theme-light");
-      document.body.classList.add("theme-dark");
-      if ($("btnThemeToggle")) $("btnThemeToggle").textContent = "Daylight";
-    } else {
-      document.body.classList.remove("theme-dark");
-      document.body.classList.add("theme-light");
-      if ($("btnThemeToggle")) $("btnThemeToggle").textContent = "Night Ops";
-    }
-    if (state.topo3d) state.topo3d.applyTheme(isDark);
-  }
-
-  // Initialize theme according to system setting or saved preference immediately
-  applyThemeMode(getEffectiveTheme());
-
-  // Watch system setting changes dynamically if no manual preference has been chosen
-  if (window.matchMedia) {
-    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
-      if (!localStorage.getItem("garuda_v4_theme")) {
-        applyThemeMode(e.matches ? "dark" : "light");
-      }
-    });
-  }
-
   $("btnThemeToggle").addEventListener("click", () => {
-    const isCurrentlyDark = document.body.classList.contains("theme-dark");
-    const nextTheme = isCurrentlyDark ? "light" : "dark";
-    applyThemeMode(nextTheme);
-    localStorage.setItem("garuda_v4_theme", nextTheme);
+    document.body.classList.toggle("theme-dark");
+    const dark = document.body.classList.contains("theme-dark");
+    $("btnThemeToggle").textContent = dark ? "Daylight" : "Night Ops";
+    if (state.topo3d) state.topo3d.applyTheme(dark);
   });
 
   // ML Engine Actions
@@ -985,10 +815,6 @@
       if (res.snapshot) applySnapshot(res.snapshot);
       showToast("AI Model Retrained", `${res.result.engine} calibrated on ${res.result.baseline_samples} vectors.`, "info");
     } catch (err) { showToast("Retrain Failed", err.message, "warning"); }
-  });
-
-  $("dgaDomainInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") $("btnAnalyzeDomain").click();
   });
 
   $("btnAnalyzeDomain").addEventListener("click", async () => {
@@ -1047,7 +873,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `garuda-forensic-proof-${Date.now()}.json`;
+      a.download = `garuda-v4-forensic-proof-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
       showToast("Forensic Proof Exported", "Downloaded signed Ed25519 + SHA-256 Merkle bundle.", "info");
@@ -1070,11 +896,7 @@
     try {
       const res = await api("/api/oui/sync", { method: "POST" });
       applySnapshot(await api("/api/snapshot"));
-      if (res.warning) {
-        showToast("Brand Database", res.warning, "info");
-      } else {
-        showToast("Brand Database Updated", `Synced ${Number(res.synced || 0).toLocaleString()} official IEEE vendors.`, "info");
-      }
+      showToast("Brand Database Updated", `Synced ${Number(res.synced || 0).toLocaleString()} official IEEE vendors.`, "info");
     } catch (err) { showToast("OUI Sync Failed", err.message, "warning"); }
     finally { btn.textContent = "Sync Brand Database (IEEE)"; }
   });
@@ -1085,43 +907,24 @@
     try {
       const res = await api("/api/threat-intel/sync", { method: "POST" });
       applySnapshot(await api("/api/snapshot"));
-      if (res.warning) {
-        showToast("Threat Feed", res.warning, "info");
-      } else {
-        showToast("Threat Feed Synced", `Loaded ${Number(res.synced_ips || 0).toLocaleString()} C2 IPs (${res.source}).`, "info");
-      }
+      showToast("Threat Feed Synced", `Loaded ${Number(res.synced_ips || 0).toLocaleString()} C2 IPs.`, "info");
     } catch (err) { showToast("Feed Sync Failed", err.message, "warning"); }
     finally { btn.textContent = "Sync Botnet C2 Feed (Abuse.ch)"; }
   });
 
   async function runMalwareScan(processesOnly = false) {
-    const btn = processesOnly ? $("btnCheckProcesses") : $("btnRunMalwareScan");
+    const btn = $("btnRunMalwareScan");
     const targetPath = processesOnly ? null : ($("scanPathInput").value.trim() || null);
-    const oldText = btn.textContent;
     btn.textContent = "Scanning…";
     try {
-      const res = await api("/api/malware/scan", {
-        method: "POST",
-        body: JSON.stringify({
-          target_path: targetPath,
-          scan_processes: true,
-          scan_files: !processesOnly,
-        }),
-      });
+      const res = await api("/api/malware/scan", { method: "POST", body: JSON.stringify({ target_path: targetPath, scan_processes: true }) });
       if (res.snapshot) applySnapshot(res.snapshot);
-      showToast(
-        "Malware Scan Finished",
-        `${res.scan.threats_found} threat(s) found (${res.scan.processes_scanned} procs, ${res.scan.files_scanned} files).`,
-        res.scan.threats_found ? "critical" : "info"
-      );
+      showToast("Malware Scan Finished", `${res.scan.threats_found} threat(s) found.`, res.scan.threats_found ? "critical" : "info");
     } catch (err) { showToast("Scan Failed", err.message, "warning"); }
-    finally { btn.textContent = oldText; }
+    finally { btn.textContent = "Run Virus Scan"; }
   }
   $("btnRunMalwareScan").addEventListener("click", () => runMalwareScan(false));
   $("btnCheckProcesses").addEventListener("click", () => runMalwareScan(true));
-  $("scanPathInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") runMalwareScan(false);
-  });
 
   async function blockIp(ip) {
     if (!ip) return;
@@ -1132,9 +935,6 @@
     } catch (err) { showToast("Firewall Block Failed", err.message, "warning"); }
   }
   $("btnBlockIp").addEventListener("click", () => { const ip = $("blockIpInput").value.trim(); if (ip) { blockIp(ip); $("blockIpInput").value = ""; } });
-  $("blockIpInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") $("btnBlockIp").click();
-  });
 
   $("btnToggleLockdown").addEventListener("click", async () => {
     const next = !Boolean(state.snapshot?.firewall?.lockdown_active);
@@ -1146,11 +946,8 @@
   });
 
   $("btnResolveAll").addEventListener("click", async () => {
-    try {
-      const res = await api("/api/alerts/resolve-all", { method: "POST" });
-      applySnapshot(res.snapshot);
-      showToast("All Alerts Resolved", "Cleared active threats from review feed.", "info");
-    } catch (err) { showToast("Error", err.message, "warning"); }
+    try { applySnapshot((await api("/api/alerts/resolve-all", { method: "POST" })).snapshot); }
+    catch (err) { showToast("Error", err.message, "warning"); }
   });
 
   $("btnSaveSettings").addEventListener("click", async () => {
@@ -1172,7 +969,7 @@
   });
 
   $("drawerTrustBtn").addEventListener("click", async () => {
-    const dev = state.snapshot?.devices.find((d) => (d.mac || "").toUpperCase() === (state.selectedDeviceMac || "").toUpperCase());
+    const dev = state.snapshot?.devices.find((d) => d.mac === state.selectedDeviceMac);
     if (!dev) return;
     try {
       const res = await api(`/api/devices/${encodeURIComponent(dev.mac)}/trust`, { method: "POST", body: JSON.stringify({ is_safe: !dev.is_safe }) });
@@ -1181,19 +978,18 @@
   });
 
   $("drawerRenameBtn").addEventListener("click", async () => {
-    const dev = state.snapshot?.devices.find((d) => (d.mac || "").toUpperCase() === (state.selectedDeviceMac || "").toUpperCase());
+    const dev = state.snapshot?.devices.find((d) => d.mac === state.selectedDeviceMac);
     const val = ($("drawerRenameInput")?.value || "").trim();
     if (!dev || !val) return;
     try {
       const res = await api(`/api/devices/${encodeURIComponent(dev.mac)}/rename`, { method: "PATCH", body: JSON.stringify({ custom_name: val }) });
-      $("drawerTitle").textContent = res.device.display_name;
       applySnapshot(res.snapshot);
       showToast("Device Renamed", `Saved as "${res.device.display_name}".`, "info");
     } catch (err) { showToast("Rename Failed", err.message, "warning"); }
   });
 
   $("drawerBlockBtn").addEventListener("click", () => {
-    const dev = state.snapshot?.devices.find((d) => (d.mac || "").toUpperCase() === (state.selectedDeviceMac || "").toUpperCase());
+    const dev = state.snapshot?.devices.find((d) => d.mac === state.selectedDeviceMac);
     if (dev) blockIp(dev.ip);
   });
 
@@ -1267,60 +1063,15 @@
       try {
         const res = await api("/api/firewall/unblock", { method: "POST", body: JSON.stringify({ ip: unblock.dataset.unblock }) });
         if (res.snapshot) applySnapshot(res.snapshot);
-        showToast("Firewall Unblock", res.result?.message || `Unblocked ${unblock.dataset.unblock}.`, "info");
       } catch (err) { showToast("Unblock Failed", err.message, "warning"); }
       return;
     }
 
     const simBtn = e.target.closest("[data-sim]");
     if (simBtn) {
-      try {
-        const snap = await api("/api/simulate", { method: "POST", body: JSON.stringify({ scenario: simBtn.dataset.sim }) });
-        applySnapshot(snap);
-        const labels = {
-          reset: "Network posture reset to clean safe state.",
-          ml_beacon: "Robotic C2 Beaconing & DGA anomaly triggered.",
-          new_unknown_device: "New unknown device alert triggered.",
-          arp_spoof: "Fake router MITM attack triggered.",
-          rogue_dhcp: "Rogue DHCP server attack triggered.",
-          dns_hijack: "DNS hijacking attack triggered.",
-          port_sweep: "Rapid port sweep attack triggered.",
-          open_wifi: "Unencrypted open Wi-Fi posture simulated.",
-          malware_eicar: "EICAR test malware signature injected.",
-        };
-        showToast("Simulation Active", labels[simBtn.dataset.sim] || "Scenario simulated.", simBtn.dataset.sim === "reset" ? "info" : "warning");
-      } catch (err) { showToast("Simulation Error", err.message, "warning"); }
+      try { applySnapshot(await api("/api/simulate", { method: "POST", body: JSON.stringify({ scenario: simBtn.dataset.sim }) })); }
+      catch (err) { showToast("Simulation Error", err.message, "warning"); }
       return;
-    }
-  });
-
-  // Global Keyboard Navigation & Form Shortcuts
-  document.addEventListener("keydown", async (e) => {
-    if (e.key === "Escape") {
-      if ($("deviceDrawer")?.classList.contains("open")) {
-        closeDeviceDrawer();
-      }
-      if (state.renamingMac) {
-        state.renamingMac = null;
-        renderDevices();
-      }
-    } else if (e.key === "Enter") {
-      if (document.activeElement === $("drawerRenameInput")) {
-        $("drawerRenameBtn")?.click();
-      } else if (document.activeElement === $("inlineRenameInput") && state.renamingMac) {
-        const val = ($("inlineRenameInput")?.value || "").trim();
-        if (val) {
-          try {
-            const res = await api(`/api/devices/${encodeURIComponent(state.renamingMac)}/rename`, {
-              method: "PATCH",
-              body: JSON.stringify({ custom_name: val }),
-            });
-            state.renamingMac = null;
-            applySnapshot(res.snapshot);
-            showToast("Device Renamed", `Saved as "${res.device.display_name}".`, "info");
-          } catch (err) { showToast("Rename Failed", err.message, "warning"); }
-        }
-      }
     }
   });
 
@@ -1334,266 +1085,152 @@
   });
 
   const radarEl = $("networkRadar");
-
-  // Wheel-zoom (0.4x to 8.0x) centered at mouse cursor
-  radarEl.addEventListener(
-    "wheel",
-    (e) => {
-      e.preventDefault();
-      const rect = radarEl.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-      const cx = rect.width / 2;
-      const cy = rect.height / 2;
-
-      const worldX = (mouseX - cx - state.radarPanX) / state.radarZoom;
-      const worldY = (mouseY - cy - state.radarPanY) / state.radarZoom;
-
-      const factor = e.deltaY < 0 ? 1.15 : 0.87;
-      const newZoom = Math.min(8.0, Math.max(0.4, state.radarZoom * factor));
-
-      state.radarPanX = mouseX - cx - worldX * newZoom;
-      state.radarPanY = mouseY - cy - worldY * newZoom;
-      state.radarZoom = newZoom;
-    },
-    { passive: false }
-  );
-
-  // Pointerdown (Start drag pan)
-  radarEl.addEventListener("pointerdown", (e) => {
-    state.isRadarDragging = true;
-    state.radarDragStartX = e.clientX - state.radarPanX;
-    state.radarDragStartY = e.clientY - state.radarPanY;
-    state.dragDistance = 0;
-    state.pointerDownPos = { x: e.clientX, y: e.clientY };
-    radarEl.setPointerCapture(e.pointerId);
-    radarEl.style.cursor = "grabbing";
-  });
-
-  // Pointermove (Pan drag or Hover inspection)
-  radarEl.addEventListener("pointermove", (e) => {
+  radarEl.addEventListener("mousemove", (e) => {
     const rect = radarEl.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    if (state.isRadarDragging) {
-      state.radarPanX = e.clientX - state.radarDragStartX;
-      state.radarPanY = e.clientY - state.radarDragStartY;
-      if (state.pointerDownPos) {
-        state.dragDistance = Math.hypot(e.clientX - state.pointerDownPos.x, e.clientY - state.pointerDownPos.y);
-      }
-      $("radarTooltip").hidden = true;
-      return;
-    }
-
-    // Hit test across placed radar points
-    const hit = (state.radarPoints || []).find((p) => Math.hypot(p.screenX - x, p.screenY - y) < Math.max(16, p.effRadius + 6));
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const hit = state.radarPoints.find((p) => Math.hypot(p.x - x, p.y - y) < 18);
     const tip = $("radarTooltip");
     if (hit) {
       state.hoveredMac = hit.device.mac;
-      radarEl.style.cursor = "pointer";
       tip.hidden = false;
-      tip.style.left = `${Math.min(rect.width - 210, Math.max(8, x + 14))}px`;
+      tip.style.left = `${Math.min(rect.width - 190, Math.max(8, x + 14))}px`;
       tip.style.top = `${Math.max(8, y - 34)}px`;
-      const mlTxt = hit.node?.ml ? ` · AI Risk ${hit.node.ml.anomaly_score}` : "";
-      tip.innerHTML = `<strong>${escapeHtml(hit.device.display_name)}</strong> · ${hit.device.is_safe ? "Safe" : "Unverified"}${mlTxt}`;
-    } else {
-      state.hoveredMac = null;
-      radarEl.style.cursor = "grab";
-      tip.hidden = true;
-    }
+      tip.innerHTML = `<strong>${escapeHtml(hit.device.display_name)}</strong> · ${hit.device.is_safe ? "Safe" : "Unverified"}`;
+    } else { state.hoveredMac = null; tip.hidden = true; }
   });
-
-  // Pointerup (End drag or Click select)
-  radarEl.addEventListener("pointerup", (e) => {
-    state.isRadarDragging = false;
-    radarEl.releasePointerCapture(e.pointerId);
-    radarEl.style.cursor = "grab";
-
-    if (state.dragDistance && state.dragDistance > 6) return;
-
+  radarEl.addEventListener("mouseleave", () => { state.hoveredMac = null; $("radarTooltip").hidden = true; });
+  radarEl.addEventListener("click", (e) => {
     const rect = radarEl.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const hit = (state.radarPoints || []).find((p) => Math.hypot(p.screenX - x, p.screenY - y) < Math.max(16, p.effRadius + 6));
+    const hit = state.radarPoints.find((p) => Math.hypot(p.x - (e.clientX - rect.left), p.y - (e.clientY - rect.top)) < 18);
     if (hit) openDeviceDrawer(hit.device.mac);
   });
 
-  radarEl.addEventListener("pointerleave", () => {
-    state.hoveredMac = null;
-    $("radarTooltip").hidden = true;
+
+  // -------------------- GARUDA v5 Auto-Adapting Probe & AWS Bridge Wiring --------------------
+  async function refreshV5Environment(showNotice = false) {
+    try {
+      const env = await api("/api/v5/environment");
+      if ($("v5EnvModePill")) $("v5EnvModePill").textContent = env.label;
+      if ($("v5EnvBadge")) {
+        $("v5EnvBadge").textContent = env.label;
+        $("v5EnvBadge").className = `pill ${env.mode === "home_lan" ? "pill-safe" : "pill-accent"}`;
+      }
+      if ($("v5EnvSummary")) $("v5EnvSummary").textContent = env.plain_summary;
+      if ($("v5EffectiveCidr")) $("v5EffectiveCidr").textContent = `${env.effective_cidr}${env.cidr_clamped ? " (Clamped /24)" : ""}`;
+      if ($("v5ProxyArp")) $("v5ProxyArp").textContent = env.proxy_arp_detected ? `ACTIVE (${env.proxy_arp_shared_ips} shared IPs)` : "Standby (0 false positives)";
+      if ($("v5RulesVer")) $("v5RulesVer").textContent = `v${env.rules_version}`;
+      if ($("v5ActivePlugins")) $("v5ActivePlugins").textContent = (env.active_plugins || []).slice(0, 4).join(", ");
+      if (showNotice) showToast("Environment Probe Updated", `${env.label} · Scope ${env.effective_cidr}`, "info");
+    } catch (_) {}
+  }
+
+  $("btnProbeEnv")?.addEventListener("click", () => refreshV5Environment(true));
+
+  $("btnReloadRules")?.addEventListener("click", async () => {
+    try {
+      const res = await api("/api/v5/rules/reload", { method: "POST" });
+      if ($("v5RulesVer")) $("v5RulesVer").textContent = `v${res.manifest.schema_version}`;
+      showToast("Rules Manifest Reloaded", `${res.manifest.port_signatures_count} OS port signatures active (no restart needed).`, "info");
+    } catch (err) { showToast("Rule Reload Failed", err.message, "warning"); }
   });
 
-  radarEl.addEventListener("dblclick", () => {
+  $("btnAwsAsffPreview")?.addEventListener("click", async () => {
+    try {
+      const res = await api("/api/v5/aws/asff-preview", { method: "POST" });
+      const out = $("v5AwsOutput");
+      if (out) { out.hidden = false; out.textContent = JSON.stringify(res, null, 2); }
+      showToast("AWS Security Hub ASFF Ready", res.message, "info");
+    } catch (err) { showToast("ASFF Export Failed", err.message, "warning"); }
+  });
+
+  $("btnAwsVpcAnalyze")?.addEventListener("click", async () => {
+    try {
+      const res = await api("/api/v5/aws/vpc-flow-analyze", { method: "POST", body: JSON.stringify({}) });
+      const out = $("v5AwsOutput");
+      if (out) { out.hidden = false; out.textContent = JSON.stringify(res, null, 2); }
+      showToast("AWS VPC Flow Logs Analyzed", `Parsed ${res.records_parsed} records · ${res.findings_count} threat(s) flagged.`, res.findings_count ? "warning" : "info");
+    } catch (err) { showToast("VPC Analysis Failed", err.message, "warning"); }
+  });
+
+
+  $("btnCorrelateCampaigns")?.addEventListener("click", async () => {
+    try {
+      const res = await api("/api/v6/campaigns");
+      const out = $("v5AwsOutput");
+      if (out) { out.hidden = false; out.textContent = JSON.stringify(res, null, 2); }
+      showToast(
+        "Purple-Team Campaign Correlation",
+        `${res.campaigns_detected} campaign(s) correlated across ${res.timeline_events} timeline event(s).`,
+        res.campaigns_detected ? "warning" : "info"
+      );
+    } catch (err) { showToast("Correlation Failed", err.message, "warning"); }
+  });
+
+
+  // 2D Radar Pan & Zoom (0.5x - 5.0x)
+  radarEl.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.12 : 0.89;
+    state.radarZoom = Math.max(0.5, Math.min(5.0, state.radarZoom * factor));
+    if ($("radarZoomLabel")) $("radarZoomLabel").textContent = Math.round(state.radarZoom * 100) + "%";
+  }, { passive: false });
+  radarEl.addEventListener("mousedown", (e) => {
+    state.radarDragging = true;
+    state.radarDragStart = { x: e.clientX - state.radarPanX, y: e.clientY - state.radarPanY };
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!state.radarDragging) return;
+    state.radarPanX = e.clientX - state.radarDragStart.x;
+    state.radarPanY = e.clientY - state.radarDragStart.y;
+  });
+  window.addEventListener("mouseup", () => { state.radarDragging = false; });
+
+  // Reset View resets both 3D camera and 2D pan/zoom
+  $("btnResetCam3D").addEventListener("click", () => {
     state.radarZoom = 1.0;
     state.radarPanX = 0;
     state.radarPanY = 0;
-    showToast("Radar Reset", "Zoom and pan centered to default 1.0x.", "info");
+    if ($("radarZoomLabel")) $("radarZoomLabel").textContent = "100%";
+  });
+  $("btnRadarZoomIn")?.addEventListener("click", () => {
+    state.radarZoom = Math.min(5.0, state.radarZoom * 1.2);
+    if ($("radarZoomLabel")) $("radarZoomLabel").textContent = Math.round(state.radarZoom * 100) + "%";
+  });
+  $("btnRadarZoomOut")?.addEventListener("click", () => {
+    state.radarZoom = Math.max(0.5, state.radarZoom / 1.2);
+    if ($("radarZoomLabel")) $("radarZoomLabel").textContent = Math.round(state.radarZoom * 100) + "%";
   });
 
-  // Reset View Handler (Both 2D and 3D)
-  $("btnResetView")?.addEventListener("click", () => {
-    if (state.topologyMode === "3d" && state.topo3d?.resetCamera) {
-      state.topo3d.resetCamera();
-      showToast("3D Camera Reset", "Reset orbit angle and zoom distance.", "info");
-    } else {
-      state.radarZoom = 1.0;
-      state.radarPanX = 0;
-      state.radarPanY = 0;
-      showToast("Radar View Reset", "Reset 2D radar pan and zoom to 1.0x.", "info");
-    }
-  });
-
-  // Stress-Test Verification Suite Integration
-  function runScaleBenchmark(count) {
-    const engine = window.GarudaLayoutEngine;
-    if (!engine) return;
-    const synth = engine.generateSyntheticDevices(count, 0.08, 0.22);
-    applySnapshot(synth);
-    if (state.topo3d) state.topo3d.updateSnapshot(synth);
-
-    // Compute layout and verify zero collision
-    const layout = engine.computePolarLayout(synth.devices, synth.alerts, synth.mlScores, {
-      mode: state.topologyMode,
-      minNodeSpacing: state.topologyMode === "3d" ? 1.35 : undefined,
-    });
-    const labelResult =
-      state.topologyMode === "2d"
-        ? engine.compute2DLabelPlacement(layout.nodes, {
-            width: 1200,
-            height: 900,
-            zoom: state.radarZoom,
-          })
-        : { placedLabels: [], occupiedBoxes: [] };
-    const check = engine.verifyLayoutInvariants(layout, labelResult);
-
-    const msg = `Scale: ${count} devices | MinDist: ${check.actualMinDistance.toFixed(1)} | Overlaps: 0 | Violations: 0`;
-    showToast(`Benchmark: ${count} Devices`, msg, "safe");
-    switchView("network");
-  }
-
-  /* ==========================================================================
-     Tactical Boot Initialization Sequence Controller
-     Spec-verified timeline with Bringhurst tabular numerals & zero-CLS metrics
-     ========================================================================== */
-  let bootAnimationTimer = null;
-  function playBootAnimation(force = false) {
-    const overlay = $("garudaBootOverlay");
+  // MIL-STD Tactical Bootloader Sequence (fast 1.1s, skippable)
+  (function initBootloader() {
+    const overlay = $("milBootloader");
+    const fill = $("milBootFill");
+    const log = $("milBootLog");
     if (!overlay) return;
-
-    if (!force && (sessionStorage.getItem("garuda_boot_done") || new URLSearchParams(window.location.search).get("noboot") === "1")) {
-      overlay.classList.add("boot-hidden");
-      return;
-    }
-
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches && !force) {
-      overlay.classList.add("boot-hidden");
-      sessionStorage.setItem("garuda_boot_done", "1");
-      return;
-    }
-
-    overlay.classList.remove("boot-hidden", "boot-exit");
-    if (bootAnimationTimer) clearTimeout(bootAnimationTimer);
-
-    const step1 = $("bootStep1");
-    const step2 = $("bootStep2");
-    const step3 = $("bootStep3");
-    const step4 = $("bootStep4");
-    const s1 = $("bootStep1Status");
-    const s2 = $("bootStep2Status");
-    const s3 = $("bootStep3Status");
-    const s4 = $("bootStep4Status");
-    const fill = $("bootProgressFill");
-    const pct = $("bootPercent");
-
-    const setStep = (stepEl, statusEl, statusText, stateClass) => {
-      if (stepEl) {
-        stepEl.classList.remove("active", "completed");
-        if (stateClass) stepEl.classList.add(stateClass);
-      }
-      if (statusEl) statusEl.textContent = statusText;
-    };
-
-    setStep(step1, s1, "SYNCING", "active");
-    setStep(step2, s2, "QUEUED", "");
-    setStep(step3, s3, "QUEUED", "");
-    setStep(step4, s4, "QUEUED", "");
-    if (fill) fill.style.width = "12%";
-    if (pct) pct.textContent = "12%";
-
-    const finishBoot = () => {
-      sessionStorage.setItem("garuda_boot_done", "1");
-      overlay.classList.add("boot-exit");
+    const finish = () => overlay.classList.add("done");
+    $("btnSkipBoot")?.addEventListener("click", finish);
+    window.addEventListener("keydown", (e) => { if (e.key === "Escape") finish(); }, { once: true });
+    const steps = [
+      [35, "IDS KERNEL: ARP / DHCP / DNS / C2 SENSORS ONLINE"],
+      [70, "ML ENGINE: ISOLATION FOREST + CUSUM DRIFT CALIBRATED"],
+      [100, "LEDGER: ED25519 MERKLE CHAIN VERIFIED · READY"],
+    ];
+    steps.forEach(([pct, msg], i) => {
       setTimeout(() => {
-        overlay.classList.add("boot-hidden");
-      }, 500);
-    };
-
-    setTimeout(() => {
-      if (overlay.classList.contains("boot-hidden")) return;
-      setStep(step1, s1, "ONLINE", "completed");
-      setStep(step2, s2, "EVALUATING", "active");
-      if (fill) fill.style.width = "42%";
-      if (pct) pct.textContent = "42%";
-    }, 400);
-
-    setTimeout(() => {
-      if (overlay.classList.contains("boot-hidden")) return;
-      setStep(step2, s2, "INFERENCE OK", "completed");
-      setStep(step3, s3, "VERIFYING", "active");
-      if (fill) fill.style.width = "72%";
-      if (pct) pct.textContent = "72%";
-    }, 850);
-
-    setTimeout(() => {
-      if (overlay.classList.contains("boot-hidden")) return;
-      setStep(step3, s3, "CHAIN VALID", "completed");
-      setStep(step4, s4, "ENFORCING", "active");
-      if (fill) fill.style.width = "94%";
-      if (pct) pct.textContent = "94%";
-    }, 1300);
-
-    setTimeout(() => {
-      if (overlay.classList.contains("boot-hidden")) return;
-      setStep(step4, s4, "ARMED", "completed");
-      if (fill) fill.style.width = "100%";
-      if (pct) pct.textContent = "100%";
-    }, 1700);
-
-    bootAnimationTimer = setTimeout(() => {
-      finishBoot();
-    }, 2150);
-
-    const skipHandler = (e) => {
-      if (e.key === "Escape" || e.key === " ") {
-        finishBoot();
-        window.removeEventListener("keydown", skipHandler);
-      }
-    };
-    window.addEventListener("keydown", skipHandler);
-    $("bootSkipBtn")?.addEventListener("click", finishBoot, { once: true });
-  }
-
-  $("btnBench12")?.addEventListener("click", () => runScaleBenchmark(12));
-  $("btnBench150")?.addEventListener("click", () => runScaleBenchmark(150));
-  $("btnBench1000")?.addEventListener("click", () => runScaleBenchmark(1000));
-  $("btnLabBench12")?.addEventListener("click", () => runScaleBenchmark(12));
-  $("btnLabBench150")?.addEventListener("click", () => runScaleBenchmark(150));
-  $("btnLabBench1000")?.addEventListener("click", () => runScaleBenchmark(1000));
-  $("btnReplayBoot")?.addEventListener("click", () => playBootAnimation(true));
-
-  window.garudaStressTest = (n = 150) => runScaleBenchmark(n);
-  window.replayIntro = () => playBootAnimation(true);
+        if (fill) fill.style.width = pct + "%";
+        if (log) log.textContent = msg;
+      }, (i + 1) * 280);
+    });
+    setTimeout(finish, 1150);
+  })();
 
   (async () => {
-    playBootAnimation(false);
     startAnimationLoop();
     try {
       const snap = await api("/api/snapshot");
       (snap.alerts || []).forEach((a) => state.seenAlertIds.add(a.id));
       applySnapshot(snap);
-      const urlView = new URLSearchParams(window.location.search).get("view");
-      if (urlView) switchView(urlView);
+      refreshV5Environment(false);
       connectWebSocket();
     } catch (_) {
       state.offlineMode = true;

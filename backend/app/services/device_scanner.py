@@ -21,6 +21,33 @@ from typing import Dict, List, Optional, Tuple
 
 from .network_detector import normalize_mac
 from .oui_db import infer_device_type_from_vendor_or_name, lookup_mac_vendor
+from .capability_probe import clamp_subnet_to_safe_24, probe_network_environment
+from .plugin_engine import DiscoveryPlugin, plugin_orchestrator
+from .rule_updater import rule_manager
+
+
+def infer_os_from_ttl(ttl: Optional[int]) -> Optional[str]:
+    """Infer broad OS family from IPv4 TTL (64=Linux/iOS/Android/macOS, 128=Windows, 255=Network Appliance)."""
+    if ttl is None or ttl <= 0:
+        return None
+    profiles = rule_manager.rules.get("ttl_os_profiles", {})
+    if ttl <= 64:
+        return profiles.get("64", "Linux / Android / iOS / macOS")
+    if ttl <= 128:
+        return profiles.get("128", "Windows")
+    return profiles.get("255", "Network Router / Appliance")
+
+
+def infer_device_from_open_ports(open_ports: Optional[List[int]]) -> Tuple[Optional[str], Optional[str]]:
+    """Infer OS label and device_type from non-intrusive TCP port signatures (e.g., 62078=iOS, 445=Windows)."""
+    if not open_ports:
+        return None, None
+    sigs = rule_manager.rules.get("port_os_signatures", {})
+    for port in open_ports:
+        entry = sigs.get(str(port))
+        if entry:
+            return entry.get("os"), entry.get("device_type")
+    return None, None
 
 MDNS_SERVICES = [
     "_apple-mobdev2._tcp.local.",
@@ -250,6 +277,8 @@ def resolve_device_identity(
     mdns_map: Dict[str, Tuple[str, str]],
     ssdp_map: Dict[str, Tuple[str, str]],
     dhcp_map: Dict[str, str],
+    ttl: Optional[int] = None,
+    open_ports: Optional[List[int]] = None,
 ) -> dict:
     """Run the 5-layer real name pipeline and record exact name_source."""
     vendor, dev_type, is_rand = lookup_mac_vendor(mac)
@@ -335,22 +364,37 @@ def resolve_device_identity(
     except Exception:
         pass
 
-    # Layer 5: Honest OUI / Randomized MAC label
+    # Layer 5: Honest OUI + Randomized MAC + TTL & Port-Signature OS Fusion (v5)
+    port_os, port_dtype = infer_device_from_open_ports(open_ports)
+    ttl_os = infer_os_from_ttl(ttl)
+    fused_os = port_os or ttl_os or os_hint
+    if port_dtype and not is_gateway:
+        dev_type = port_dtype
+
     if is_gateway:
         name = f"{vendor} Wi-Fi Router" if vendor != "Unknown Manufacturer" else f"Main Wi-Fi Router ({ip})"
         dev_type = "router"
     elif is_rand:
-        name = f"Phone/Laptop with Private Wi-Fi MAC ({ip.split('.')[-1]})"
-        os_hint = "iOS / Android / Win11 Private MAC"
+        if port_os:
+            name = f"Private {port_os} ({ip.split('.')[-1]})"
+            os_hint = f"{port_os} (Randomized MAC)"
+        elif ttl_os:
+            name = f"Private {ttl_os.split('/')[0].strip()} Device ({ip.split('.')[-1]})"
+            os_hint = f"{ttl_os} (Randomized MAC)"
+        else:
+            name = f"Phone/Laptop with Private Wi-Fi MAC ({ip.split('.')[-1]})"
+            os_hint = "iOS / Android / Win11 Private MAC"
     elif vendor != "Unknown Manufacturer":
         label_map = {"phone": "Phone", "laptop": "Computer", "tv": "Smart TV", "printer": "Printer", "iot": "Smart Device", "router": "Router"}
         name = f"{vendor} {label_map.get(dev_type, 'Device')} ({ip.split('.')[-1]})"
+        os_hint = fused_os
     else:
-        name = f"Unidentified Device ({ip})"
+        name = f"{port_os} ({ip})" if port_os else (f"{ttl_os.split('/')[0].strip()} Host ({ip})" if ttl_os else f"Unidentified Device ({ip})")
+        os_hint = fused_os
 
     return {
         "real_name": name,
-        "name_source": "oui",
+        "name_source": "port_ttl_fusion" if (port_os or ttl_os) else "oui",
         "vendor": vendor,
         "device_type": dev_type,
         "os_hint": os_hint,
@@ -359,25 +403,34 @@ def resolve_device_identity(
 
 
 def discover_lan_devices(net_info: dict, dhcp_hostnames: Optional[Dict[str, str]] = None, active_sweep: bool = True) -> List[dict]:
-    """Discover all connected LAN hosts and run 5-layer real name resolution concurrently."""
-    subnet_cidr = net_info["subnet_cidr"]
+    """Discover all connected LAN hosts with v5 /24 CIDR clamping, VPN auto-skip, and isolated plugins."""
+    raw_cidr = net_info["subnet_cidr"]
     local_ip = net_info["local_ip"]
     gateway_ip = net_info["gateway_ip"]
     gateway_mac = net_info["gateway_mac"]
     dhcp_map = {k.upper(): v for k, v in (dhcp_hostnames or {}).items()}
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
-        f_mdns = pool.submit(discover_mdns_names, 1.5)
-        f_ssdp = pool.submit(discover_ssdp_names, 1.2)
+    # v5 Guardrail: Never sweep /16 or /20 campus networks blindly; skip active sweep on active VPN
+    subnet_cidr, _was_clamped = clamp_subnet_to_safe_24(raw_cidr, local_ip)
+    effective_active_sweep = bool(active_sweep and not net_info.get("vpn_active"))
 
+    # Run multicast discovery via fault-isolated PluginOrchestrator
+    plugin_results = plugin_orchestrator.run_all([
+        DiscoveryPlugin("mdns_multicast", lambda: discover_mdns_names(1.4), timeout_sec=2.0, enabled=not net_info.get("vpn_active")),
+        DiscoveryPlugin("ssdp_multicast", lambda: discover_ssdp_names(1.2), timeout_sec=1.8, enabled=not net_info.get("vpn_active")),
+    ])
+    mdns_map = plugin_results["mdns_multicast"].data or {}
+    ssdp_map = plugin_results["ssdp_multicast"].data or {}
+
+    if True:
         ip_to_mac: Dict[str, str] = {}
         latencies: Dict[str, int] = {}
 
-        scapy_hits = _scapy_arp_sweep(subnet_cidr) if active_sweep else []
+        scapy_hits = _scapy_arp_sweep(subnet_cidr) if effective_active_sweep else []
         for ip, mac in scapy_hits:
             ip_to_mac[ip] = mac
 
-        if active_sweep and not scapy_hits and local_ip != "127.0.0.1":
+        if effective_active_sweep and not scapy_hits and local_ip != "127.0.0.1":
             try:
                 net = ipaddress.ip_network(subnet_cidr, strict=False)
                 hosts = [str(h) for h in list(net.hosts())[:128]]
@@ -405,8 +458,7 @@ def discover_lan_devices(net_info: dict, dhcp_hostnames: Optional[Dict[str, str]
             local_mac = ":".join(f"{(node >> shift) & 0xFF:02X}" for shift in range(40, -1, -8))
             ip_to_mac[local_ip] = local_mac
 
-        mdns_map = f_mdns.result()
-        ssdp_map = f_ssdp.result()
+        # mdns_map and ssdp_map safely populated by PluginOrchestrator
 
     def _build(item):
         ip, mac = item

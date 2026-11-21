@@ -27,57 +27,6 @@
     0 14px 32px -18px rgba(22, 24, 29, 0.14);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not(.theme-light) {
-    --bg: #12151B;
-    --surface: #1A1E26;
-    --surface-2: #222833;
-    --ink: #ECEAE4;
-    --ink-muted: #98A0AE;
-    --hairline: rgba(236, 234, 228, 0.10);
-    --hairline-strong: rgba(236, 234, 228, 0.22);
-
-    --accent: #6394F2;
-    --safe: #3EB488;
-    --warn: #E2A343;
-    --danger: #E36050;
-
-    --accent-soft: rgba(99, 148, 242, 0.15);
-    --safe-soft: rgba(62, 180, 136, 0.15);
-    --warn-soft: rgba(226, 163, 67, 0.15);
-    --danger-soft: rgba(227, 96, 80, 0.16);
-
-    --shadow-surface:
-      0 1px 0 rgba(255, 255, 255, 0.05) inset,
-      0 14px 34px -16px rgba(0, 0, 0, 0.72);
-  }
-}
-
-body.theme-light {
-  --bg: #F3F0EA;
-  --surface: #FAF8F4;
-  --surface-2: #E8E3DA;
-  --ink: #16181D;
-  --ink-muted: #575C66;
-  --hairline: rgba(22, 24, 29, 0.11);
-  --hairline-strong: rgba(22, 24, 29, 0.22);
-
-  --accent: #1E4FD6;
-  --safe: #157F56;
-  --warn: #B96B08;
-  --danger: #C53624;
-
-  --accent-soft: rgba(30, 79, 214, 0.10);
-  --safe-soft: rgba(21, 127, 86, 0.11);
-  --warn-soft: rgba(185, 107, 8, 0.12);
-  --danger-soft: rgba(197, 54, 36, 0.12);
-
-  --shadow-surface:
-    0 1px 0 rgba(255, 255, 255, 0.72) inset,
-    0 1px 2px rgba(22, 24, 29, 0.05),
-    0 14px 32px -18px rgba(22, 24, 29, 0.14);
-}
-
 body.theme-dark {
   --bg: #12151B;
   --surface: #1A1E26;
@@ -824,8 +773,6 @@ body.theme-dark::before { opacity: 0.03; }
   height: 100%;
   border: none;
   border-radius: 0;
-  cursor: grab;
-  touch-action: none;
 }
 .topology-hud-badge {
   position: absolute;
@@ -900,342 +847,93 @@ body.theme-dark::before { opacity: 0.03; }
   overflow-x: auto;
 }
 
-/* ==========================================================================
-   Tactical Opening Animation (Spec-Verified Hardware Telemetry)
-   Adaptive Daylight & Night Ops modes conforming to system settings & OS preference
-   ========================================================================== */
-
-.boot-overlay {
+/* MIL-STD Tactical Bootloader */
+.mil-bootloader {
   position: fixed;
   inset: 0;
-  z-index: 99999;
-  background-color: var(--bg);
-  background-image:
-    radial-gradient(circle at 50% 38%, var(--accent-soft) 0%, transparent 65%),
-    linear-gradient(var(--hairline) 1px, transparent 1px),
-    linear-gradient(90deg, var(--hairline) 1px, transparent 1px);
-  background-size: 100% 100%, 28px 28px, 28px 28px;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  opacity: 1;
-  visibility: visible;
-  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
-              filter 0.45s cubic-bezier(0.16, 1, 0.3, 1),
-              visibility 0.45s;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  transition: opacity 0.35s ease, visibility 0.35s ease;
 }
-
-.boot-overlay.boot-exit {
+.mil-bootloader.done {
   opacity: 0;
-  transform: scale(1.03);
-  filter: blur(6px);
+  visibility: hidden;
   pointer-events: none;
 }
-
-.boot-overlay.boot-hidden {
-  display: none !important;
-}
-
-.boot-modal {
-  width: 100%;
-  max-width: 560px;
-  background: var(--surface);
-  color: var(--ink);
-  border-radius: var(--r-outer, 18px);
-  border: 1px solid var(--hairline-strong);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.4) inset,
-    0 -1px 0 var(--hairline) inset,
-    0 4px 16px rgba(0, 0, 0, 0.08),
-    0 30px 60px -15px rgba(0, 0, 0, 0.22);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  animation: bootModalIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-body.theme-dark .boot-modal {
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.12) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.5) inset,
-    0 4px 16px rgba(0, 0, 0, 0.4),
-    0 32px 64px -16px rgba(0, 0, 0, 0.85);
-}
-
-@keyframes bootModalIn {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.975);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.boot-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 22px;
-  border-bottom: 1px solid var(--hairline);
-  background: var(--surface-2);
-}
-
-.boot-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.boot-mark {
-  position: relative;
-  width: 38px;
-  height: 38px;
-  border-radius: var(--r-mid, 12px);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.boot-radar-ping {
-  position: absolute;
-  inset: -3px;
-  border-radius: inherit;
-  border: 1.5px solid var(--accent);
-  opacity: 0;
-  animation: bootRadarPulse 2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
-}
-
-@keyframes bootRadarPulse {
-  0% { transform: scale(0.85); opacity: 0.85; }
-  100% { transform: scale(1.6); opacity: 0; }
-}
-
-.boot-title {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--ink);
-  text-transform: uppercase;
-}
-
-.boot-subtitle {
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--ink-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  margin-top: 2px;
-}
-
-.boot-skip-btn {
+.mil-boot-card {
+  width: min(440px, 90vw);
+  padding: 24px 26px;
+  border-radius: var(--r-outer);
   background: var(--surface);
   border: 1px solid var(--hairline-strong);
-  color: var(--ink-muted);
-  font-size: 11px;
-  font-weight: 600;
-  padding: 5px 12px;
-  border-radius: var(--r-inner, 8px);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-.boot-skip-btn:hover {
-  background: var(--surface-2);
-  color: var(--ink);
-  border-color: var(--accent);
-}
-
-.boot-viewport {
-  position: relative;
-  padding: 20px 22px;
-  overflow: hidden;
-  background: var(--surface);
-}
-
-.boot-grid-bg {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(var(--hairline) 1px, transparent 1px),
-    linear-gradient(90deg, var(--hairline) 1px, transparent 1px);
-  background-size: 24px 24px;
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.boot-scanline {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  box-shadow: 0 0 10px var(--accent-soft);
-  animation: bootScanAnim 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  pointer-events: none;
-  z-index: 1;
-}
-
-@keyframes bootScanAnim {
-  0% { top: -2px; opacity: 0; }
-  15% { opacity: 0.9; }
-  85% { opacity: 0.9; }
-  100% { top: 100%; opacity: 0; }
-}
-
-.boot-crosshair {
-  position: absolute;
-  top: 14px;
-  right: 18px;
-  width: 14px;
-  height: 14px;
-  border-top: 1px solid var(--hairline-strong);
-  border-right: 1px solid var(--hairline-strong);
-  pointer-events: none;
-}
-
-.boot-telemetry {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.boot-step {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 10px 14px;
-  border-radius: var(--r-inner, 8px);
-  background: var(--surface-2);
-  border: 1px solid var(--hairline);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings: "tnum" 1, "zero" 1;
-}
-
-.boot-step.active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  box-shadow: 0 0 14px -3px var(--accent-soft);
-}
-
-.boot-step.completed {
-  background: var(--safe-soft);
-  border-color: var(--safe);
-}
-
-.boot-step-icon {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--ink-muted);
-  width: 22px;
+  box-shadow: var(--shadow-surface);
   text-align: center;
 }
-
-.boot-step.active .boot-step-icon {
+.mil-boot-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
   color: var(--accent);
+  margin-bottom: 14px;
+}
+.mil-boot-bar {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.mil-boot-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 0.28s ease;
+}
+.mil-boot-log {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mil-bootloader { display: none !important; }
 }
 
-.boot-step.completed .boot-step-icon {
-  color: var(--safe);
+/* 2D Radar Zoom HUD Controls */
+.radar-zoom-hud {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  border: 1px solid var(--hairline);
+  backdrop-filter: blur(8px);
+  z-index: 6;
 }
-
-.boot-step-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.boot-step-name {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+.radar-zoom-hud[hidden] { display: none; }
+.radar-zoom-hud span {
+  font-size: 11.5px;
+  font-weight: 700;
+  min-width: 40px;
+  text-align: center;
   color: var(--ink);
 }
-
-.boot-step-desc {
-  font-size: 10.5px;
-  color: var(--ink-muted);
-  margin-top: 2px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-.boot-step-status {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  padding: 3px 8px;
-  border-radius: 4px;
-  background: var(--hairline);
-  color: var(--ink-muted);
-}
-
-.boot-step.active .boot-step-status {
+.mil-boot-emblem {
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 12px;
+  border-radius: 14px;
   background: var(--accent-soft);
   color: var(--accent);
-  border: 1px solid var(--accent);
+  display: grid;
+  place-items: center;
+  animation: bootPulse 1.2s ease-in-out infinite;
 }
-
-.boot-step.completed .boot-step-status {
-  background: var(--safe-soft);
-  color: var(--safe);
-  border: 1px solid var(--safe);
-}
-
-.boot-footer {
-  padding: 16px 22px;
-  background: var(--surface-2);
-  border-top: 1px solid var(--hairline);
-}
-
-.boot-progress-bar {
-  width: 100%;
-  height: 5px;
-  background: var(--hairline-strong);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.boot-progress-fill {
-  width: 0%;
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), var(--safe));
-  box-shadow: 0 0 10px var(--accent-soft);
-  transition: width 0.28s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.boot-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 10px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 10px;
-  color: var(--ink-muted);
-  letter-spacing: 0.05em;
-  font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings: "tnum" 1, "zero" 1;
-}
-
-.boot-pct {
-  font-weight: 700;
-  color: var(--ink);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .boot-overlay {
-    display: none !important;
-  }
+@keyframes bootPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }

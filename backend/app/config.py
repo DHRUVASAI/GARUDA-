@@ -23,7 +23,7 @@ YARA_RULES_PATH = RULES_DIR / "garuda_yara.yar"
 WEB3_RPC_URL = os.getenv("GARUDA_WEB3_RPC_URL", "").strip()
 WEB3_CONTRACT_ADDRESS = os.getenv("GARUDA_WEB3_CONTRACT", "").strip()
 WEB3_PRIVATE_KEY = os.getenv("GARUDA_WEB3_PRIVATE_KEY", "").strip()
-WEB3_CHAIN_NAME = os.getenv("GARUDA_WEB3_CHAIN_NAME", "Monad Testnet").strip()
+WEB3_CHAIN_NAME = os.getenv("GARUDA_WEB3_CHAIN_NAME", "Polygon Amoy Testnet").strip()
 
 DEFAULT_SCAN_INTERVAL = int(os.getenv("GARUDA_SCAN_INTERVAL", "15"))
 DEFAULT_SIMULATION_MODE = os.getenv("GARUDA_SIMULATION_MODE", "false").lower() in ("1", "true", "yes")

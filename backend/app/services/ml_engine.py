@@ -63,13 +63,7 @@ def shannon_entropy(text: str) -> float:
 
 def analyze_domain_dga(domain: str) -> dict:
     """Classify whether a domain looks like a DGA botnet or DNS-tunneling payload."""
-    clean = (domain or "").strip().lower()
-    if "://" in clean:
-        clean = clean.split("://", 1)[1]
-    clean = clean.split("/")[0].split("?")[0].split("#")[0]
-    if ":" in clean:
-        clean = clean.split(":")[0]
-    clean = clean.strip(".")
+    clean = (domain or "").strip().lower().strip(".")
     if not clean:
         return {
             "domain": domain,
@@ -236,6 +230,10 @@ class BehavioralMLEngine:
         self._device_event_ts: Dict[str, List[float]] = {} # mac -> recent packet/beacon timestamps
         self._injected_anomalies: Dict[str, dict] = {}     # simulation hooks (strictly opt-in)
         self._last_trained_at: Optional[datetime] = None
+        # v6 Behavioral Drift (CUSUM) & Baseline Poisoning Guardrails (ML-03, ML-06)
+        self._device_drift_cusum: Dict[str, float] = {}
+        self._device_baseline_mean: Dict[str, float] = {}
+        self.poisoning_attempts_blocked: int = 0
 
         try:
             import numpy as np  # noqa: F401
@@ -321,15 +319,28 @@ class BehavioralMLEngine:
         else:
             z = 0.0 if latency_ms < 80 else min(1.0, (latency_ms - 80) / 150.0)
 
-        # Update Welford accumulators (cap extreme spikes so attacks don't poison baseline)
-        if z < 3.5:
+        # v6 Slow Behavioral Drift (CUSUM) against frozen initial baseline anchor (ML-03)
+        if mac not in self._device_baseline_mean and n >= 4:
+            self._device_baseline_mean[mac] = st["mean"]
+        anchor_mean = self._device_baseline_mean.get(mac, st["mean"])
+        drift_delta = max(0.0, (latency_ms - anchor_mean - 8.0) / max(15.0, anchor_mean))
+        prev_cusum = self._device_drift_cusum.get(mac, 0.0)
+        new_cusum = max(0.0, min(5.0, prev_cusum * 0.92 + drift_delta))
+        self._device_drift_cusum[mac] = new_cusum
+
+        # Strict anti-poisoning Welford update: never let abnormal spikes or gradual drift corrupt baseline (ML-06)
+        if z < 2.2 and new_cusum < 1.2:
             st["n"] = n + 1
             delta = latency_ms - st["mean"]
             st["mean"] += delta / st["n"]
             delta2 = latency_ms - st["mean"]
             st["m2"] += delta * delta2
+        else:
+            self.poisoning_attempts_blocked += 1
 
-        return round(min(1.0, z / 5.0), 3)
+        # Fuse instantaneous Z-score with accumulated slow CUSUM drift
+        drift_norm = min(1.0, max(0.0, (new_cusum - 0.8) / 2.2))
+        return round(min(1.0, max(z / 4.5, drift_norm)), 3)
 
     def _update_hour_profile(self, mac: str, hour_utc: int) -> float:
         hist = self._device_hour_hist.setdefault(mac, [0] * 24)
@@ -369,10 +380,26 @@ class BehavioralMLEngine:
 
         # Weighted L2 statistical risk across critical behavioral dimensions
         weights = [0.14, 0.18, 0.18, 0.15, 0.14, 0.07, 0.04, 0.10]
-        stat_norm = min(1.0, sum(w * v for w, v in zip(weights, vec)) * 2.15)
-        peak_boost = max(vec[1], vec[2], vec[3], vec[4], vec[7]) * 0.35
+        stat_norm = min(1.0, sum(w * v for w, v in zip(weights, vec)) * 2.05)
 
-        ensemble = min(1.0, (0.48 * if_norm) + (0.37 * stat_norm) + peak_boost)
+        # ML-07 Feature Evasion & ML-02 Trusted Compromise Guard:
+        # Even if an attacker keeps 6-7 features completely normal, a single extreme malicious feature must escalate
+        critical_peak = max(vec[1], vec[2], vec[3], vec[4], vec[7])
+        drift_or_offhours_peak = max(vec[0], vec[6])
+        if critical_peak >= 0.78:
+            peak_boost = 0.55 * critical_peak
+        elif critical_peak >= 0.45:
+            peak_boost = 0.36 * critical_peak
+        elif drift_or_offhours_peak >= 0.62:
+            peak_boost = 0.34 * drift_or_offhours_peak
+        else:
+            peak_boost = 0.0
+
+        # ML-05 False-Positive Resistance: dampen IsolationForest jitter when all behavioral features are mild
+        if max(vec) < 0.32 and vec[7] == 0.0:
+            if_norm = min(if_norm, 0.25)
+
+        ensemble = min(1.0, (0.44 * if_norm) + (0.34 * stat_norm) + peak_boost)
         return round(ensemble * 100.0, 1), round(if_norm, 3), round(stat_norm, 3)
 
     def _explain_vector(self, vec: List[float]) -> List[dict]:
@@ -454,9 +481,11 @@ class BehavioralMLEngine:
                 vec = [lat_z, arp_norm, syn_norm, dns_ent, beacon_reg, novelty, off_hrs, alert_p]
                 score_100, if_s, stat_s = self._score_vector(vec)
 
-                # Reinforce clean verified devices gently into the training corpus
-                if d.get("is_safe") and alert_p == 0.0 and score_100 < 28.0 and len(self._trained_samples) < 400:
+                # v6 Strict Anti-Poisoning Admission (ML-06): only strictly benign vectors enter training corpus
+                if d.get("is_safe") and alert_p == 0.0 and score_100 < 22.0 and max(vec) < 0.30 and len(self._trained_samples) < 400:
                     self._trained_samples.append(vec)
+                elif score_100 >= 42.0 or max(vec) >= 0.55:
+                    self.poisoning_attempts_blocked += 1
 
                 level = "critical" if score_100 >= 70.0 else "elevated" if score_100 >= 42.0 else "normal"
                 reasons = self._explain_vector(vec)

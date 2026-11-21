@@ -16,6 +16,7 @@ import hashlib
 import hmac
 import json
 import secrets
+import threading
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 
@@ -28,6 +29,7 @@ from ..config import (
 )
 
 GENESIS_PREV_HASH = "0" * 64
+_LEDGER_WRITE_LOCK = threading.Lock()
 
 
 def sha256_hex(data: bytes) -> str:
@@ -163,41 +165,42 @@ def _compute_block_hash(block_index: int, timestamp_utc: str, event_type: str, p
 
 
 def append_attestation_block(db: Any, event_type: str, summary: str, payload: dict) -> Any:
-    """Append a real SHA-256 chained + Ed25519 signed forensic block to SQLite."""
+    """Append a real SHA-256 chained + Ed25519 signed forensic block to SQLite (thread-safe for FR-06)."""
     from ..models import AttestationBlock
 
-    rows = db.query(AttestationBlock).order_by(AttestationBlock.block_index.asc()).all()
-    next_index = (rows[-1].block_index + 1) if rows else 0
-    prev_hash = rows[-1].block_hash if rows else GENESIS_PREV_HASH
-    ts = datetime.now(timezone.utc).isoformat()
+    with _LEDGER_WRITE_LOCK:
+        rows = db.query(AttestationBlock).order_by(AttestationBlock.block_index.asc()).all()
+        next_index = (rows[-1].block_index + 1) if rows else 0
+        prev_hash = rows[-1].block_hash if rows else GENESIS_PREV_HASH
+        ts = datetime.now(timezone.utc).isoformat()
 
-    p_json = canonical_json(payload)
-    p_sha = sha256_hex(p_json.encode("utf-8"))
-    b_hash = _compute_block_hash(next_index, ts, event_type, p_sha, prev_hash)
-    all_leaves = [r.payload_sha256 for r in rows] + [p_sha]
-    m_root = compute_merkle_root(all_leaves)
-    sig_hex = signer.sign(b_hash)
+        p_json = canonical_json(payload)
+        p_sha = sha256_hex(p_json.encode("utf-8"))
+        b_hash = _compute_block_hash(next_index, ts, event_type, p_sha, prev_hash)
+        all_leaves = [r.payload_sha256 for r in rows] + [p_sha]
+        m_root = compute_merkle_root(all_leaves)
+        sig_hex = signer.sign(b_hash)
 
-    blk = AttestationBlock(
-        block_index=next_index,
-        timestamp_utc=ts,
-        event_type=event_type,
-        summary=summary[:250],
-        payload_json=p_json,
-        payload_sha256=p_sha,
-        prev_hash=prev_hash,
-        merkle_root=m_root,
-        block_hash=b_hash,
-        signature_alg=signer.algorithm,
-        signature_hex=sig_hex,
-        signer_pubkey_hex=signer.public_key_hex,
-        anchor_status="local_signed",
-        chain_name=WEB3_CHAIN_NAME if WEB3_RPC_URL else "Local Cryptographic Ledger",
-    )
-    db.add(blk)
-    db.commit()
-    db.refresh(blk)
-    return blk
+        blk = AttestationBlock(
+            block_index=next_index,
+            timestamp_utc=ts,
+            event_type=event_type,
+            summary=summary[:250],
+            payload_json=p_json,
+            payload_sha256=p_sha,
+            prev_hash=prev_hash,
+            merkle_root=m_root,
+            block_hash=b_hash,
+            signature_alg=signer.algorithm,
+            signature_hex=sig_hex,
+            signer_pubkey_hex=signer.public_key_hex,
+            anchor_status="local_signed",
+            chain_name=WEB3_CHAIN_NAME if WEB3_RPC_URL else "Local Cryptographic Ledger",
+        )
+        db.add(blk)
+        db.commit()
+        db.refresh(blk)
+        return blk
 
 
 def ensure_genesis_block(db: Any, ssid: str = "GARUDA v4 Node") -> Any:
@@ -232,11 +235,14 @@ def verify_ledger_integrity(db: Any) -> dict:
 
     tampered = []
     expected_prev = GENESIS_PREV_HASH
+    expected_index = 0
     leaves = []
 
     for r in rows:
         leaves.append(r.payload_sha256)
         issues = []
+        if r.block_index != expected_index:
+            issues.append("missing_or_deleted_block_index")
         recomp_payload = sha256_hex((r.payload_json or "").encode("utf-8"))
         if recomp_payload != r.payload_sha256:
             issues.append("payload_modified")
@@ -251,6 +257,7 @@ def verify_ledger_integrity(db: Any) -> dict:
         if issues:
             tampered.append({"block_index": r.block_index, "issues": issues})
         expected_prev = r.block_hash
+        expected_index += 1
 
     root = compute_merkle_root(leaves)
     valid = len(tampered) == 0
