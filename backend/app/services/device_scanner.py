@@ -61,7 +61,132 @@ MDNS_SERVICES = [
     "_http._tcp.local.",
     "_hap._tcp.local.",
     "_spotify-connect._tcp.local.",
+    "_amzn-wld._tcp.local.",
+    "_amzn-alexa._tcp.local.",
+    "_amzn-echo._tcp.local.",
+    "_dial-multiscreen._tcp.local.",
+    "_sonos._tcp.local.",
 ]
+
+
+def classify_smart_device(
+    vendor: str,
+    raw_name: str,
+    hint: str,
+    open_ports: Optional[List[int]],
+    ip: str,
+    is_gateway: bool = False,
+) -> Optional[Tuple[str, str, str]]:
+    """Intelligently classify and name Amazon Alexa/Echo, Fire TV Stick, Google Nest,
+    Apple TV, and Smart IoT devices.
+    Returns (friendly_name, device_type, os_hint) or None if general resolution applies.
+    """
+    if is_gateway:
+        return None
+
+    norm_vendor = (vendor or "").strip()
+    raw = (raw_name or "").strip()
+    h = (hint or "").strip()
+    combined = f"{raw} {h} {norm_vendor}".lower()
+    last_octet = ip.split(".")[-1] if ip else ""
+    is_amazon = "amazon" in combined or "amazon" in norm_vendor.lower()
+
+    # --- 1. Amazon Fire TV Stick / Fire TV Hardware Models ---
+    firetv_models = {
+        "aftmm": "Amazon Fire TV Stick 4K Max",
+        "aftsss": "Amazon Fire TV Stick 4K Max (2nd Gen)",
+        "afts": "Amazon Fire TV Stick 4K",
+        "aftm": "Amazon Fire TV Stick (3rd Gen)",
+        "aftt": "Amazon Fire TV Stick (2nd Gen)",
+        "aftkrt": "Amazon Fire TV Stick Lite",
+        "aftb": "Amazon Fire TV Cube",
+        "aftr": "Amazon Fire TV",
+        "afta": "Amazon Fire TV (1st Gen)",
+    }
+
+    # Match exact AFT model codes
+    for code, model_title in firetv_models.items():
+        if re.search(r"\b" + code + r"\b", combined):
+            return model_title, "tv", "Fire OS (Android based)"
+
+    # Match Fire TV keywords
+    if any(k in combined for k in ("firetv", "fire tv", "firestick", "fire stick", "amazon-fire")):
+        if raw and any(w in raw.lower() for w in ("living", "bed", "room", "hall", "den", "stick", "tv")):
+            return raw, "tv", "Fire OS (Android based)"
+        return f"Amazon Fire TV Stick ({last_octet})", "tv", "Fire OS (Android based)"
+
+    # Amazon Fire TV via Cast/DIAL ports (8008, 8009) or ADB (5555)
+    if is_amazon and open_ports and any(p in open_ports for p in (8008, 8009, 5555)):
+        return f"Amazon Fire TV Stick ({last_octet})", "tv", "Fire OS (Android based)"
+
+    # --- 2. Amazon Echo & Alexa Devices ---
+    echo_models = {
+        "echoshow": "Amazon Echo Show (Alexa)",
+        "echo show": "Amazon Echo Show (Alexa)",
+        "echospot": "Amazon Echo Spot (Alexa)",
+        "echo spot": "Amazon Echo Spot (Alexa)",
+        "echodot": "Amazon Echo Dot (Alexa)",
+        "echo dot": "Amazon Echo Dot (Alexa)",
+        "echostudio": "Amazon Echo Studio (Alexa)",
+        "echo studio": "Amazon Echo Studio (Alexa)",
+        "echopop": "Amazon Echo Pop (Alexa)",
+        "echo pop": "Amazon Echo Pop (Alexa)",
+        "echoflex": "Amazon Echo Flex (Alexa)",
+        "echo flex": "Amazon Echo Flex (Alexa)",
+    }
+
+    for code, model_title in echo_models.items():
+        if code in combined:
+            return model_title, "iot", "Fire OS / Amazon Linux"
+
+    if any(k in combined for k in ("echo", "alexa", "_amzn-alexa", "_amzn-echo", "_amzn-wld")):
+        if raw and any(w in raw.lower() for w in ("living", "bed", "room", "kitchen", "hall", "office")):
+            return f"Amazon Echo / Alexa ({raw})", "iot", "Fire OS / Amazon Linux"
+        return f"Amazon Echo / Alexa ({last_octet})", "iot", "Fire OS / Amazon Linux"
+
+    # Amazon Echo via Spotify Connect port 4070 or TLS port 8443
+    if is_amazon and open_ports and any(p in open_ports for p in (4070, 8443)):
+        return f"Amazon Echo / Alexa ({last_octet})", "iot", "Fire OS / Amazon Linux"
+
+    # --- 3. Amazon Tablets / Kindle ---
+    if any(k in combined for k in ("kindle", "kftb", "kffowi", "fire tablet")):
+        return f"Amazon Fire Tablet / Kindle ({last_octet})", "tablet", "Fire OS"
+
+    # --- 4. Generic Amazon OUI device ---
+    if is_amazon:
+        return f"Amazon Smart Device (Echo / Fire TV) ({last_octet})", "iot", "Fire OS / Amazon Linux"
+
+    # --- 5. Google Nest / Home / Chromecast ---
+    if any(k in combined for k in ("chromecast", "google-tv", "googletv")):
+        title = "Google Chromecast with Google TV" if ("tv" in combined or "4k" in combined) else f"Google Chromecast ({last_octet})"
+        return title, "tv", "Google TV / Cast OS"
+    if any(k in combined for k in ("nest", "google-home", "google home")):
+        title = "Google Nest Mini" if "mini" in combined else ("Google Nest Audio" if "audio" in combined else ("Google Nest Hub" if "hub" in combined else f"Google Nest Smart Speaker ({last_octet})"))
+        return title, "iot", "Cast OS / Fuchsia"
+
+    # --- 6. Apple Media Devices ---
+    if any(k in combined for k in ("appletv", "apple-tv", "_mediaremotetv")):
+        return "Apple TV", "tv", "tvOS"
+    if "homepod" in combined:
+        return "Apple HomePod", "iot", "audioOS"
+
+    # --- 7. Roku ---
+    if "roku" in combined:
+        return f"Roku Streaming Player ({last_octet})", "tv", "Roku OS"
+
+    # --- 8. Smart IoT Platforms ---
+    if "espressif" in combined:
+        return f"Espressif Smart IoT (ESP32/ESP8266) ({last_octet})", "iot", "FreeRTOS / ESP-IDF"
+    if "tuya" in combined:
+        return f"Tuya Smart Device ({last_octet})", "iot", "Tuya IoT OS"
+    if any(k in combined for k in ("tapo", "kasa")):
+        return f"TP-Link Smart Home Device ({last_octet})", "iot", "TP-Link Smart OS"
+    if "sonos" in combined:
+        return (raw if "sonos" in raw.lower() else f"Sonos Smart Speaker ({last_octet})"), "iot", "Sonos OS"
+    if "philips hue" in combined or "hue bridge" in combined:
+        return "Philips Hue Smart Bridge", "iot", "Hue Linux"
+
+    return None
 
 
 def discover_mdns_names(timeout: float = 1.6) -> Dict[str, Tuple[str, str]]:
@@ -298,6 +423,17 @@ def resolve_device_identity(
     # Layer 1: mDNS / Bonjour
     if ip in mdns_map:
         name, hint = mdns_map[ip]
+        smart = classify_smart_device(vendor, name, hint, open_ports, ip, is_gateway)
+        if smart:
+            s_name, s_type, s_os = smart
+            return {
+                "real_name": s_name,
+                "name_source": "mdns",
+                "vendor": vendor,
+                "device_type": "router" if is_gateway else s_type,
+                "os_hint": s_os,
+                "is_randomized_mac": is_rand,
+            }
         return {
             "real_name": name,
             "name_source": "mdns",
@@ -310,6 +446,18 @@ def resolve_device_identity(
     # Layer 2: SSDP / UPnP XML <friendlyName>
     if ip in ssdp_map:
         name, hint = ssdp_map[ip]
+        smart = classify_smart_device(vendor, name, hint, open_ports, ip, is_gateway)
+        if smart:
+            s_name, s_type, s_os = smart
+            chosen_name = name if (name and any(w in name.lower() for w in ("living", "bed", "room", "tv", "speaker", "bravia"))) else s_name
+            return {
+                "real_name": chosen_name,
+                "name_source": "ssdp",
+                "vendor": vendor if vendor != "Unknown Manufacturer" else (hint.split()[0] if hint else vendor),
+                "device_type": "router" if is_gateway else s_type,
+                "os_hint": s_os,
+                "is_randomized_mac": is_rand,
+            }
         return {
             "real_name": name,
             "name_source": "ssdp",
@@ -322,6 +470,17 @@ def resolve_device_identity(
     # Layer 3: DHCP Option 12 Hostname captured by live sniffer
     if mac.upper() in dhcp_map:
         name = dhcp_map[mac.upper()]
+        smart = classify_smart_device(vendor, name, "DHCP Hostname", open_ports, ip, is_gateway)
+        if smart:
+            s_name, s_type, s_os = smart
+            return {
+                "real_name": s_name,
+                "name_source": "dhcp",
+                "vendor": vendor,
+                "device_type": "router" if is_gateway else s_type,
+                "os_hint": s_os,
+                "is_randomized_mac": is_rand,
+            }
         return {
             "real_name": name,
             "name_source": "dhcp",
@@ -334,6 +493,17 @@ def resolve_device_identity(
     # Layer 4a: NetBIOS UDP 137
     nb = query_netbios_name(ip)
     if nb:
+        smart = classify_smart_device(vendor, nb, "NetBIOS", open_ports, ip, is_gateway)
+        if smart:
+            s_name, s_type, s_os = smart
+            return {
+                "real_name": s_name,
+                "name_source": "netbios",
+                "vendor": vendor,
+                "device_type": "router" if is_gateway else s_type,
+                "os_hint": s_os,
+                "is_randomized_mac": is_rand,
+            }
         return {
             "real_name": nb,
             "name_source": "netbios",
@@ -351,6 +521,17 @@ def resolve_device_identity(
             rdns, _, _ = socket.gethostbyaddr(ip)
             if rdns and rdns != ip:
                 clean = rdns.replace(".local", "").replace(".lan", "").replace(".home", "").strip()
+                smart = classify_smart_device(vendor, clean, "rDNS", open_ports, ip, is_gateway)
+                if smart:
+                    s_name, s_type, s_os = smart
+                    return {
+                        "real_name": s_name,
+                        "name_source": "rdns",
+                        "vendor": vendor,
+                        "device_type": "router" if is_gateway else s_type,
+                        "os_hint": s_os,
+                        "is_randomized_mac": is_rand,
+                    }
                 return {
                     "real_name": clean,
                     "name_source": "rdns",
@@ -370,6 +551,19 @@ def resolve_device_identity(
     fused_os = port_os or ttl_os or os_hint
     if port_dtype and not is_gateway:
         dev_type = port_dtype
+
+    # Check smart device classifier for vendor + open ports / OUI
+    smart = classify_smart_device(vendor, "", "", open_ports, ip, is_gateway)
+    if smart and not is_gateway and not is_rand:
+        s_name, s_type, s_os = smart
+        return {
+            "real_name": s_name,
+            "name_source": "port_ttl_fusion" if (port_os or ttl_os or open_ports) else "oui",
+            "vendor": vendor,
+            "device_type": s_type,
+            "os_hint": s_os or fused_os,
+            "is_randomized_mac": is_rand,
+        }
 
     if is_gateway:
         name = f"{vendor} Wi-Fi Router" if vendor != "Unknown Manufacturer" else f"Main Wi-Fi Router ({ip})"

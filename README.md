@@ -19,15 +19,18 @@ GARUDA v6 is a cross-platform personal & enterprise-ready network defense platfo
 | **AWS Edge-to-Cloud Bridge** | `aws_bridge.py` | Exports local LAN alerts in official **AWS Security Finding Format (ASFF `2018-10-08`)** and analyzes **AWS VPC Flow Logs** (`/api/v5/aws/asff-preview`, `/api/v5/aws/vpc-flow-analyze`). |
 | **Cryptographic & Web3 Ledger** | `attestation_ledger.py`, `GarudaAttestation.sol` | Thread-safe Ed25519 + SHA-256 hash-chained SQLite ledger with binary Merkle inclusion proofs, tamper/deletion detection, restart recovery, and EVM smart contract anchoring. |
 | **OS Firewall & Malware Shield** | `firewall_manager.py`, `malware_scanner.py` | Real Windows Defender (`netsh`) / Linux (`ufw`/`iptables`/`nft`) IP blocking, Public Wi-Fi Lockdown with clean policy recovery, ClamAV/YARA/psutil process HIDS, and Abuse.ch C2 feeds. |
+| **Resilient IEEE OUI & Smart Device Engine** | `oui_db.py`, `device_scanner.py` | Multi-source failover (Linux `hwdata` + `arp-scan` + IEEE CSV + local cache) with 40,400+ vendor prefixes. Dedicated model recognition for **Amazon Echo/Alexa** (Dot, Show, Studio), **Amazon Fire TV Stick** (4K Max, 4K, Lite, Cube), **Google Nest/Chromecast**, **Apple TV/HomePod**, and **Roku**. |
 | **Collision-Free 2D/3D Frontend** | `layoutEngine.js`, `topology3d.js`, `app.js` | Golden-ratio / circumference ring-packing up to 1,000+ devices, 2D radar Pan & Zoom (`0.5x`–`5.0x`), dynamic 3D WebGL plinth/camera scaling, and skippable MIL-STD tactical bootloader. |
 
 ---
 
-## Verified Adversarial Benchmark (`68 / 68` Automated Tests)
+## Verified Adversarial Benchmark (`81 / 81` Automated Tests)
 
 | Suite | Tests | Coverage |
 | :--- | :---: | :--- |
 | `tests/test_garuda_v6_adversarial_50.py` | **50 / 50** | Red Team (`RT-01`..`RT-12`), ML (`ML-01`..`ML-08`), Blue Team (`BT-01`..`BT-07`), Forensics (`FR-01`..`FR-08`), Purple Team (`PT-01`..`PT-08`), Resilience (`PR-01`..`PR-07`). |
+| `tests/test_garuda_v6_1_adaptive_adversary.py` | **5 / 5** | Adaptive MAC Hopping, Low-and-Slow Distributed Evasion, Encrypted C2 Behavioral Cadence, Anti-Baseline Poisoning Guardrail, Crash & Recovery Under Pressure. |
+| `tests/test_garuda_ieee_sync_and_smart_devices.py` | **8 / 8** | Multi-source IEEE OUI sync resilience, offline bundled cache fallback, vendor normalization, Amazon Alexa & Fire TV Stick detection, smart IoT classification. |
 | `tests/test_garuda_v5_resilience.py` | **7 / 7** | Campus `/24` clamp, Proxy-ARP shield, VPN skip, TTL/Port OS fusion, plugin isolation, hot-reload rules, AWS ASFF + VPC Flow Logs. |
 | `tests/test_garuda_v4.py` | **11 / 11** | Core OUI, SSDP XML, IDS, EICAR/reverse-shell, firewall builders, advisor, DGA entropy, IsolationForest, Merkle, Ed25519, Solidity contract. |
 
@@ -43,6 +46,6 @@ garuda.bat
 chmod +x run.sh
 sudo ./run.sh
 
-# Run all 68 automated tests
+# Run all 81 automated tests
 pytest -v tests/
 ```

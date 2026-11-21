@@ -15,7 +15,8 @@ venv/
 ENV/
 
 # Local runtime data, sqlite databases & private keys
-data/
+data/*
+!data/ieee_oui_cache.json
 *.db
 *.db-journal
 *.sqlite3
