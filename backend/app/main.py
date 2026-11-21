@@ -48,12 +48,31 @@ async def lifespan(app: FastAPI):
     init_db()
     monitor.bind_loop(asyncio.get_running_loop())
     monitor.ids.start()
-    db = SessionLocal()
-    try:
-        await monitor.run_scan(db, active_sweep=True, check_doh=False)
-    finally:
-        db.close()
+
+    async def _initial_scan_task():
+        await asyncio.sleep(0.1)
+        db = SessionLocal()
+        try:
+            await monitor.run_scan(db, active_sweep=True, check_doh=False)
+        except Exception:
+            pass
+        finally:
+            db.close()
+
+    asyncio.create_task(_initial_scan_task())
     monitor._bg_task = asyncio.create_task(monitor.background_loop())
+
+    def _open_browser_when_ready():
+        import os
+        import webbrowser
+        if os.getenv("GARUDA_NO_BROWSER") != "1":
+            try:
+                webbrowser.open("http://localhost:8000")
+            except Exception:
+                pass
+
+    asyncio.get_running_loop().call_later(0.4, _open_browser_when_ready)
+
     try:
         yield
     finally:
