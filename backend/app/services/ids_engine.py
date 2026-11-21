@@ -204,6 +204,13 @@ class LivePacketIDS:
 
             # 1a. Gateway MAC Spoofing (MITM)
             if gw_ip and gw_mac and src_ip == gw_ip and src_mac != gw_mac:
+                with self._lock:
+                    self._arp_spoof_history[src_mac].append(now)
+                    recent_spoofers = [
+                        m for m, ts in self._arp_spoof_history.items()
+                        if any(now - t <= 300.0 for t in ts)
+                    ]
+
                 alert = {
                     "severity": "critical",
                     "category": "active_attack",
@@ -222,6 +229,25 @@ class LivePacketIDS:
                 }
                 triggered.append(alert)
                 self._emit_alert(f"arp_gw_{src_mac}", alert, cooldown_sec=30.0)
+
+                # 1a-ii. Adaptive MITM: Attacker hopping MAC addresses while spoofing gateway
+                if len(recent_spoofers) >= 2:
+                    adaptive_alert = {
+                        "severity": "critical",
+                        "category": "active_attack",
+                        "attack_type": "adaptive_mitm_mac_hopping",
+                        "title": f"Adaptive MITM Attack Detected (MAC Hopping x{len(recent_spoofers)})",
+                        "plain_explanation": (
+                            f"An adaptive attacker is repeatedly hopping MAC addresses ({', '.join(recent_spoofers)}) "
+                            f"while spoofing your gateway ({gw_ip}). Enforcing static ARP pinning."
+                        ),
+                        "what_to_do": "Router ARP is pinned. Enable Emergency Lockdown or disconnect from Wi-Fi.",
+                        "technical_evidence": json.dumps({"gateway_ip": gw_ip, "hopping_macs": recent_spoofers, "count": len(recent_spoofers)}),
+                        "related_mac": src_mac,
+                        "related_ip": src_ip,
+                    }
+                    triggered.append(adaptive_alert)
+                    self._emit_alert("adaptive_mitm_hopping", adaptive_alert, cooldown_sec=15.0)
 
             # 1b. v5 Proxy-ARP Shield: enterprise AP/gateway legitimately replies for many client IPs
             elif self.proxy_arp_enabled and src_ip != gw_ip and src_mac in (gw_mac, self.proxy_mac):
@@ -331,7 +357,7 @@ class LivePacketIDS:
 
                 dist_dq = self._dist_syn_events[dst_ip]
                 dist_dq.append((now, src_ip, dport))
-                dist_recent = [(s, p) for t, s, p in dist_dq if now - t <= 120.0]
+                dist_recent = [(s, p) for t, s, p in dist_dq if now - t <= 600.0]
                 dist_sources = {s for s, _ in dist_recent}
                 dist_ports = {p for _, p in dist_recent}
 
@@ -370,7 +396,7 @@ class LivePacketIDS:
                 triggered.append(alert)
                 self._emit_alert(f"slow_scan_{src_ip}", alert, cooldown_sec=120.0)
 
-            if len(dist_sources) >= 3 and len(dist_ports) >= 9:
+            if len(dist_sources) >= 3 and len(dist_ports) >= 6:
                 alert = {
                     "severity": "critical",
                     "category": "active_attack",
@@ -378,7 +404,7 @@ class LivePacketIDS:
                     "title": f"Coordinated Distributed Port Scan ({len(dist_sources)} Sources Targeting {dst_ip})",
                     "plain_explanation": (
                         f"{len(dist_sources)} different hosts ({', '.join(sorted(dist_sources)[:5])}) coordinated to probe "
-                        f"{len(dist_ports)} distinct ports on your device within 2 minutes."
+                        f"{len(dist_ports)} distinct ports on your device within 10 minutes."
                     ),
                     "what_to_do": "Activate 1-Click Firewall Lockdown immediately and inspect all participating hosts.",
                     "technical_evidence": json.dumps({"sources": sorted(dist_sources), "distinct_ports": sorted(dist_ports)[:30], "target_ip": dst_ip}),
