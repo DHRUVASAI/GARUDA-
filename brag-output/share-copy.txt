@@ -1,7 +1,53 @@
-Your home router sees zero network threats. Enterprise SIEMs cost $100,000/year. 
+================================================================================
+OFF CAMPUS BY AWS — SOCIAL MEDIA LAUNCH COPY (GARUDA)
+TAGS: GrowthX (@GrowthX) and AWS Developers (@AWSDevelopers)
+================================================================================
 
-We built GARUDA v4 — an open-source, autonomous personal network guardian that turns your workstation into a real-time packet IDS, behavioral ML anomaly detector, Ed25519 Merkle attestation ledger, and host firewall.
+[LINKEDIN POST]
+Enterprise SIEMs cost $100,000+ per year. But your home Wi-Fi router is completely blind to stealth ARP spoofing, rogue IoT botnets, and covert C2 beaconing.
 
-100% self-hosted, zero cloud dependency, and rated Grade A+ (9.3/10) across 31 rigorous security benchmarks.
+Meet GARUDA — Autonomous Personal Network Guardian, Live Packet IDS, ML Anomaly Engine, and Cryptographic Forensic Ledger.
 
-👉 Star on GitHub: https://github.com/DHRUVASAI/GARUDA-
+Built for #OffCampus by @AWS Developers and @GrowthX!
+
+Key Features:
+- 5-Layer Device Fingerprinting (mDNS, SSDP UPnP XML, DHCP Option 12, NetBIOS, 35,000+ IEEE OUI cache) — zero "unknown device" labels.
+- Raw Scapy L2-L7 Packet IDS detecting ARP cache poisoning, SYN floods, and DNS hijacking in real time.
+- Isolation Forest 8D behavioral ML anomaly scoring with streaming RRCF trees.
+- RFC 6962 SHA-256 Merkle Forensic Ledger with Ed25519 cryptographic block signing.
+- Guaranteed zero-collision 2D radar + 3D WebGL PBR network topology scaling to 1,000+ devices.
+- 1-Command local live execution: `garuda`
+
+Tagging @GrowthX and @AWS Developers! Watch the 60-second walkthrough below!
+
+#AWS #GrowthX #CyberSecurity #MachineLearning #Web3 #FullStack #Python #FastAPI #CloudSecurity #DevOps #Hackathon #OffCampus
+
+--------------------------------------------------------------------------------
+
+[X / TWITTER POST]
+Your Wi-Fi router is blind. Enterprise SIEMs cost $100k/yr.
+
+I built GARUDA — an autonomous personal network guardian with live Scapy IDS, 8D Isolation Forest ML anomaly scoring, and Ed25519 Merkle forensic ledger.
+
+Built for Off Campus by @AWSDevelopers & @GrowthX!
+
+Watch the 60s demo:
+
+#GrowthX #AWS #OffCampus #CyberSecurity #AI
+
+--------------------------------------------------------------------------------
+
+[INSTAGRAM REEL / POST]
+Your home Wi-Fi is blind. Here is how I solved it for Off Campus by @awsdevelopers and @growthx!
+
+Meet GARUDA — the autonomous personal network guardian:
+1. 5-Layer real hardware identification
+2. Real-time Scapy L2-L7 packet IDS
+3. Isolation Forest ML behavioral anomaly tensors
+4. Ed25519 cryptographic attestation ledger
+5. 2D/3D collision-free radar topology
+
+Run in 1 command: `garuda`
+
+#OffCampus #AWS #GrowthX #Cybersecurity #AI #MachineLearning #Coding #BuildInPublic #Developers
+================================================================================
