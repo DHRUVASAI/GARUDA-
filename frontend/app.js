@@ -937,6 +937,8 @@
 
   // System Theme & Saved Preference Detection (Supports Daylight & Night Ops)
   function getEffectiveTheme() {
+    const urlTheme = new URLSearchParams(window.location.search).get("theme");
+    if (urlTheme === "dark" || urlTheme === "light") return urlTheme;
     const saved = localStorage.getItem("garuda_v4_theme");
     if (saved === "dark" || saved === "light") return saved;
     const sysDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -1479,7 +1481,7 @@
     const overlay = $("garudaBootOverlay");
     if (!overlay) return;
 
-    if (!force && sessionStorage.getItem("garuda_boot_done")) {
+    if (!force && (sessionStorage.getItem("garuda_boot_done") || new URLSearchParams(window.location.search).get("noboot") === "1")) {
       overlay.classList.add("boot-hidden");
       return;
     }
@@ -1590,6 +1592,8 @@
       const snap = await api("/api/snapshot");
       (snap.alerts || []).forEach((a) => state.seenAlertIds.add(a.id));
       applySnapshot(snap);
+      const urlView = new URLSearchParams(window.location.search).get("view");
+      if (urlView) switchView(urlView);
       connectWebSocket();
     } catch (_) {
       state.offlineMode = true;
