@@ -6,7 +6,10 @@
   <a href="#how-it-works"><img src="https://img.shields.io/badge/-How_It_Works-6366f1?style=flat-square" alt="How It Works" /></a>
   <a href="#security-audit"><img src="https://img.shields.io/badge/-Security_Audit-10b981?style=flat-square" alt="Security Audit" /></a>
   <a href="#api"><img src="https://img.shields.io/badge/-API_Reference-f59e0b?style=flat-square" alt="API" /></a>
+  <a href="https://github.com/DHRUVASAI/GARUDA-"><img src="https://img.shields.io/badge/Off_Campus_Code-FXYKCA-blueviolet?style=flat-square" alt="Off Campus Code: FXYKCA" /></a>
 </p>
+
+<p align="center"><strong>Off Campus Code:</strong> <code>FXYKCA</code></p>
 
 <br />
 
