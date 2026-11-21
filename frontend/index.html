@@ -76,7 +76,7 @@
           <span class="eyebrow">Live IDS · IsolationForest AI · Ed25519 Merkle Ledger · OS Firewall</span>
           <h1 class="hero-h1">See everyone on your Wi-Fi. Catch anomalies before they touch your data.</h1>
           <p class="hero-lead">
-            GARUDA v4 identifies your exact network and every connected device by its real name, learns your baseline with an
+            GARUDA v6 identifies your exact network and every connected device by its real name, learns your baseline with an
             <strong>IsolationForest AI engine</strong>, seals critical forensic alerts into a tamper-proof <strong>Ed25519 Merkle &amp; Web3 ledger</strong>,
             scans for malware, and enforces real OS firewall rules—all translated into clear plain English.
           </p>
@@ -115,7 +115,7 @@
       </div>
 
       <div class="section-head">
-        <span class="kicker">GARUDA v4 DEFENSE PIPELINE</span>
+        <span class="kicker">GARUDA v6 DEFENSE PIPELINE</span>
         <h2>Full-spectrum local protection without confusing jargon</h2>
       </div>
       <div class="workflow-strip">
@@ -169,7 +169,7 @@
         </div>
 
         <div class="card">
-          <div class="kicker">GARUDA v4 LIVE ENGINE CAPABILITIES</div>
+          <div class="kicker">GARUDA v6 LIVE ENGINE CAPABILITIES</div>
           <h3 style="margin:6px 0 14px; font-size:20px;">Zero-black-box local audit</h3>
           <div class="cap-list">
             <div class="cap-row"><span>OS &amp; Privilege Level</span><strong class="mono" id="capOs">Checking…</strong></div>
@@ -321,6 +321,15 @@
             <button class="seg-btn" data-filter="safe">Marked Safe</button>
           </div>
         </div>
+
+        <div class="filter-bar" id="deviceCategoryFilter">
+          <button class="filter-pill active" data-cat="all">All Devices</button>
+          <button class="filter-pill" data-cat="amazon">Amazon &amp; Smart IoT</button>
+          <button class="filter-pill" data-cat="computers">Laptops &amp; PCs</button>
+          <button class="filter-pill" data-cat="mobile">Phones &amp; Tablets</button>
+          <button class="filter-pill" data-cat="unverified">Unverified Only</button>
+          <button class="filter-pill" data-cat="alerts">Flagged / High Risk</button>
+        </div>
       </div>
 
       <div class="device-list" id="deviceList"></div>
@@ -356,6 +365,8 @@
             <h2 class="card-title" style="margin:4px 0 6px;">Test Active, Passive, AI &amp; Malware Alerts</h2>
             <p class="muted" style="margin:0 0 12px;">Safely trigger realistic attacks to verify live alerts, AI anomaly scoring, and cryptographic ledger sealing.</p>
             <div class="sim-grid">
+              <button class="btn btn-sm" data-sim="amazon_devices">📡 Test: Amazon Alexa &amp; Fire TV Stick Discovery</button>
+              <button class="btn btn-sm" data-sim="adaptive_mitm">⚡ Test: Adaptive MAC Hopping MITM</button>
               <button class="btn btn-sm" data-sim="ml_beacon">🤖 AI: Robotic C2 Beaconing &amp; DGA Anomaly</button>
               <button class="btn btn-sm" data-sim="new_unknown_device">+ Unknown Device Joins Wi-Fi</button>
               <button class="btn btn-sm" data-sim="arp_spoof">⚡ Active: Fake Router (MITM ARP Spoof)</button>

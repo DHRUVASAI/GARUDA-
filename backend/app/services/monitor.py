@@ -523,6 +523,39 @@ class GarudaV4Monitor:
             })
             return await self.run_scan(db, active_sweep=False, check_doh=False)
 
+        if scenario == "amazon_devices":
+            self._sim_extra_devices = [d for d in self._sim_extra_devices if not d["mac"].startswith("84:28:59")]
+            self._sim_extra_devices.append({
+                "ip": "192.168.1.55", "mac": "84:28:59:AA:11:01", "real_name": "Amazon Fire TV Stick 4K Max",
+                "name_source": "dhcp", "vendor": "Amazon", "device_type": "tv", "os_hint": "Fire OS (Android based)",
+                "is_gateway": False, "is_self": False, "is_randomized_mac": False, "latency_ms": 12,
+            })
+            self._sim_extra_devices.append({
+                "ip": "192.168.1.56", "mac": "84:28:59:BB:22:02", "real_name": "Amazon Echo Dot (Alexa)",
+                "name_source": "dhcp", "vendor": "Amazon", "device_type": "iot", "os_hint": "Fire OS / Amazon Linux",
+                "is_gateway": False, "is_self": False, "is_randomized_mac": False, "latency_ms": 8,
+            })
+            return await self.run_scan(db, active_sweep=False, check_doh=False)
+
+        if scenario == "adaptive_mitm":
+            self._sim_extra_devices = [d for d in self._sim_extra_devices if d["mac"] != "02:00:00:AA:BB:01"]
+            self._sim_extra_devices.append({
+                "ip": "192.168.1.115", "mac": "02:00:00:AA:BB:01", "real_name": "Adaptive-Adversary (Hopping MAC)",
+                "name_source": "dhcp", "vendor": "Private Wi-Fi Address", "device_type": "laptop", "os_hint": "Kali Linux / MAC Hopper",
+                "is_gateway": False, "is_self": False, "is_randomized_mac": True, "latency_ms": 3,
+            })
+            a = Alert(
+                severity="critical", category="active_attack", attack_type="adaptive_mitm",
+                title="Adaptive Adversary: Rapid Gateway MAC Hopping MITM (192.168.1.115)",
+                plain_explanation="Attacker is rotating MAC addresses every 30 seconds while continuing gateway impersonation and ARP poisoning.",
+                what_to_do="Enforce Gateway Pinning immediately and block 192.168.1.115 via OS Firewall.",
+                related_mac="02:00:00:AA:BB:01", related_ip="192.168.1.115", resolved=False, created_at=now,
+            )
+            db.add(a)
+            db.commit()
+            append_attestation_block(db, event_type="adaptive_mitm", summary=a.title, payload={"mac": "02:00:00:AA:BB:01", "ip": "192.168.1.115"})
+            return await self.run_scan(db, active_sweep=False, check_doh=False)
+
         if scenario == "arp_spoof":
             base = self._default_sim_network()
             base["gateway_mac"] = "DE:AD:BE:9F:01:22"

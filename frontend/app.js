@@ -2,6 +2,7 @@
   const state = {
     view: "landing",
     filter: "all",
+    categoryFilter: "all",
     search: "",
     renamingMac: null,
     topologyMode: "3d", // "3d" | "2d"
@@ -39,6 +40,8 @@
   }
 
   function showToast(title, body, severity = "info") {
+    if (severity === "critical") playTactileClick("alert");
+    else if (severity === "warning") playTactileClick("tick");
     const stack = $("toastStack");
     const el = document.createElement("div");
     el.className = `toast ${severity}`;
@@ -68,7 +71,7 @@
   function sendDesktopNotification(alert) {
     if (!state.desktopNotifications || !("Notification" in window)) return;
     if (Notification.permission === "granted") {
-      new Notification(`GARUDA v4 Alert: ${alert.title}`, { body: alert.plain_explanation });
+      new Notification(`GARUDA v6 Alert: ${alert.title}`, { body: alert.plain_explanation });
     }
   }
 
@@ -133,6 +136,7 @@
   }
 
   function switchView(viewName) {
+    playTactileClick("tick");
     state.view = viewName;
     document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
     const target = $(`view-${viewName}`);
@@ -343,6 +347,31 @@
       .filter((d) => d.is_online)
       .filter((d) => (state.filter === "safe" ? d.is_safe : state.filter === "unverified" ? !d.is_safe : true))
       .filter((d) => {
+        if (!state.categoryFilter || state.categoryFilter === "all") return true;
+        const v = (d.vendor || "").toLowerCase();
+        const n = (d.display_name || "").toLowerCase();
+        const t = (d.device_type || "").toLowerCase();
+        const o = (d.os_hint || "").toLowerCase();
+        if (state.categoryFilter === "amazon") {
+          return v.includes("amazon") || n.includes("echo") || n.includes("alexa") || n.includes("fire tv") || n.includes("firestick") || n.includes("aft") || t === "tv" || t === "iot";
+        }
+        if (state.categoryFilter === "computers") {
+          return t === "laptop" || o.includes("windows") || o.includes("mac") || o.includes("linux");
+        }
+        if (state.categoryFilter === "mobile") {
+          return t === "phone" || t === "tablet" || o.includes("android") || o.includes("ios");
+        }
+        if (state.categoryFilter === "unverified") {
+          return !d.is_safe;
+        }
+        if (state.categoryFilter === "alerts") {
+          const ml = mlMap.get(d.mac.toUpperCase());
+          const hasCrit = snap.alerts.some((a) => !a.resolved && (a.related_mac === d.mac || a.related_ip === d.ip));
+          return Boolean(hasCrit || (ml && ml.risk_level === "critical"));
+        }
+        return true;
+      })
+      .filter((d) => {
         if (!q) return true;
         return (
           (d.display_name || "").toLowerCase().includes(q) ||
@@ -373,6 +402,17 @@
           ? `<span class="pill pill-accent">Main Router</span>`
           : d.is_self ? `<span class="pill pill-accent">This Device</span>` : "";
 
+        // Brand tag
+        let brandTag = "";
+        const vLower = (d.vendor || "").toLowerCase();
+        if (vLower.includes("amazon")) brandTag = `<span class="brand-tag brand-tag-amazon">Amazon</span>`;
+        else if (vLower.includes("apple")) brandTag = `<span class="brand-tag brand-tag-apple">Apple</span>`;
+        else if (vLower.includes("google")) brandTag = `<span class="brand-tag brand-tag-google">Google</span>`;
+        else if (vLower.includes("samsung")) brandTag = `<span class="brand-tag brand-tag-samsung">Samsung</span>`;
+        else if (vLower.includes("espressif") || vLower.includes("tuya") || vLower.includes("raspberry") || vLower.includes("roku")) {
+          brandTag = `<span class="brand-tag brand-tag-iot">${escapeHtml(d.vendor)}</span>`;
+        }
+
         const renameBox =
           state.renamingMac === d.mac
             ? `<div class="rename-inline">
@@ -383,11 +423,12 @@
             : "";
 
         return `
-          <div class="device-row ${d.is_safe ? "" : "unverified"}">
+          <div class="device-row device-card ${d.is_safe ? "" : "unverified"}">
             <div class="device-left">
               <div class="device-icon">${icon}</div>
               <div>
                 <div class="device-name">
+                  ${brandTag}
                   <span>${escapeHtml(d.display_name)}</span>
                   ${safeBadge} ${mlBadge} ${roleBadge} ${srcBadge}
                 </div>
@@ -636,6 +677,53 @@
     state.selectedDeviceMac = null;
   }
 
+  // Tactical Micro-Audio Feedback (Safe Gain < 0.05)
+  let audioCtx = null;
+  function playTactileClick(type = "tick") {
+    try {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) audioCtx = new AudioContext();
+      }
+      if (!audioCtx) return;
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const t = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      if (type === "tick") {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, t);
+        osc.frequency.exponentialRampToValueAtTime(440, t + 0.03);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.linearRampToValueAtTime(0.03, t + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+        osc.start(t);
+        osc.stop(t + 0.035);
+      } else if (type === "action") {
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(520, t);
+        osc.frequency.exponentialRampToValueAtTime(780, t + 0.05);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.linearRampToValueAtTime(0.04, t + 0.006);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+        osc.start(t);
+        osc.stop(t + 0.065);
+      } else if (type === "alert") {
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(360, t);
+        osc.frequency.exponentialRampToValueAtTime(240, t + 0.08);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.linearRampToValueAtTime(0.035, t + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+        osc.start(t);
+        osc.stop(t + 0.085);
+      }
+    } catch (_) {}
+  }
+
   // 2D Precision Orbital Radar (Hero preview + 2D Topology Mode)
   function drawRadar(canvasId, compact = false) {
     const canvas = $(canvasId);
@@ -655,6 +743,38 @@
     const mlMap = new Map((state.snapshot.ml?.device_scores || []).map((m) => [m.mac.toUpperCase(), m]));
 
     ctx.clearRect(0, 0, w, h);
+
+    // Phosphor Sonar Sweeper Wedge
+    const sweepAngle = (state.animPhase * 1.5) % (Math.PI * 2);
+    const sweepArc = Math.PI / 4.5;
+    ctx.save();
+    const sweepGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+    if (hasCrit) {
+      sweepGrad.addColorStop(0, dark ? "rgba(227, 96, 80, 0.22)" : "rgba(197, 54, 36, 0.16)");
+      sweepGrad.addColorStop(1, "transparent");
+    } else {
+      sweepGrad.addColorStop(0, dark ? "rgba(99, 148, 242, 0.20)" : "rgba(30, 79, 214, 0.14)");
+      sweepGrad.addColorStop(1, "transparent");
+    }
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, maxR, sweepAngle - sweepArc, sweepAngle);
+    ctx.closePath();
+    ctx.fillStyle = sweepGrad;
+    ctx.fill();
+
+    // Sweeper Leading Edge Line
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(sweepAngle) * maxR, cy + Math.sin(sweepAngle) * maxR);
+    ctx.strokeStyle = hasCrit
+      ? (dark ? "rgba(255, 110, 95, 0.65)" : "rgba(197, 54, 36, 0.55)")
+      : (dark ? "rgba(120, 180, 255, 0.65)" : "rgba(30, 79, 214, 0.55)");
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    ctx.restore();
+
+    // Subtle Radial Pulse
     const pulseR = ((state.animPhase * 0.35) % 1) * maxR;
     ctx.beginPath();
     ctx.arc(cx, cy, pulseR, 0, Math.PI * 2);
@@ -662,15 +782,37 @@
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    [0.36, 0.68, 1.0].forEach((f, idx) => {
+    // Concentric Range Rings & Distance Labels
+    const rings = [
+      { r: 0.35, label: "10m" },
+      { r: 0.68, label: "25m / 5 GHz" },
+      { r: 1.0, label: "50m Perimeter" }
+    ];
+    rings.forEach((ring, idx) => {
+      const r = maxR * ring.r;
       ctx.beginPath();
-      ctx.arc(cx, cy, maxR * f, 0, Math.PI * 2);
-      ctx.strokeStyle = dark ? "rgba(236,234,228,0.10)" : "rgba(22,24,29,0.10)";
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = dark ? "rgba(236,234,228,0.10)" : "rgba(22,24,29,0.08)";
       ctx.setLineDash(idx === 2 ? [4, 4] : []);
       ctx.lineWidth = 1;
       ctx.stroke();
+      ctx.setLineDash([]);
+
+      if (!compact) {
+        ctx.fillStyle = dark ? "rgba(236, 234, 228, 0.35)" : "rgba(22, 24, 29, 0.32)";
+        ctx.font = "600 9.5px 'JetBrains Mono', monospace";
+        ctx.textAlign = "left";
+        ctx.fillText(ring.label, cx + 6, cy - r + 11);
+      }
     });
-    ctx.setLineDash([]);
+
+    // Cardinal Crosshair Ticks
+    ctx.strokeStyle = dark ? "rgba(236, 234, 228, 0.08)" : "rgba(22, 24, 29, 0.06)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - maxR, cy); ctx.lineTo(cx + maxR, cy);
+    ctx.moveTo(cx, cy - maxR); ctx.lineTo(cx, cy + maxR);
+    ctx.stroke();
 
     const devices = state.snapshot.devices.filter((d) => d.is_online);
     const gw = devices.find((d) => d.is_gateway) || devices[0];
@@ -719,6 +861,16 @@
       ctx.fillStyle = color;
       ctx.fill();
 
+      // Shockwave ripples for critical threats
+      if (isAlert) {
+        const alertPulse = ((state.animPhase * 0.8 + idx * 0.3) % 1) * 22;
+        ctx.beginPath();
+        ctx.arc(x, y, 12 + alertPulse, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(197, 54, 36, ${Math.max(0, 0.6 * (1 - alertPulse / 22))})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
       const hovered = !compact && state.hoveredMac === d.mac;
       ctx.beginPath();
       ctx.arc(x, y, (compact ? 9 : 12) + (hovered ? 2.5 : 0), 0, Math.PI * 2);
@@ -727,6 +879,24 @@
       ctx.strokeStyle = dark ? "#1A1E26" : "#FAF8F4";
       ctx.lineWidth = 2.5;
       ctx.stroke();
+
+      // Target acquisition reticle brackets [+] when hovered
+      if (hovered) {
+        const bSize = compact ? 14 : 18;
+        const arm = 5;
+        ctx.strokeStyle = isAlert ? (dark ? "#FF6E5F" : "#C53624") : (dark ? "#78B4FF" : "#1E4FD6");
+        ctx.lineWidth = 1.8;
+        // Top-left
+        ctx.beginPath();
+        ctx.moveTo(x - bSize, y - bSize + arm); ctx.lineTo(x - bSize, y - bSize); ctx.lineTo(x - bSize + arm, y - bSize);
+        // Top-right
+        ctx.moveTo(x + bSize - arm, y - bSize); ctx.lineTo(x + bSize, y - bSize); ctx.lineTo(x + bSize, y - bSize + arm);
+        // Bottom-left
+        ctx.moveTo(x - bSize, y + bSize - arm); ctx.lineTo(x - bSize, y + bSize); ctx.lineTo(x - bSize + arm, y + bSize);
+        // Bottom-right
+        ctx.moveTo(x + bSize - arm, y + bSize); ctx.lineTo(x + bSize, y + bSize); ctx.lineTo(x + bSize, y + bSize - arm);
+        ctx.stroke();
+      }
 
       ctx.fillStyle = dark ? "#ECEAE4" : "#16181D";
       ctx.font = compact ? "600 11px Inter, sans-serif" : "600 12px Inter, sans-serif";
@@ -999,8 +1169,18 @@
 
     const filt = e.target.closest("[data-filter]");
     if (filt) {
+      playTactileClick("tick");
       state.filter = filt.dataset.filter;
       document.querySelectorAll(".seg-btn[data-filter]").forEach((b) => b.classList.toggle("active", b === filt));
+      renderDevices();
+      return;
+    }
+
+    const catBtn = e.target.closest("[data-cat]");
+    if (catBtn) {
+      playTactileClick("tick");
+      state.categoryFilter = catBtn.dataset.cat;
+      document.querySelectorAll(".filter-pill[data-cat]").forEach((b) => b.classList.toggle("active", b === catBtn));
       renderDevices();
       return;
     }
@@ -1069,6 +1249,7 @@
 
     const simBtn = e.target.closest("[data-sim]");
     if (simBtn) {
+      playTactileClick("action");
       try { applySnapshot(await api("/api/simulate", { method: "POST", body: JSON.stringify({ scenario: simBtn.dataset.sim }) })); }
       catch (err) { showToast("Simulation Error", err.message, "warning"); }
       return;

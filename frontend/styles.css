@@ -937,3 +937,166 @@ body.theme-dark::before { opacity: 0.03; }
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.05); }
 }
+
+/* ==================== CRAFT-ELEVATED STYLING SYSTEM ==================== */
+
+/* Custom Palette Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: 99px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-muted);
+}
+
+/* Custom Text Selection */
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Tabular Numeric Discipline */
+.mono, .spec-cell strong, .kpi-val, .score-num, .cap-chip strong, .step-num, .sim-grid button, .device-mac, .device-ip {
+  font-variant-numeric: tabular-nums lining-nums !important;
+  font-feature-settings: "tnum" 1, "zero" 1 !important;
+}
+
+/* Brand Badges */
+.brand-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.brand-tag-amazon {
+  background: rgba(255, 153, 0, 0.14);
+  color: #D47A00;
+  border: 1px solid rgba(255, 153, 0, 0.35);
+}
+body.theme-dark .brand-tag-amazon {
+  color: #FFB03A;
+  border-color: rgba(255, 176, 58, 0.45);
+}
+
+.brand-tag-apple {
+  background: rgba(120, 120, 120, 0.12);
+  color: #555555;
+  border: 1px solid rgba(120, 120, 120, 0.28);
+}
+body.theme-dark .brand-tag-apple {
+  color: #D1D5DB;
+  border-color: rgba(209, 213, 219, 0.35);
+}
+
+.brand-tag-google {
+  background: rgba(66, 133, 244, 0.14);
+  color: #1A73E8;
+  border: 1px solid rgba(66, 133, 244, 0.35);
+}
+body.theme-dark .brand-tag-google {
+  color: #8AB4F8;
+}
+
+.brand-tag-samsung {
+  background: rgba(20, 40, 160, 0.12);
+  color: #1428A0;
+  border: 1px solid rgba(20, 40, 160, 0.28);
+}
+body.theme-dark .brand-tag-samsung {
+  color: #7AA2F7;
+}
+
+.brand-tag-iot {
+  background: rgba(16, 185, 129, 0.14);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+body.theme-dark .brand-tag-iot {
+  color: #34D399;
+}
+
+/* Category Filter Tabs */
+.filter-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 0 10px;
+}
+.filter-pill {
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--ink-muted);
+  padding: 5px 12px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.14s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+.filter-pill:hover {
+  color: var(--ink);
+  border-color: var(--hairline-strong);
+}
+.filter-pill.active {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+  box-shadow: 0 2px 6px -2px rgba(0,0,0,0.22);
+}
+
+/* Interactive Device Card Elevate */
+.device-card {
+  position: relative;
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease, border-color 0.16s ease;
+}
+.device-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 8px 24px -10px rgba(22, 24, 29, 0.16);
+  border-color: var(--hairline-strong);
+}
+
+/* Live Sonar Canvas Enhancement */
+.hero-canvas-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-mid);
+}
+.hero-canvas-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at center, transparent 65%, color-mix(in srgb, var(--surface) 25%, transparent) 100%);
+}
+
+/* Tactical Crosshair Reticle Overlay */
+.tactical-hud-overlay {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10.5px;
+  color: var(--ink-muted);
+  pointer-events: none;
+  z-index: 5;
+  letter-spacing: 0.05em;
+}
