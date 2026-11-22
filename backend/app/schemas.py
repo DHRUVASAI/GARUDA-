@@ -307,3 +307,34 @@ class DashboardSnapshotOut(BaseModel):
 
 class SimulateScenarioIn(BaseModel):
     scenario: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class UserInfoOut(BaseModel):
+    id: int
+    username: str
+    role: str
+    is_active: bool
+    created_at: Optional[datetime] = None
+
+
+class LoginResponse(BaseModel):
+    token: str
+    token_type: str = "Bearer"
+    expires_in_hours: int = 24
+    user: UserInfoOut
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+
+class AuthStatusOut(BaseModel):
+    auth_enabled: bool = True
+    authenticated: bool
+    user: Optional[UserInfoOut] = None

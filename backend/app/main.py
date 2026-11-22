@@ -15,7 +15,9 @@ from .models import Alert, Device, FirewallRuleLog, MalwareScanRun, NetworkBasel
 from .schemas import (
     AlertSettingsIn,
     AlertSettingsOut,
+    AuthStatusOut,
     CapabilitiesOut,
+    ChangePasswordRequest,
     DashboardSnapshotOut,
     DeviceRenameUpdate,
     DeviceTrustUpdate,
@@ -24,8 +26,11 @@ from .schemas import (
     FirewallBlockRequest,
     FirewallLockdownRequest,
     LedgerSealRequest,
+    LoginRequest,
+    LoginResponse,
     MalwareScanRequest,
     SimulateScenarioIn,
+    UserInfoOut,
 )
 from .services.attestation_ledger import (
     anchor_merkle_root_evm,
@@ -53,18 +58,29 @@ from .services.aws_bridge import (
     parse_vpc_flow_logs,
     to_aws_security_hub_asff,
 )
+from .services.auth import (
+    create_access_token,
+    decode_access_token,
+    ensure_default_admin,
+    get_current_user_optional,
+    hash_password,
+    require_operator,
+    verify_password,
+)
+from .models import User, utcnow
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    monitor.bind_loop(asyncio.get_running_loop())
-    monitor.ids.start()
     db = SessionLocal()
     try:
+        ensure_default_admin(db)
         await monitor.run_scan(db, active_sweep=False, check_doh=False)
     finally:
         db.close()
+    monitor.bind_loop(asyncio.get_running_loop())
+    monitor.ids.start()
     monitor._bg_task = asyncio.create_task(monitor.background_loop())
     try:
         yield
@@ -92,6 +108,51 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# -------------------- Authentication & Operator Control --------------------
+@app.post("/api/auth/login", response_model=LoginResponse)
+def auth_login(body: LoginRequest, db: Session = Depends(get_db)):
+    ensure_default_admin(db)
+    user = db.query(User).filter(User.username == body.username.strip(), User.is_active == True).first()
+    if not user or not verify_password(body.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+    user.last_login_at = utcnow()
+    db.commit()
+    token = create_access_token(user.username, user.role)
+    return LoginResponse(
+        token=token,
+        token_type="Bearer",
+        expires_in_hours=24,
+        user=UserInfoOut(id=user.id, username=user.username, role=user.role, is_active=user.is_active, created_at=user.created_at),
+    )
+
+
+@app.get("/api/auth/me", response_model=AuthStatusOut)
+def auth_me(current_user: Optional[User] = Depends(get_current_user_optional)):
+    if not current_user:
+        return AuthStatusOut(auth_enabled=True, authenticated=False, user=None)
+    return AuthStatusOut(
+        auth_enabled=True,
+        authenticated=True,
+        user=UserInfoOut(id=current_user.id, username=current_user.username, role=current_user.role, is_active=current_user.is_active, created_at=current_user.created_at),
+    )
+
+
+@app.post("/api/auth/logout")
+def auth_logout():
+    return {"ok": True, "message": "Logged out successfully."}
+
+
+@app.post("/api/auth/change-password")
+def auth_change_password(body: ChangePasswordRequest, current_user: User = Depends(require_operator), db: Session = Depends(get_db)):
+    if not verify_password(body.old_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password incorrect.")
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters.")
+    current_user.password_hash = hash_password(body.new_password)
+    db.commit()
+    return {"ok": True, "message": "Password updated successfully."}
 
 
 @app.get("/api/health")

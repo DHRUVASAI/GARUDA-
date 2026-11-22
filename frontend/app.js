@@ -18,6 +18,8 @@
     desktopNotifications: true,
     seenAlertIds: new Set(),
     checkedAdvice: new Set(JSON.parse(localStorage.getItem("garuda_v4_checked_advice") || "[]")),
+    authToken: localStorage.getItem("garuda_auth_token") || null,
+    authUser: null,
     animPhase: 0,
     radarZoom: 1.0,
     radarPanX: 0,
@@ -76,9 +78,13 @@
   }
 
   async function api(path, opts = {}) {
+    const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+    if (state.authToken) {
+      headers["Authorization"] = `Bearer ${state.authToken}`;
+    }
     const res = await fetch(path, {
-      headers: { "Content-Type": "application/json" },
       ...opts,
+      headers,
     });
     if (!res.ok) {
       let detail = `HTTP ${res.status}`;
@@ -86,9 +92,70 @@
         const j = await res.json();
         detail = j.detail || j.message || detail;
       } catch (_) {}
+      if (res.status === 401 && path !== "/api/auth/login" && path !== "/api/auth/me") {
+        state.authToken = null;
+        state.authUser = null;
+        localStorage.removeItem("garuda_auth_token");
+        updateAuthUI(null);
+        openAuthModal();
+      }
       throw new Error(detail);
     }
     return res.json();
+  }
+
+  function updateAuthUI(user) {
+    state.authUser = user;
+    const btn = $("btnOperatorAuth");
+    if (!btn) return;
+    if (user && user.username) {
+      btn.classList.add("logged-in");
+      btn.innerHTML = `<span class="auth-dot online"></span> <strong>${escapeHtml(user.username)}</strong> (Operator)`;
+      btn.title = `Logged in as ${user.username} (${user.role}). Click to log out.`;
+    } else {
+      btn.classList.remove("logged-in");
+      btn.innerHTML = `<span class="auth-dot guest"></span> <strong>Operator Login</strong>`;
+      btn.title = "Authenticate as an operator to unlock firewall controls.";
+    }
+  }
+
+  function openAuthModal() {
+    playTactileClick("tick");
+    const m = $("authModal"), b = $("authModalBackdrop"), err = $("authErrorMsg");
+    if (m) m.hidden = false;
+    if (b) b.hidden = false;
+    if (err) err.hidden = true;
+    setTimeout(() => $("authUsernameInput")?.focus(), 60);
+  }
+
+  function closeAuthModal() {
+    playTactileClick("tick");
+    const m = $("authModal"), b = $("authModalBackdrop"), p = $("authPasswordInput"), err = $("authErrorMsg");
+    if (m) m.hidden = true;
+    if (b) b.hidden = true;
+    if (p) p.value = "";
+    if (err) err.hidden = true;
+  }
+
+  async function checkAuthStatus() {
+    if (!state.authToken) {
+      updateAuthUI(null);
+      return;
+    }
+    try {
+      const res = await api("/api/auth/me");
+      if (res && res.authenticated && res.user) {
+        updateAuthUI(res.user);
+      } else {
+        state.authToken = null;
+        localStorage.removeItem("garuda_auth_token");
+        updateAuthUI(null);
+      }
+    } catch (_) {
+      state.authToken = null;
+      localStorage.removeItem("garuda_auth_token");
+      updateAuthUI(null);
+    }
   }
 
   // Fault-Isolated 3D PBR Topology Mount (Automatic 2D Fallback if WebGL/CDN unavailable)
@@ -1382,6 +1449,66 @@
     if ($("radarZoomLabel")) $("radarZoomLabel").textContent = Math.round(state.radarZoom * 100) + "%";
   });
 
+  // Operator Authentication Event Handlers
+  $("btnOperatorAuth")?.addEventListener("click", () => {
+    if (state.authUser) {
+      if (confirm(`Currently authenticated as "${state.authUser.username}". Do you want to log out?`)) {
+        state.authToken = null;
+        state.authUser = null;
+        localStorage.removeItem("garuda_auth_token");
+        updateAuthUI(null);
+        showToast("Logged Out", "Operator session ended. Switched to guest mode.", "info");
+      }
+    } else {
+      openAuthModal();
+    }
+  });
+
+  $("btnCloseAuthModal")?.addEventListener("click", closeAuthModal);
+  $("btnCancelAuth")?.addEventListener("click", closeAuthModal);
+  $("authModalBackdrop")?.addEventListener("click", closeAuthModal);
+
+  $("btnTogglePassword")?.addEventListener("click", () => {
+    const p = $("authPasswordInput");
+    if (!p) return;
+    p.type = p.type === "password" ? "text" : "password";
+  });
+
+  $("authLoginForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const u = $("authUsernameInput")?.value.trim();
+    const p = $("authPasswordInput")?.value;
+    const submitBtn = $("btnSubmitAuth");
+    const errBox = $("authErrorMsg");
+    if (!u || !p) return;
+
+    submitBtn.textContent = "Authenticating…";
+    submitBtn.disabled = true;
+    if (errBox) errBox.hidden = true;
+
+    try {
+      const res = await api("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ username: u, password: p }),
+      });
+      state.authToken = res.token;
+      localStorage.setItem("garuda_auth_token", res.token);
+      updateAuthUI(res.user);
+      closeAuthModal();
+      playTactileClick("action");
+      showToast("Operator Authenticated", `Welcome back, ${res.user.username}. Security and firewall controls active.`, "info");
+    } catch (err) {
+      if (errBox) {
+        errBox.textContent = err.message || "Invalid operator credentials.";
+        errBox.hidden = false;
+      }
+      playTactileClick("alert");
+    } finally {
+      submitBtn.textContent = "Authenticate Operator";
+      submitBtn.disabled = false;
+    }
+  });
+
   // MIL-STD Tactical Bootloader Sequence (fast 1.1s, skippable)
   (function initBootloader() {
     const overlay = $("milBootloader");
@@ -1407,6 +1534,7 @@
 
   (async () => {
     startAnimationLoop();
+    await checkAuthStatus();
     try {
       const snap = await api("/api/snapshot");
       (snap.alerts || []).forEach((a) => state.seenAlertIds.add(a.id));

@@ -126,3 +126,15 @@ class AlertSettings(Base):
     telegram_chat_id = Column(String(128), nullable=True)
     simulation_mode = Column(Boolean, default=False, nullable=False)
     scan_interval_sec = Column(Integer, default=15, nullable=False)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(64), unique=True, index=True, nullable=False)
+    password_hash = Column(String(256), nullable=False)
+    role = Column(String(32), nullable=False, default="admin")  # admin | operator | viewer
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    last_login_at = Column(DateTime(timezone=True), nullable=True)

@@ -49,6 +49,7 @@
 
     <div class="top-actions">
       <span class="pill pill-accent" id="connectionModePill"><span class="dot"></span> Connecting…</span>
+      <button class="btn btn-sm btn-auth" id="btnOperatorAuth" title="Operator Authentication"><span class="auth-dot guest"></span> Operator Login</button>
       <button class="btn btn-sm" id="btnScanNow">Scan Now</button>
       <button class="btn btn-sm" id="btnThemeToggle" title="Switch Daylight / Night Ops">Night Ops</button>
     </div>
@@ -627,6 +628,58 @@
       <button class="btn btn-danger btn-sm" id="drawerBlockBtn">Block IP</button>
     </div>
   </aside>
+
+  <!-- Operator Authentication Modal -->
+  <div class="modal-backdrop" id="authModalBackdrop" hidden></div>
+  <div class="auth-modal" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle" hidden>
+    <div class="modal-head">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="auth-shield-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <div>
+          <div class="kicker">SECURITY ACCESS GATEWAY</div>
+          <h3 id="authModalTitle" style="margin:2px 0 0; font-size:18px;">Operator Authentication</h3>
+        </div>
+      </div>
+      <button class="btn btn-sm" id="btnCloseAuthModal" aria-label="Close dialog">✕</button>
+    </div>
+
+    <form class="auth-modal-body" id="authLoginForm" autocomplete="on">
+      <p class="muted" style="margin:0 0 16px; font-size:13px; line-height:1.45;">
+        Authenticate as an authorized operator to execute OS firewall rules, calibrate AI baselines, and seal cryptographic ledger attestations.
+      </p>
+
+      <div class="auth-field-group">
+        <label for="authUsernameInput" class="auth-label">Operator Username</label>
+        <div class="auth-input-wrap">
+          <input type="text" id="authUsernameInput" class="auth-input mono" placeholder="admin" required autocomplete="username" />
+        </div>
+      </div>
+
+      <div class="auth-field-group" style="margin-top:12px;">
+        <label for="authPasswordInput" class="auth-label">Security Key / Password</label>
+        <div class="auth-input-wrap">
+          <input type="password" id="authPasswordInput" class="auth-input mono" placeholder="••••••••••••••••" required autocomplete="current-password" />
+          <button type="button" class="btn-toggle-pw" id="btnTogglePassword" title="Show/Hide password">👁</button>
+        </div>
+      </div>
+
+      <div class="auth-error-msg" id="authErrorMsg" hidden></div>
+
+      <div class="auth-seed-hint mono muted" style="margin-top:12px; font-size:11px;">
+        Default deployment seed: <code>admin</code> / <code>garuda-admin-secure</code>
+      </div>
+
+      <div class="modal-foot" style="margin-top:20px; display:flex; justify-content:flex-end; gap:8px;">
+        <button type="button" class="btn btn-sm" id="btnCancelAuth">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm" id="btnSubmitAuth">Authenticate Operator</button>
+      </div>
+    </form>
+  </div>
 
   <div class="toast-stack" id="toastStack" aria-live="polite"></div>
   <script src="/static/layoutEngine.js"></script>
