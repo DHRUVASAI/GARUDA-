@@ -243,6 +243,8 @@ class GarudaV4Monitor:
         else:
             net_info = await asyncio.to_thread(detect_network_environment)
             observed = await asyncio.to_thread(discover_lan_devices, net_info, self.ids.dhcp_hostnames, active_sweep)
+            if self._sim_extra_devices:
+                observed = list(observed) + list(self._sim_extra_devices)
 
         ensure_genesis_block(db, net_info["ssid"])
         net_info["arp_pinned"] = net_info["ssid"] in self.arp_pinned_ssids
@@ -474,16 +476,20 @@ class GarudaV4Monitor:
 
     async def trigger_simulation(self, db: Session, scenario: str) -> dict:
         settings = _get_or_create_settings(db)
-        settings.simulation_mode = True
-        db.commit()
         now = datetime.now(timezone.utc)
 
         if scenario == "reset":
+            settings.simulation_mode = False
             self._sim_network_override = None
             self._sim_extra_devices = []
             ml_engine.inject_simulated_anomaly("", None)
             db.query(Alert).update({Alert.resolved: True})
-            db.query(Device).filter(Device.mac.in_(["DE:AD:BE:9F:01:22", "28:6C:07:55:AA:91", "B8:27:EB:88:11:09"])).delete(synchronize_session=False)
+            db.query(Device).filter(Device.mac.in_([
+                "DE:AD:BE:9F:01:22", "28:6C:07:55:AA:91", "B8:27:EB:88:11:09",
+                "70:85:C2:44:10:01", "A4:83:E7:21:9B:04", "F0:18:98:77:3A:11",
+                "34:23:BA:50:12:88", "3C:D9:2B:99:40:12", "84:28:59:AA:11:01",
+                "84:28:59:BB:22:02", "02:00:00:AA:BB:01"
+            ])).delete(synchronize_session=False)
             db.commit()
             return await self.run_scan(db, active_sweep=False, check_doh=False)
 

@@ -76,6 +76,14 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         ensure_default_admin(db)
+        import os
+        if os.getenv("GARUDA_SIMULATION_MODE", "false").lower() not in ("1", "true", "yes"):
+            s = _get_or_create_settings(db)
+            if s.simulation_mode:
+                s.simulation_mode = False
+                db.commit()
+            monitor._sim_network_override = None
+            monitor._sim_extra_devices = []
         await monitor.run_scan(db, active_sweep=False, check_doh=False)
     finally:
         db.close()
