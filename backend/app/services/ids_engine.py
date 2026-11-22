@@ -58,6 +58,10 @@ class LivePacketIDS:
         self._dhcp_servers_seen: Dict[str, str] = {}   # server_ip -> mac
         self._arp_spoof_history: Dict[str, List[float]] = collections.defaultdict(list)
 
+        # Fast-Path O(1) sliding-window trackers (fast-anything accelerator pattern)
+        self._syn_trackers: Dict[str, Any] = {}
+        self._slow_syn_trackers: Dict[str, Any] = {}
+
     def set_proxy_arp_mode(self, enabled: bool, proxy_mac: Optional[str] = None):
         with self._lock:
             self.proxy_arp_enabled = bool(enabled)
@@ -346,20 +350,30 @@ class LivePacketIDS:
         # Active Port Scans hitting this device (RT-04 Fast, RT-05 Slow, RT-06 Distributed)
         if local_ip and dst_ip == local_ip and src_ip != local_ip:
             with self._lock:
+                # Fast accelerator O(1) sliding tracker (fast-anything pattern)
+                if src_ip not in self._syn_trackers:
+                    from .fast_accel import FastSlidingTracker
+                    self._syn_trackers[src_ip] = FastSlidingTracker(window_sec=10.0, maxlen=120)
+                    self._slow_syn_trackers[src_ip] = FastSlidingTracker(window_sec=900.0, maxlen=500)
+
+                recent_distinct = self._syn_trackers[src_ip].add(now, dport)
+                slow_distinct = self._slow_syn_trackers[src_ip].add(now, dport)
+                slow_span = self._slow_syn_trackers[src_ip].get_time_span(now)
+
                 dq = self._syn_ports[src_ip]
                 dq.append((now, dport))
-                recent_ports: Set[int] = {p for t, p in dq if now - t <= 10.0}
-
                 slow_dq = self._slow_syn_ports[src_ip]
                 slow_dq.append((now, dport))
-                slow_ports: Set[int] = {p for t, p in slow_dq if now - t <= 900.0}
-                slow_span = (max(t for t, _ in slow_dq if now - t <= 900.0) - min(t for t, _ in slow_dq if now - t <= 900.0)) if len(slow_dq) >= 2 else 0.0
 
                 dist_dq = self._dist_syn_events[dst_ip]
                 dist_dq.append((now, src_ip, dport))
                 dist_recent = [(s, p) for t, s, p in dist_dq if now - t <= 600.0]
                 dist_sources = {s for s, _ in dist_recent}
                 dist_ports = {p for _, p in dist_recent}
+
+                # Materialize port sets only if alert threshold crossed
+                recent_ports: Set[int] = {p for t, p in dq if now - t <= 10.0} if recent_distinct >= 12 else set()
+                slow_ports: Set[int] = {p for t, p in slow_dq if now - t <= 900.0} if (slow_distinct >= 10 and slow_span >= 30.0) else set()
 
             if len(recent_ports) >= 12:
                 alert = {

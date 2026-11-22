@@ -143,25 +143,32 @@ def analyze_domain_dga(domain: str) -> dict:
 
 
 def compute_beacon_regularity(timestamps: List[float]) -> float:
-    """Detect periodic C2 beaconing (returns 0.0 benign/irregular .. 1.0 robotic periodic cadence)."""
-    if len(timestamps) < 5:
+    """Detect periodic C2 beaconing (returns 0.0 benign/irregular .. 1.0 robotic periodic cadence).
+    
+    Accelerated via `fast_accel` with transparent fallback.
+    """
+    try:
+        from .fast_accel import fast_beacon_regularity
+        return fast_beacon_regularity(timestamps)
+    except Exception:
+        if len(timestamps) < 5:
+            return 0.0
+        ordered = sorted(timestamps)
+        deltas = [ordered[i + 1] - ordered[i] for i in range(len(ordered) - 1) if ordered[i + 1] > ordered[i]]
+        if len(deltas) < 4:
+            return 0.0
+        mean_dt = statistics.mean(deltas)
+        if mean_dt < 1.0:
+            return 0.0
+        stdev_dt = statistics.pstdev(deltas)
+        cv = stdev_dt / mean_dt  # CV near 0 => highly periodic machine beacon
+        if cv <= 0.08:
+            return 0.96
+        if cv <= 0.18:
+            return round(0.96 - (cv - 0.08) * 5.0, 3)
+        if cv <= 0.35:
+            return round(max(0.0, 0.46 - (cv - 0.18) * 2.5), 3)
         return 0.0
-    ordered = sorted(timestamps)
-    deltas = [ordered[i + 1] - ordered[i] for i in range(len(ordered) - 1) if ordered[i + 1] > ordered[i]]
-    if len(deltas) < 4:
-        return 0.0
-    mean_dt = statistics.mean(deltas)
-    if mean_dt < 1.0:
-        return 0.0
-    stdev_dt = statistics.pstdev(deltas)
-    cv = stdev_dt / mean_dt  # CV near 0 => highly periodic machine beacon
-    if cv <= 0.08:
-        return 0.96
-    if cv <= 0.18:
-        return round(0.96 - (cv - 0.08) * 5.0, 3)
-    if cv <= 0.35:
-        return round(max(0.0, 0.46 - (cv - 0.18) * 2.5), 3)
-    return 0.0
 
 
 class _PureIsolationForest:
@@ -386,12 +393,12 @@ class BehavioralMLEngine:
         # Even if an attacker keeps 6-7 features completely normal, a single extreme malicious feature must escalate
         critical_peak = max(vec[1], vec[2], vec[3], vec[4], vec[7])
         drift_or_offhours_peak = max(vec[0], vec[6])
-        if critical_peak >= 0.78:
-            peak_boost = 0.55 * critical_peak
+        if critical_peak >= 0.75:
+            peak_boost = 0.58 * critical_peak
         elif critical_peak >= 0.45:
-            peak_boost = 0.36 * critical_peak
-        elif drift_or_offhours_peak >= 0.62:
-            peak_boost = 0.34 * drift_or_offhours_peak
+            peak_boost = 0.38 * critical_peak
+        elif drift_or_offhours_peak >= 0.60:
+            peak_boost = 0.35 * drift_or_offhours_peak
         else:
             peak_boost = 0.0
 
