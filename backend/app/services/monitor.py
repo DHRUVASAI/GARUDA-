@@ -6,6 +6,7 @@ Web3 attestation ledger, ClamAV/YARA/psutil malware scanning, OS firewall contro
 
 import asyncio
 import json
+import os
 import platform
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
@@ -33,6 +34,10 @@ def _get_or_create_settings(db: Session) -> AlertSettings:
         db.add(s)
         db.commit()
         db.refresh(s)
+    elif os.getenv("GARUDA_SIMULATION_MODE", "").lower() in ("0", "false", "no"):
+        if s.simulation_mode:
+            s.simulation_mode = False
+            db.commit()
     return s
 
 

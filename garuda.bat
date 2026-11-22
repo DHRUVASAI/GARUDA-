@@ -2,6 +2,7 @@
 setlocal
 title GARUDA v6 -- Tactical Network Guardian
 
+set "GARUDA_SIMULATION_MODE=false"
 set "LAUNCH_DIR=%~dp0"
 cd /d "%LAUNCH_DIR%"
 
