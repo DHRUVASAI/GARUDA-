@@ -6,6 +6,7 @@ Web3 attestation ledger, ClamAV/YARA/psutil malware scanning, OS firewall contro
 
 import asyncio
 import json
+import os
 import platform
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
