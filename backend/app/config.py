@@ -1,13 +1,23 @@
 import ctypes
 import os
 import platform
+import sys
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+if hasattr(sys, "_MEIPASS"):
+    BUNDLE_DIR = Path(sys._MEIPASS)
+    BASE_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "GARUDA"
+    BASE_DIR.mkdir(parents=True, exist_ok=True)
+    FRONTEND_DIR = BUNDLE_DIR / "frontend"
+    RULES_DIR = BUNDLE_DIR / "rules" if (BUNDLE_DIR / "rules").exists() else BASE_DIR / "rules"
+    CONTRACTS_DIR = BUNDLE_DIR / "contracts" if (BUNDLE_DIR / "contracts").exists() else BASE_DIR / "contracts"
+else:
+    BASE_DIR = Path(__file__).resolve().parents[2]
+    FRONTEND_DIR = BASE_DIR / "frontend"
+    RULES_DIR = BASE_DIR / "rules"
+    CONTRACTS_DIR = BASE_DIR / "contracts"
+
 DATA_DIR = BASE_DIR / "data"
-RULES_DIR = BASE_DIR / "rules"
-FRONTEND_DIR = BASE_DIR / "frontend"
-CONTRACTS_DIR = BASE_DIR / "contracts"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 RULES_DIR.mkdir(parents=True, exist_ok=True)

@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="manifest" href="/static/manifest.json" />
+  <meta name="theme-color" content="#161b22" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>GARUDA — Tactical Network Guardian, IsolationForest AI &amp; Forensic Ledger</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
@@ -696,6 +700,27 @@
           <button class="btn btn-sm" id="btnAdminDoLockdown">Toggle Lockdown Mode</button>
         </div>
         <div id="adminBlockedListWrap" style="margin-top:12px;"></div>
+      </div>
+
+      <!-- Connected Fleet & Remote Networks -->
+      <div class="card v7-section-gap">
+        <div class="card-header">
+          <div>
+            <h3>Connected Fleet &amp; Remote Scanned Networks</h3>
+            <p class="muted">Live telemetry and device inventories reported from laptops and mobile devices running GARUDA worldwide.</p>
+          </div>
+          <span class="pill pill-safe" id="fleetAgentsCountBadge">0 Networks Synced</span>
+        </div>
+        <div class="v7-table-wrap" style="margin-top:12px;">
+          <table class="v7-table">
+            <thead>
+              <tr><th>Time</th><th>Agent / Device</th><th>Platform</th><th>Network (SSID)</th><th>Subnet</th><th>Devices</th><th>Score</th></tr>
+            </thead>
+            <tbody id="adminFleetBody">
+              <tr><td colspan="7" class="muted">No remote fleet reports received yet. Once any laptop or phone runs GARUDA, its scan will sync here.</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div class="card v7-section-gap">

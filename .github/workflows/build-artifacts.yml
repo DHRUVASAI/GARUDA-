@@ -1,0 +1,75 @@
+name: Build Standalone Executables & Android APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-windows-exe:
+    name: Build Windows Standalone GARUDA.exe
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Compile GARUDA.exe
+        run: |
+          python build_exe.py
+
+      - name: Upload GARUDA.exe Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GARUDA-Windows-x64
+          path: dist/GARUDA.exe
+
+  build-android-apk:
+    name: Build Android APK (Capacitor Native Shell)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: "zulu"
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Capacitor & Dependencies
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init "GARUDA" "com.garuda.guardian" --web-dir "frontend"
+          npx cap add android
+
+      - name: Build Android Release APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload Android APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GARUDA-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk

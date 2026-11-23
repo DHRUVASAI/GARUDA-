@@ -23,7 +23,8 @@ from ..auth import (
 )
 from ..config import AWS_REGION, DATABASE_URL, REQUIRE_AUTH
 from ..database import get_db
-from ..models import AdminAuditLog, DoctorReport, User
+from ..models import AdminAuditLog, DoctorReport, FleetAgentReport, User
+from ..schemas import FleetReportIn
 from ..services.network_doctor import NetworkDoctor
 from ..services.adaptive_intel import adaptive_intel
 
@@ -291,6 +292,61 @@ def admin_system_status(
         "total_audit_logs": db.query(AdminAuditLog).count(),
         "total_doctor_reports": db.query(DoctorReport).count(),
     }
+
+
+@router.post("/api/telemetry/report")
+def submit_telemetry_report(report: FleetReportIn, db: Session = Depends(get_db)):
+    """Receives live scan telemetry from any desktop (.exe) or mobile agent and stores in central database."""
+    entry = FleetAgentReport(
+        agent_id=report.agent_id,
+        agent_name=report.agent_name,
+        agent_os=report.agent_os,
+        ssid=report.ssid,
+        gateway_ip=report.gateway_ip,
+        gateway_mac=report.gateway_mac,
+        subnet_cidr=report.subnet_cidr,
+        device_count=report.device_count,
+        devices_json=json.dumps(report.devices),
+        alerts_count=report.alerts_count,
+        alerts_json=json.dumps(report.alerts),
+        security_score=report.security_score,
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return {"status": "ok", "report_id": entry.id, "reported_at": entry.created_at.isoformat()}
+
+
+@router.get("/api/admin/fleet")
+def list_fleet_reports(db: Session = Depends(get_db)):
+    """Lists recent fleet scan reports across all laptops, phones, and networks."""
+    reports = db.query(FleetAgentReport).order_by(FleetAgentReport.created_at.desc()).limit(100).all()
+    results = []
+    for r in reports:
+        try:
+            devs = json.loads(r.devices_json)
+        except Exception:
+            devs = []
+        try:
+            alrts = json.loads(r.alerts_json)
+        except Exception:
+            alrts = []
+        results.append({
+            "id": r.id,
+            "agent_id": r.agent_id,
+            "agent_name": r.agent_name,
+            "agent_os": r.agent_os,
+            "ssid": r.ssid,
+            "gateway_ip": r.gateway_ip,
+            "subnet_cidr": r.subnet_cidr,
+            "device_count": r.device_count,
+            "devices": devs,
+            "alerts_count": r.alerts_count,
+            "alerts": alrts,
+            "security_score": r.security_score,
+            "reported_at": r.created_at.isoformat() if r.created_at else None,
+        })
+    return {"total": len(results), "reports": results}
 
 
 class FalsePositiveRequest(BaseModel):

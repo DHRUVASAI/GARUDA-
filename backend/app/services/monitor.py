@@ -8,6 +8,7 @@ import asyncio
 import json
 import os
 import platform
+import socket
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
@@ -418,7 +419,42 @@ class GarudaV4Monitor:
         for ca in created_alerts:
             await ws_manager.broadcast("alert", ca)
             asyncio.create_task(dispatch_external_alert(ca, settings))
+        asyncio.create_task(self.sync_telemetry_to_cloud(snapshot))
         return snapshot
+
+    async def sync_telemetry_to_cloud(self, snapshot: dict):
+        """Asynchronously stream live network scan telemetry to central cloud database."""
+        cloud_url = os.getenv("GARUDA_CLOUD_URL", "https://garuda-z57m.onrender.com").rstrip("/")
+        is_cloud = bool(
+            os.getenv("RENDER") or os.getenv("AWS_EXECUTION_ENV") or os.getenv("DYNO") or 
+            os.getenv("GARUDA_CLOUD_MODE", "").lower() in ("1", "true")
+        )
+        if is_cloud:
+            return
+        try:
+            import httpx
+            net = snapshot.get("network", {})
+            online_devs = [d for d in snapshot.get("devices", []) if d.get("is_online")]
+            active_alerts = [a for a in snapshot.get("alerts", []) if not a.get("resolved")]
+            advisor = snapshot.get("advisor", {})
+            payload = {
+                "agent_id": socket.gethostname().lower(),
+                "agent_name": f"{socket.gethostname()} ({platform.system()})",
+                "agent_os": f"{platform.system()} {platform.release()}",
+                "ssid": net.get("ssid", "Unknown Network"),
+                "gateway_ip": net.get("gateway_ip"),
+                "gateway_mac": net.get("gateway_mac"),
+                "subnet_cidr": net.get("subnet_cidr"),
+                "device_count": len(online_devs),
+                "devices": online_devs,
+                "alerts_count": len(active_alerts),
+                "alerts": active_alerts,
+                "security_score": advisor.get("health_score", 100),
+            }
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                await client.post(f"{cloud_url}/api/telemetry/report", json=payload)
+        except Exception:
+            pass
 
     def _get_malware_summary(self, db: Session) -> dict:
         avail = [k for k, v in detect_available_engines().items() if v]

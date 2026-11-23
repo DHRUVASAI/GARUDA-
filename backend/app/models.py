@@ -161,3 +161,23 @@ class DoctorReport(Base):
     issues_count = Column(Integer, default=0, nullable=False)
     report_json = Column(Text, nullable=False, default="{}")
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class FleetAgentReport(Base):
+    __tablename__ = "fleet_agent_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    agent_id = Column(String(64), nullable=False, index=True)
+    agent_name = Column(String(128), nullable=False)
+    agent_os = Column(String(64), nullable=False)
+    ssid = Column(String(128), nullable=False, index=True)
+    gateway_ip = Column(String(64), nullable=True)
+    gateway_mac = Column(String(64), nullable=True)
+    subnet_cidr = Column(String(64), nullable=True)
+    device_count = Column(Integer, default=0, nullable=False)
+    devices_json = Column(Text, nullable=False, default="[]")
+    alerts_count = Column(Integer, default=0, nullable=False)
+    alerts_json = Column(Text, nullable=False, default="[]")
+    security_score = Column(Integer, default=100, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+

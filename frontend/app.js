@@ -1999,6 +1999,36 @@
     renderAdminFirewallControls();
 
     try {
+      const fleetRes = await fetch("/api/admin/fleet");
+      if (fleetRes.ok) {
+        const fleetData = await fleetRes.json();
+        const badge = $("fleetAgentsCountBadge");
+        if (badge) badge.textContent = `${fleetData.total} Reports Synced`;
+        const fleetBody = $("adminFleetBody");
+        if (fleetBody) {
+          if (!fleetData.reports || fleetData.reports.length === 0) {
+            fleetBody.innerHTML = `<tr><td colspan="7" class="muted" style="text-align:center;padding:16px;">No remote fleet reports received yet. Once any laptop or phone runs GARUDA, its scan will sync here.</td></tr>`;
+          } else {
+            fleetBody.innerHTML = fleetData.reports.map((r) => {
+              const timeStr = r.reported_at ? new Date(r.reported_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now";
+              return `
+                <tr>
+                  <td><span class="muted" style="font-size:12px;">${timeStr}</span></td>
+                  <td><strong>${escapeHtml(r.agent_name || r.agent_id)}</strong></td>
+                  <td><span class="pill pill-neutral">${escapeHtml(r.agent_os || "Unknown OS")}</span></td>
+                  <td><span class="pill pill-accent">${escapeHtml(r.ssid)}</span></td>
+                  <td><code>${escapeHtml(r.subnet_cidr || "—")}</code></td>
+                  <td><strong>${r.device_count}</strong> devices</td>
+                  <td><span class="pill ${r.security_score >= 80 ? 'pill-safe' : 'pill-warn'}">${r.security_score}/100</span></td>
+                </tr>
+              `;
+            }).join("");
+          }
+        }
+      }
+    } catch {}
+
+    try {
       const statsRes = await fetch("/api/admin/system-status");
       if (statsRes.ok) {
         const s = await statsRes.json();

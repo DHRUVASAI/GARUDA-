@@ -307,3 +307,19 @@ class DashboardSnapshotOut(BaseModel):
 
 class SimulateScenarioIn(BaseModel):
     scenario: str
+
+
+class FleetReportIn(BaseModel):
+    agent_id: str
+    agent_name: str
+    agent_os: str
+    ssid: str
+    gateway_ip: Optional[str] = None
+    gateway_mac: Optional[str] = None
+    subnet_cidr: Optional[str] = None
+    device_count: int = 0
+    devices: List[dict] = []
+    alerts_count: int = 0
+    alerts: List[dict] = []
+    security_score: int = 100
+
