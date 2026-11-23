@@ -309,7 +309,7 @@ class GarudaV4Monitor:
                 row.last_seen = now
             else:
                 auto_safe = bool(d["is_self"] or (first_bootstrap and d["is_gateway"]))
-                db.add(Device(
+                new_dev = Device(
                     mac=mac,
                     ip=d["ip"],
                     real_name=d["real_name"],
@@ -325,7 +325,9 @@ class GarudaV4Monitor:
                     latency_ms=d["latency_ms"],
                     first_seen=now,
                     last_seen=now,
-                ))
+                )
+                db.add(new_dev)
+                existing_by_mac[mac] = new_dev
 
         for mac, row in existing_by_mac.items():
             if mac not in seen_macs:
@@ -356,7 +358,10 @@ class GarudaV4Monitor:
                 created_alerts.append(_serialize_alert(a))
                 unresolved_keys.add(key)
 
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
 
         # Seal critical alerts into the cryptographic attestation ledger
         for ca in created_alerts:

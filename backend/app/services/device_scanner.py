@@ -369,7 +369,7 @@ def fingerprint_brand_and_model(
         return "Philips / Smart Color LED Bulb", "Philips Hue / Signify", "bulb", "Zigbee / Wi-Fi Smart Lighting"
     if "fan" in lower_comb or "atomberg" in lower_comb or "havells" in lower_comb:
         return "Smart BLDC Motor Ceiling Fan", "Atomberg / Smart Home", "fan", "Smart Home IoT Fan"
-    if "ac" in lower_comb or "daikin" in lower_comb or "voltas" in lower_comb or "cooler" in lower_comb:
+    if re.search(r"\b(ac|hvac|air[- ]?conditioner|daikin|voltas|cooler)\b", lower_comb):
         return "Smart Inverter Split AC", "Daikin / Voltas", "ac", "HVAC Smart Climate Control"
     if "fridge" in lower_comb or "refrigerator" in lower_comb:
         return "Smart Connected Refrigerator", "Samsung / LG ThinQ", "fridge", "Smart Appliance IoT"
@@ -595,8 +595,25 @@ def discover_lan_devices(net_info: dict, dhcp_hostnames: Optional[Dict[str, str]
             "latency_ms": latencies.get(ip, 1 if is_self else None),
         }
 
+    # Deduplicate MAC collisions (Cloud SDN / Proxy-ARP virtual bridges)
+    used_macs = set()
+    cleaned_items = []
+    for ip, mac in ip_to_mac.items():
+        norm_mac = normalize_mac(mac)
+        if norm_mac in used_macs:
+            ip_parts = ip.split(".")
+            if len(ip_parts) == 4:
+                try:
+                    norm_mac = f"{norm_mac[:12]}:{int(ip_parts[2]) % 256:02X}:{int(ip_parts[3]) % 256:02X}"
+                except Exception:
+                    norm_mac = f"{norm_mac[:15]}:{len(used_macs) % 256:02X}"
+            else:
+                norm_mac = f"{norm_mac[:15]}:{len(used_macs) % 256:02X}"
+        used_macs.add(norm_mac)
+        cleaned_items.append((ip, norm_mac))
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=24) as ex:
-        devices = list(ex.map(_build, ip_to_mac.items()))
+        devices = list(ex.map(_build, cleaned_items))
 
     devices.sort(key=lambda d: (not d["is_gateway"], not d["is_self"], d["ip"]))
     return devices
