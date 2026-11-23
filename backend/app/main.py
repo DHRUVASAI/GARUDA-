@@ -547,7 +547,8 @@ async def websocket_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
     db = SessionLocal()
     try:
-        await websocket.send_json({"type": "snapshot", "data": monitor.get_snapshot(db)})
+        snap_data = monitor.get_snapshot(db)
+        await websocket.send_text(json.dumps({"type": "snapshot", "data": snap_data}, default=str))
     finally:
         db.close()
     try:

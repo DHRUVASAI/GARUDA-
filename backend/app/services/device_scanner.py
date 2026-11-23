@@ -237,9 +237,16 @@ def _ping_host(ip: str) -> Optional[int]:
     return None
 
 
-def read_os_arp_table() -> List[Tuple[str, str]]:
-    """Parse OS ARP / neighbor cache into [(ip, mac), ...]."""
+def read_os_arp_table(subnet_cidr: Optional[str] = None) -> List[Tuple[str, str]]:
+    """Parse OS ARP / neighbor cache into [(ip, mac), ...], optionally filtered to subnet_cidr."""
     entries: Dict[str, str] = {}
+    target_net = None
+    if subnet_cidr:
+        try:
+            target_net = ipaddress.ip_network(subnet_cidr, strict=False)
+        except Exception:
+            target_net = None
+
     sys_name = platform.system().lower()
     if sys_name == "linux":
         out = subprocess.run(["ip", "neigh", "show"], capture_output=True, text=True, timeout=3, check=False).stdout
@@ -248,7 +255,8 @@ def read_os_arp_table() -> List[Tuple[str, str]]:
             if m:
                 ip, mac = m.group(1), normalize_mac(m.group(2))
                 if not mac.startswith(("FF:FF:FF", "01:00:5E", "33:33")):
-                    entries[ip] = mac
+                    if target_net is None or ipaddress.ip_address(ip) in target_net:
+                        entries[ip] = mac
     else:
         out = subprocess.run(["arp", "-a"], capture_output=True, text=True, timeout=3, check=False).stdout
         for line in out.splitlines():
@@ -256,7 +264,8 @@ def read_os_arp_table() -> List[Tuple[str, str]]:
             if m:
                 ip, mac = m.group(1), normalize_mac(m.group(2))
                 if mac not in ("FF:FF:FF:FF:FF:FF", "00:00:00:00:00:00") and not mac.startswith(("01:00:5E", "33:33")):
-                    entries[ip] = mac
+                    if target_net is None or (target_net and ipaddress.ip_address(ip) in target_net):
+                        entries[ip] = mac
     return list(entries.items())
 
 
@@ -344,6 +353,15 @@ def fingerprint_brand_and_model(
         return f"{p_brand} Network Laser/Inkjet Printer", p_brand, "printer", "Network Printing Service"
 
     # 5. Smartphones & Handhelds
+    if "motorola" in lower_comb or "moto" in lower_comb or "edge" in lower_comb or "razr" in lower_comb:
+        model = "Motorola Edge 60 Pro 5G" if ("edge" in lower_comb or "60" in lower_comb) else ("Motorola Razr" if "razr" in lower_comb else "Motorola Smartphone")
+        return model, "Motorola Mobility (Lenovo)", "phone", "Android / Hello UI"
+    if "pixel" in lower_comb:
+        return "Google Pixel Smartphone", "Google LLC", "phone", "Android OS"
+    if "oneplus" in lower_comb or "nord" in lower_comb:
+        return "OnePlus Smartphone", "OnePlus Technology", "phone", "OxygenOS"
+    if "vivo" in lower_comb or "iqoo" in lower_comb:
+        return "Vivo / iQOO Smartphone", "Vivo Mobile", "phone", "Funtouch OS"
     if "xiaomi" in lower_comb or "12t" in lower_comb or "poco" in lower_comb or "redmi" in lower_comb:
         model = "Xiaomi 12T Pro 5G" if "12t" in lower_comb else "Xiaomi Smartphone"
         return model, "Xiaomi Communications", "phone", "Android / HyperOS"
@@ -458,7 +476,7 @@ def resolve_device_identity(
     # Layer 4b: Reverse DNS
     try:
         old_t = socket.getdefaulttimeout()
-        socket.setdefaulttimeout(0.45)
+        socket.setdefaulttimeout(1.5)
         try:
             rdns, _, _ = socket.gethostbyaddr(ip)
             if rdns and rdns != ip:
@@ -545,8 +563,8 @@ def discover_lan_devices(net_info: dict, dhcp_hostnames: Optional[Dict[str, str]
         if effective_active_sweep and not scapy_hits and local_ip != "127.0.0.1":
             try:
                 net = ipaddress.ip_network(subnet_cidr, strict=False)
-                hosts = [str(h) for h in list(net.hosts())[:128]]
-                with concurrent.futures.ThreadPoolExecutor(max_workers=48) as ping_ex:
+                hosts = [str(h) for h in list(net.hosts())[:254]]
+                with concurrent.futures.ThreadPoolExecutor(max_workers=64) as ping_ex:
                     futs = {ping_ex.submit(_ping_host, ip): ip for ip in hosts}
                     for fut in concurrent.futures.as_completed(futs, timeout=4.5):
                         ip = futs[fut]
@@ -559,7 +577,7 @@ def discover_lan_devices(net_info: dict, dhcp_hostnames: Optional[Dict[str, str]
             except Exception:
                 pass
 
-        for ip, mac in read_os_arp_table():
+        for ip, mac in read_os_arp_table(subnet_cidr):
             ip_to_mac.setdefault(ip, mac)
 
         if gateway_ip and gateway_mac and gateway_mac != "00:00:00:00:00:00":
