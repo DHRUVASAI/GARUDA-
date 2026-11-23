@@ -1,13 +1,39 @@
 services:
-  garuda-v3:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-garuda}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_strong_password}
+      POSTGRES_DB: ${POSTGRES_DB:-garuda_prod}
+    volumes:
+      - garuda_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-garuda} -d ${POSTGRES_DB:-garuda_prod}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  garuda:
     build: .
-    network_mode: host
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-garuda}:${POSTGRES_PASSWORD:-change_me_strong_password}@db:5432/${POSTGRES_DB:-garuda_prod}
+      GARUDA_REQUIRE_AUTH: ${GARUDA_REQUIRE_AUTH:-true}
+      GARUDA_SCAN_INTERVAL: ${GARUDA_SCAN_INTERVAL:-15}
+      GARUDA_SIMULATION_MODE: ${GARUDA_SIMULATION_MODE:-false}
     cap_add:
       - NET_ADMIN
       - NET_RAW
-    environment:
-      - GARUDA_SCAN_INTERVAL=15
-      - GARUDA_SIMULATION_MODE=false
     volumes:
       - ./data:/app/data
-    restart: unless-stopped
+
+volumes:
+  garuda_pgdata:

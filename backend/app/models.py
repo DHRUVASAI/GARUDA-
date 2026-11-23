@@ -133,8 +133,31 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(64), unique=True, index=True, nullable=False)
-    password_hash = Column(String(256), nullable=False)
-    role = Column(String(32), nullable=False, default="admin")  # admin | operator | viewer
+    email = Column(String(128), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    role = Column(String(24), default="viewer", nullable=False)  # admin | analyst | viewer
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
-    last_login_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class AdminAuditLog(Base):
+    __tablename__ = "admin_audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    actor_username = Column(String(64), nullable=False, index=True)
+    action = Column(String(100), nullable=False, index=True)
+    target = Column(String(255), nullable=True)
+    detail = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class DoctorReport(Base):
+    __tablename__ = "doctor_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    triggered_by = Column(String(64), nullable=False, default="system")
+    health_score = Column(Integer, nullable=False)
+    grade = Column(String(16), nullable=False)
+    issues_count = Column(Integer, default=0, nullable=False)
+    report_json = Column(Text, nullable=False, default="{}")
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)

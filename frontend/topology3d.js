@@ -78,20 +78,55 @@ export async function mountGarudaTopology3D(containerEl, hooks) {
   sweepRing.position.y = 0.01;
   scene.add(sweepRing);
 
-  // Central Router Monolith
+  // Central Router Procedural Gateway Model
   const routerGroup = new THREE.Group();
-  const routerBody = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.46, 0.56, 1.05, 32),
-    new THREE.MeshPhysicalMaterial({ color: 0x1e4fd6, metalness: 0.62, roughness: 0.28, clearcoat: 0.5 })
+  const chassisMat = new THREE.MeshPhysicalMaterial({
+    color: 0x1a233a,
+    metalness: 0.65,
+    roughness: 0.28,
+    clearcoat: 0.6,
+    clearcoatRoughness: 0.2
+  });
+  const routerBody = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.26, 0.82), chassisMat);
+  routerBody.position.y = 0.16;
+  routerGroup.add(routerBody);
+
+  const topPlate = new THREE.Mesh(
+    new THREE.BoxGeometry(1.14, 0.04, 0.74),
+    new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.45, metalness: 0.4 })
   );
-  routerBody.position.y = 0.52;
-  const routerCap = new THREE.Mesh(
-    new THREE.TorusGeometry(0.48, 0.045, 16, 48),
-    new THREE.MeshStandardMaterial({ color: 0xf4f1ea, metalness: 0.8, roughness: 0.2 })
+  topPlate.position.set(0, 0.30, 0);
+  routerGroup.add(topPlate);
+
+  const antennaMat = new THREE.MeshStandardMaterial({ color: 0x0b0f19, metalness: 0.7, roughness: 0.3 });
+  [-0.42, 0.42].forEach((xOff, i) => {
+    const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.08, 16), antennaMat);
+    hinge.rotation.z = Math.PI / 2;
+    hinge.position.set(xOff, 0.26, -0.38);
+    const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.032, 0.95, 16), antennaMat);
+    stalk.position.set(xOff + (i === 0 ? -0.06 : 0.06), 0.70, -0.42);
+    stalk.rotation.z = i === 0 ? 0.12 : -0.12;
+    stalk.rotation.x = -0.14;
+    routerGroup.add(hinge, stalk);
+  });
+
+  const ledColors = [0x00e5ff, 0x3eb488, 0x00e5ff, 0x3eb488, 0x3eb488];
+  ledColors.forEach((hex, idx) => {
+    const led = new THREE.Mesh(
+      new THREE.SphereGeometry(0.02, 12, 12),
+      new THREE.MeshBasicMaterial({ color: hex })
+    );
+    led.position.set(-0.35 + idx * 0.175, 0.16, 0.42);
+    routerGroup.add(led);
+  });
+
+  const routerHalo = new THREE.Mesh(
+    new THREE.TorusGeometry(0.72, 0.025, 16, 64),
+    new THREE.MeshBasicMaterial({ color: 0x1e4fd6, transparent: true, opacity: 0.55 })
   );
-  routerCap.rotation.x = Math.PI / 2;
-  routerCap.position.y = 1.02;
-  routerGroup.add(routerBody, routerCap);
+  routerHalo.rotation.x = Math.PI / 2;
+  routerHalo.position.y = 0.02;
+  routerGroup.add(routerHalo);
   scene.add(routerGroup);
 
   const dynamicGroup = new THREE.Group();
@@ -100,11 +135,33 @@ export async function mountGarudaTopology3D(containerEl, hooks) {
   let interactables = [];
   let packets = [];
   let halos = [];
+  let animatedFans = [];
   let currentThemeDark = false;
   let visible = true;
   let animId = 0;
 
-  function buildDeviceMesh(deviceType, colorHex) {
+  function resolve3DCategory(deviceType, d) {
+    if (!d && !deviceType) return "iot";
+    const text = `${d?.display_name || ""} ${d?.vendor || ""} ${d?.hostname || ""} ${d?.device_type || deviceType || ""}`.toLowerCase();
+    if (/printer|canon|g4070|epson|brother|laserjet|deskjet|pixma/i.test(text)) return "printer";
+    if (/alexa|echo|dot|show|amazon speaker/i.test(text)) return "alexa";
+    if (/firetv|fire tv|firestick|fire stick|roku|chromecast|apple tv|xstream|iptv/i.test(text)) return "streaming_stick";
+    if (text.includes("amazon technologies")) {
+      return (d?.ip && d.ip.endsWith(".6")) ? "streaming_stick" : "alexa";
+    }
+    if (/tv|bravia|webos|tizen|smart tv|oled|qled|hisense|sony tv|lg tv/i.test(text)) return "tv";
+    if (/bulb|light|lamp|hue|lifx|candle|strip|wiz/i.test(text)) return "bulb";
+    if (/fan|ventilator|blower|atomberg|havells|orient/i.test(text)) return "fan";
+    if (/ac\b|air conditioner|cooler|hvac|daikin|voltas|carrier|split ac|hitachi/i.test(text)) return "ac";
+    if (/fridge|refrigerator|freezer|whirlpool/i.test(text)) return "fridge";
+    if (/camera|cctv|cam|hikvision|dahua|blink|ring|ezviz|imou|webcam/i.test(text)) return "camera";
+    if (/phone|mobile|android|iphone|galaxy|pixel|realme|redmi|xiaomi|oneplus|oppo|vivo|a73/i.test(text)) return "phone";
+    if (/omen|laptop|notebook|desktop|pc|macbook|thinkpad|dell|workstation|this computer|fugui/i.test(text)) return "computer";
+    return "iot";
+  }
+
+  function buildDeviceMesh(deviceType, colorHex, d) {
+    const category = resolve3DCategory(deviceType, d);
     const mat = new THREE.MeshPhysicalMaterial({
       color: colorHex,
       metalness: 0.45,
@@ -115,39 +172,359 @@ export async function mountGarudaTopology3D(containerEl, hooks) {
     const accentMat = new THREE.MeshStandardMaterial({ color: 0xfaf8f4, metalness: 0.7, roughness: 0.25 });
     const g = new THREE.Group();
 
-    if (deviceType === "laptop") {
-      const base = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.06, 0.48), mat);
-      base.position.y = 0.04;
-      const lid = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.42, 0.04), mat);
-      lid.position.set(0, 0.26, -0.22);
-      lid.rotation.x = -0.18;
-      g.add(base, lid);
-    } else if (deviceType === "phone" || deviceType === "tablet") {
-      const w = deviceType === "tablet" ? 0.52 : 0.28;
-      const h = deviceType === "tablet" ? 0.66 : 0.54;
-      const slab = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.06), mat);
-      slab.position.y = h / 2 + 0.06;
-      g.add(slab);
-    } else if (deviceType === "tv") {
-      const scr = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.5, 0.06), mat);
-      scr.position.y = 0.36;
-      const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 0.1, 16), accentMat);
-      stand.position.y = 0.05;
-      g.add(scr, stand);
-    } else if (deviceType === "printer") {
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.34, 0.52), mat);
-      body.position.y = 0.18;
-      const tray = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.05, 0.28), accentMat);
-      tray.position.set(0, 0.38, -0.06);
-      g.add(body, tray);
-    } else if (deviceType === "iot") {
-      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.44, 24), mat);
-      cyl.position.y = 0.22;
-      g.add(cyl);
+    if (category === "alexa") {
+      // Amazon Echo cylindrical speaker with glowing cyan torus light ring
+      const echoBody = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.28, 0.30, 0.52, 32),
+        new THREE.MeshStandardMaterial({ color: 0x1c2128, roughness: 0.85, metalness: 0.1 })
+      );
+      echoBody.position.y = 0.26;
+      const topRing = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.27, 0.28, 0.04, 32),
+        new THREE.MeshStandardMaterial({ color: 0x12151b, roughness: 0.3, metalness: 0.5 })
+      );
+      topRing.position.y = 0.53;
+      const cyanRing = new THREE.Mesh(
+        new THREE.TorusGeometry(0.265, 0.02, 16, 48),
+        new THREE.MeshBasicMaterial({ color: 0x00e5ff })
+      );
+      cyanRing.rotation.x = Math.PI / 2;
+      cyanRing.position.y = 0.55;
+      const centerBtn = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.04, 0.015, 16),
+        new THREE.MeshBasicMaterial({ color: 0x00e5ff })
+      );
+      centerBtn.position.y = 0.555;
+      g.add(echoBody, topRing, cyanRing, centerBtn);
+    } else if (category === "streaming_stick") {
+      // Fire TV Dongle Stick + Companion Remote Control
+      const stickBody = new THREE.Mesh(
+        new THREE.BoxGeometry(0.34, 0.10, 0.72),
+        new THREE.MeshStandardMaterial({ color: 0x12151b, roughness: 0.4, metalness: 0.2 })
+      );
+      stickBody.position.set(-0.16, 0.08, 0);
+      const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.2, metalness: 0.95 });
+      const hdmiPlug = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.045, 0.16), goldMat);
+      hdmiPlug.position.set(-0.16, 0.08, -0.42);
+      const stickLed = new THREE.Mesh(
+        new THREE.BoxGeometry(0.03, 0.02, 0.03),
+        new THREE.MeshBasicMaterial({ color: 0x00e5ff })
+      );
+      stickLed.position.set(-0.16, 0.13, 0.28);
+      const remoteBody = new THREE.Mesh(
+        new THREE.BoxGeometry(0.22, 0.065, 0.64),
+        new THREE.MeshStandardMaterial({ color: 0x1f242c, roughness: 0.5, metalness: 0.2 })
+      );
+      remoteBody.position.set(0.18, 0.05, 0.02);
+      const dpad = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.065, 0.065, 0.02, 24),
+        new THREE.MeshStandardMaterial({ color: 0x2e3540, roughness: 0.4, metalness: 0.4 })
+      );
+      dpad.position.set(0.18, 0.088, -0.12);
+      const dpadCenter = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03, 0.03, 0.025, 16),
+        new THREE.MeshStandardMaterial({ color: 0x16181d, roughness: 0.2, metalness: 0.6 })
+      );
+      dpadCenter.position.set(0.18, 0.09, -0.12);
+      g.add(stickBody, hdmiPlug, stickLed, remoteBody, dpad, dpadCenter);
+    } else if (category === "printer") {
+      // Multi-tier Printer Chassis + Scanner Bed + Rear Paper Feed + Front Tray
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.32, 0.56), mat);
+      body.position.y = 0.16;
+      const lid = new THREE.Mesh(
+        new THREE.BoxGeometry(0.70, 0.05, 0.54),
+        new THREE.MeshStandardMaterial({ color: 0x161920, roughness: 0.3, metalness: 0.5 })
+      );
+      lid.position.set(0, 0.34, 0);
+      const rearTray = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.36, 0.02), accentMat);
+      rearTray.rotation.x = -0.42;
+      rearTray.position.set(0, 0.45, -0.22);
+      const paperSheet = new THREE.Mesh(
+        new THREE.BoxGeometry(0.42, 0.32, 0.008),
+        new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 })
+      );
+      paperSheet.rotation.x = -0.42;
+      paperSheet.position.set(0, 0.48, -0.21);
+      const frontTray = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.03, 0.26), accentMat);
+      frontTray.position.set(0, 0.12, 0.38);
+      const printLed = new THREE.Mesh(new THREE.SphereGeometry(0.02, 12, 12), new THREE.MeshBasicMaterial({ color: 0x3eb488 }));
+      printLed.position.set(0.28, 0.26, 0.28);
+      g.add(body, lid, rearTray, paperSheet, frontTray, printLed);
+    } else if (category === "tv") {
+      // 16:9 Widescreen Smart TV + Stand Neck & Base
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.60, 0.035), mat);
+      panel.position.y = 0.44;
+      const screen = new THREE.Mesh(
+        new THREE.BoxGeometry(0.96, 0.54, 0.01),
+        new THREE.MeshPhysicalMaterial({ color: 0x111622, roughness: 0.1, clearcoat: 0.9 })
+      );
+      screen.position.set(0, 0.44, 0.018);
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.16, 12), accentMat);
+      neck.position.y = 0.10;
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.025, 0.24), accentMat);
+      base.position.y = 0.02;
+      g.add(panel, screen, neck, base);
+    } else if (category === "phone") {
+      // Flagship Smartphone (Triple-Lens Studio Model on Display Stand)
+      const phoneAssembly = new THREE.Group();
+      phoneAssembly.position.y = 0.36;
+      phoneAssembly.rotation.x = -0.22;
+
+      // 1. Titanium / Aerospace Metal Chassis Frame
+      const frameMat = new THREE.MeshStandardMaterial({
+        color: 0x1e232d,
+        metalness: 0.88,
+        roughness: 0.22,
+      });
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.33, 0.66, 0.036), frameMat);
+      phoneAssembly.add(frame);
+
+      [-0.166, 0.166].forEach((xSide) => {
+        const band1 = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.015, 0.038), accentMat);
+        band1.position.set(xSide, 0.18, 0);
+        const band2 = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.015, 0.038), accentMat);
+        band2.position.set(xSide, -0.18, 0);
+        phoneAssembly.add(band1, band2);
+      });
+
+      const powerBtn = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.08, 0.012), accentMat);
+      powerBtn.position.set(0.168, 0.08, 0);
+      const volUp = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.05, 0.012), accentMat);
+      volUp.position.set(-0.168, 0.12, 0);
+      const volDown = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.05, 0.012), accentMat);
+      volDown.position.set(-0.168, 0.04, 0);
+      phoneAssembly.add(powerBtn, volUp, volDown);
+
+      // 2. Front Screen Assembly: Jet-black bezel + Active AMOLED Face
+      const screenBezel = new THREE.Mesh(
+        new THREE.BoxGeometry(0.316, 0.646, 0.004),
+        new THREE.MeshBasicMaterial({ color: 0x05070a })
+      );
+      screenBezel.position.set(0, 0, 0.019);
+
+      const screenFace = new THREE.Mesh(
+        new THREE.BoxGeometry(0.298, 0.626, 0.003),
+        new THREE.MeshPhysicalMaterial({
+          color: 0x0c121d,
+          roughness: 0.04,
+          clearcoat: 1.0,
+          clearcoatRoughness: 0.06,
+          emissive: 0x16263f,
+          emissiveIntensity: 0.55,
+        })
+      );
+      screenFace.position.set(0, 0, 0.021);
+
+      const earSpeaker = new THREE.Mesh(
+        new THREE.BoxGeometry(0.06, 0.006, 0.002),
+        new THREE.MeshBasicMaterial({ color: 0x222730 })
+      );
+      earSpeaker.position.set(0, 0.302, 0.023);
+
+      const dynamicIsland = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.015, 0.015, 0.004, 16),
+        new THREE.MeshBasicMaterial({ color: 0x000000 })
+      );
+      dynamicIsland.rotation.x = Math.PI / 2;
+      dynamicIsland.position.set(0, 0.278, 0.023);
+
+      const homeBar = new THREE.Mesh(
+        new THREE.BoxGeometry(0.11, 0.006, 0.002),
+        new THREE.MeshBasicMaterial({ color: 0x8899aa })
+      );
+      homeBar.position.set(0, -0.292, 0.023);
+
+      phoneAssembly.add(screenBezel, screenFace, earSpeaker, dynamicIsland, homeBar);
+
+      // 3. Rear Multi-Lens Camera System & Backplate
+      const backPlate = new THREE.Mesh(
+        new THREE.BoxGeometry(0.318, 0.648, 0.004),
+        new THREE.MeshStandardMaterial({ color: 0x161b24, roughness: 0.35, metalness: 0.65 })
+      );
+      backPlate.position.set(0, 0, -0.019);
+
+      const camPlateau = new THREE.Mesh(
+        new THREE.BoxGeometry(0.13, 0.16, 0.016),
+        new THREE.MeshStandardMaterial({ color: 0x222936, roughness: 0.25, metalness: 0.75 })
+      );
+      camPlateau.position.set(-0.085, 0.22, -0.026);
+      phoneAssembly.add(backPlate, camPlateau);
+
+      const lensMat = new THREE.MeshPhysicalMaterial({ color: 0x080a0e, roughness: 0.02, clearcoat: 1.0 });
+      const rimMat = new THREE.MeshStandardMaterial({ color: 0x8894a6, metalness: 0.95, roughness: 0.1 });
+      const lensPositions = [
+        [-0.108, 0.255],
+        [-0.108, 0.185],
+        [-0.055, 0.220],
+      ];
+      lensPositions.forEach(([lx, ly]) => {
+        const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.014, 16), rimMat);
+        rim.rotation.x = Math.PI / 2;
+        rim.position.set(lx, ly, -0.035);
+        const pupil = new THREE.Mesh(new THREE.CylinderGeometry(0.020, 0.020, 0.015, 16), lensMat);
+        pupil.rotation.x = Math.PI / 2;
+        pupil.position.set(lx, ly, -0.036);
+        phoneAssembly.add(rim, pupil);
+      });
+
+      const flash = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.009, 0.009, 0.012, 12),
+        new THREE.MeshBasicMaterial({ color: 0xfff0c8 })
+      );
+      flash.rotation.x = Math.PI / 2;
+      flash.position.set(-0.055, 0.265, -0.034);
+
+      const lidar = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.007, 0.007, 0.012, 12),
+        new THREE.MeshBasicMaterial({ color: 0x111111 })
+      );
+      lidar.rotation.x = Math.PI / 2;
+      lidar.position.set(-0.055, 0.175, -0.034);
+      phoneAssembly.add(flash, lidar);
+
+      // 4. Subtle Clear Acrylic Presentation Stand
+      const standDisc = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.20, 0.025, 24),
+        new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.12, transmission: 0.82, thickness: 0.3 })
+      );
+      standDisc.position.y = 0.013;
+      const standSpine = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.016, 0.022, 0.22, 12),
+        accentMat
+      );
+      standSpine.rotation.x = -0.22;
+      standSpine.position.set(0, 0.12, -0.04);
+      g.add(standDisc, standSpine, phoneAssembly);
+    } else if (category === "computer") {
+      // Clamshell Laptop with Keyboard Deck & Angled Screen Lid
+      const laptopBase = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.045, 0.52), mat);
+      laptopBase.position.y = 0.035;
+      const kbd = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.01, 0.30), new THREE.MeshStandardMaterial({ color: 0x12151b, roughness: 0.7 }));
+      kbd.position.set(0, 0.06, -0.06);
+      const trackpad = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.01, 0.12), new THREE.MeshStandardMaterial({ color: 0x222730, roughness: 0.3 }));
+      trackpad.position.set(0, 0.06, 0.16);
+      const lidGroup = new THREE.Group();
+      lidGroup.position.set(0, 0.05, -0.25);
+      lidGroup.rotation.x = -0.25;
+      const lidMesh = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.48, 0.03), mat);
+      lidMesh.position.y = 0.24;
+      const lidScreen = new THREE.Mesh(
+        new THREE.BoxGeometry(0.68, 0.44, 0.01),
+        new THREE.MeshPhysicalMaterial({ color: 0x182030, roughness: 0.1, clearcoat: 0.8 })
+      );
+      lidScreen.position.set(0, 0.24, 0.016);
+      lidGroup.add(lidMesh, lidScreen);
+      g.add(laptopBase, kbd, trackpad, lidGroup);
+    } else if (category === "bulb") {
+      // Smart Connected Bulb: Screw Base + Neck + Glass Dome + Glowing PointLight
+      const baseCyl = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.12, 0.18, 16),
+        new THREE.MeshStandardMaterial({ color: 0xb0b5be, metalness: 0.9, roughness: 0.2 })
+      );
+      baseCyl.position.y = 0.10;
+      const neckCyl = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.13, 0.14, 20),
+        new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.6 })
+      );
+      neckCyl.position.y = 0.24;
+      const bulbDome = new THREE.Mesh(
+        new THREE.SphereGeometry(0.24, 28, 28),
+        new THREE.MeshPhysicalMaterial({
+          color: 0xfffaed,
+          roughness: 0.1,
+          transmission: 0.65,
+          thickness: 0.2,
+          emissive: 0xffd27d,
+          emissiveIntensity: 0.75
+        })
+      );
+      bulbDome.scale.set(1, 1.25, 1);
+      bulbDome.position.y = 0.46;
+      const bulbLight = new THREE.PointLight(0xffd27d, 0.7, 2.5);
+      bulbLight.position.set(0, 0.46, 0);
+      g.add(baseCyl, neckCyl, bulbDome, bulbLight);
+    } else if (category === "fan") {
+      // Smart Fan with 3 Aerodynamic ROTATING Blades
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.24, 16), accentMat);
+      rod.position.y = 0.50;
+      const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.17, 0.10, 24), mat);
+      motor.position.y = 0.36;
+      const bladeGroup = new THREE.Group();
+      bladeGroup.position.y = 0.36;
+      for (let i = 0; i < 3; i++) {
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.015, 0.52), mat);
+        blade.position.set(0, 0, 0.28);
+        blade.rotation.x = 0.12;
+        const bladeArm = new THREE.Group();
+        bladeArm.rotation.y = (i * Math.PI * 2) / 3;
+        bladeArm.add(blade);
+        bladeGroup.add(bladeArm);
+      }
+      g.add(rod, motor, bladeGroup);
+      animatedFans.push(bladeGroup);
+    } else if (category === "ac") {
+      // Wall-mount Split AC with Louvers & Ice-Blue Temp Readout
+      const acBody = new THREE.Mesh(
+        new THREE.BoxGeometry(0.94, 0.28, 0.26),
+        new THREE.MeshPhysicalMaterial({ color: 0xf4f1ea, roughness: 0.25, metalness: 0.1, clearcoat: 0.5 })
+      );
+      acBody.position.y = 0.32;
+      const intake = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.02, 0.20), new THREE.MeshStandardMaterial({ color: 0xced2da, roughness: 0.6 }));
+      intake.position.set(0, 0.465, -0.01);
+      const louver = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.02, 0.08), new THREE.MeshStandardMaterial({ color: 0xa8b0bd, roughness: 0.4 }));
+      louver.rotation.x = 0.35;
+      louver.position.set(0, 0.19, 0.12);
+      const tempLed = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.01), new THREE.MeshBasicMaterial({ color: 0x56ccf2 }));
+      tempLed.position.set(0.32, 0.32, 0.132);
+      g.add(acBody, intake, louver, tempLed);
+    } else if (category === "fridge") {
+      // Double Door Smart Refrigerator with Handles & Freezer Seam
+      const fridgeBody = new THREE.Mesh(
+        new THREE.BoxGeometry(0.56, 1.12, 0.56),
+        new THREE.MeshPhysicalMaterial({ color: 0xd8dce4, roughness: 0.28, metalness: 0.75, clearcoat: 0.3 })
+      );
+      fridgeBody.position.y = 0.56;
+      const seam = new THREE.Mesh(new THREE.BoxGeometry(0.562, 0.015, 0.562), new THREE.MeshBasicMaterial({ color: 0x222730 }));
+      seam.position.y = 0.78;
+      const handleUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.26, 16), new THREE.MeshStandardMaterial({ color: 0xfaf8f4, metalness: 0.95, roughness: 0.1 }));
+      handleUpper.position.set(0.24, 0.90, 0.29);
+      const handleLower = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.42, 16), new THREE.MeshStandardMaterial({ color: 0xfaf8f4, metalness: 0.95, roughness: 0.1 }));
+      handleLower.position.set(0.24, 0.52, 0.29);
+      g.add(fridgeBody, seam, handleUpper, handleLower);
+    } else if (category === "camera") {
+      // Articulated Security Camera + Glass Lens + Red Record LED
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.22, 16), accentMat);
+      arm.rotation.z = Math.PI / 4;
+      arm.position.set(-0.16, 0.40, 0);
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 16), accentMat);
+      ball.position.set(-0.06, 0.32, 0);
+      const camBody = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.17, 0.36, 24), mat);
+      camBody.rotation.z = -Math.PI / 6;
+      camBody.position.set(0.08, 0.25, 0);
+      const lens = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.12, 0.02, 24),
+        new THREE.MeshPhysicalMaterial({ color: 0x0a0c10, roughness: 0.05, clearcoat: 1.0 })
+      );
+      lens.rotation.z = -Math.PI / 6;
+      lens.position.set(0.18, 0.19, 0);
+      const recLed = new THREE.Mesh(new THREE.SphereGeometry(0.015, 12, 12), new THREE.MeshBasicMaterial({ color: 0xe36050 }));
+      recLed.position.set(0.20, 0.24, 0.06);
+      g.add(arm, ball, camBody, lens, recLed);
     } else {
-      const oct = new THREE.Mesh(new THREE.OctahedronGeometry(0.36, 0), mat);
-      oct.position.y = 0.42;
-      g.add(oct);
+      // Microcontroller IoT Sensor PCB + IC Chip + Heartbeat LED
+      const pcb = new THREE.Mesh(
+        new THREE.BoxGeometry(0.46, 0.032, 0.46),
+        new THREE.MeshStandardMaterial({ color: 0x162c1e, roughness: 0.5, metalness: 0.3 })
+      );
+      pcb.position.y = 0.02;
+      const icChip = new THREE.Mesh(
+        new THREE.BoxGeometry(0.22, 0.04, 0.22),
+        new THREE.MeshStandardMaterial({ color: 0x181a1f, roughness: 0.2, metalness: 0.8 })
+      );
+      icChip.position.y = 0.045;
+      const chipLed = new THREE.Mesh(new THREE.SphereGeometry(0.018, 12, 12), new THREE.MeshBasicMaterial({ color: colorHex }));
+      chipLed.position.set(0.14, 0.05, 0.14);
+      g.add(pcb, icChip, chipLed);
     }
     return g;
   }
@@ -165,6 +542,7 @@ export async function mountGarudaTopology3D(containerEl, hooks) {
     interactables = [];
     packets = [];
     halos = [];
+    animatedFans = [];
 
     const hasCrit = (snap.alerts || []).some((a) => !a.resolved && a.severity === "critical");
     routerBody.material.color.setHex(hasCrit ? 0xc53624 : (currentThemeDark ? 0x6394f2 : 0x1e4fd6));
@@ -216,7 +594,7 @@ export async function mountGarudaTopology3D(containerEl, hooks) {
         ? (currentThemeDark ? 0x3eb488 : 0x157f56)
         : (currentThemeDark ? 0xe2a343 : 0xb96b08);
 
-      const nodeGroup = buildDeviceMesh(d.device_type, colorHex);
+      const nodeGroup = buildDeviceMesh(d.device_type, colorHex, d);
       nodeGroup.position.set(x, 0.02, z);
       nodeGroup.lookAt(0, 0.02, 0);
       nodeGroup.userData = { baseY: 0.02, targetScale: 1.0 };
@@ -345,6 +723,11 @@ export async function mountGarudaTopology3D(containerEl, hooks) {
     for (const p of packets) {
       const t = (phase * p.speed + p.offset) % 1;
       p.curve.getPoint(t, p.mesh.position);
+    }
+
+    // Rotating smart fan blades
+    for (const fan of animatedFans) {
+      fan.rotation.y += reducedMotion ? 0.02 : 0.08;
     }
 
     // Pulsing ML anomaly halos

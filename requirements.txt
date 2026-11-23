@@ -16,3 +16,12 @@ scapy>=2.6.0
 # web3>=7.4.0
 # Optional for compiled YARA malware rules (GARUDA includes a built-in pure-Python fallback if omitted):
 # yara-python>=4.5.1
+# GARUDA v7 Production Auth, PostgreSQL, Rate-Limiting & AWS SDK
+psycopg2-binary>=2.9.9
+passlib[bcrypt]>=1.7.4
+bcrypt<4.2.0
+python-jose[cryptography]>=3.3.0
+python-multipart>=0.0.9
+email-validator>=2.2.0
+slowapi>=0.1.9
+boto3>=1.35.0

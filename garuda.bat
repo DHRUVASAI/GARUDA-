@@ -1,34 +1,17 @@
 @echo off
-setlocal
-title GARUDA v6 -- Tactical Network Guardian
-
-set "GARUDA_SIMULATION_MODE=false"
-set "LAUNCH_DIR=%~dp0"
-cd /d "%LAUNCH_DIR%"
-
-if exist "%LAUNCH_DIR%GARUDA--main\backend\app\main.py" (
-    cd /d "%LAUNCH_DIR%GARUDA--main"
+title GARUDA v6 — Tactical Network Guardian
+echo ================================================================
+echo   GARUDA v6 — Auto-Adapting Network, AI, AWS & Forensic Guardian
+echo ================================================================
+if not exist ".venv\Scripts\python.exe" (
+    echo [1/3] Creating Python virtual environment...
+    python -m venv .venv
 )
-
-echo.
-echo ================================================================
-echo   GARUDA v6 -- Adversarial Network Guardian and Forensic Ledger
-echo ================================================================
-echo   [*] Starting Sentinel Core on http://localhost:8000 ...
-echo   [*] Launching Tactical Web Dashboard in default browser...
+call .venv\Scripts\activate.bat
+echo [2/3] Ensuring dependencies are installed...
+pip install -q -r requirements.txt
+echo [3/3] Launching GARUDA v6 Engine (non-blocking) and opening dashboard...
+start "GARUDA v6 Server" /min cmd /c "python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"
+timeout /t 2 /nobreak >nul
 start "" http://localhost:8000
-
-echo   [*] Engine is LIVE. Interactive logs streaming below.
-echo   [*] Press Ctrl+C in this terminal to safely stop the server.
-echo ================================================================
-echo.
-
-python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 %*
-
-if %ERRORLEVEL% NEQ 0 (
-    echo.
-    echo [!] Server stopped with exit code %ERRORLEVEL%.
-    pause
-)
-
-endlocal
+echo Dashboard opened at http://localhost:8000 (Swagger API: http://localhost:8000/docs)

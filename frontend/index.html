@@ -3,26 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GARUDA v6 — Adversarial-Hardened Network Guardian, AI Anomaly, AWS Bridge &amp; Forensic Ledger</title>
+  <title>GARUDA — Tactical Network Guardian, IsolationForest AI &amp; Forensic Ledger</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <!-- MIL-STD Tactical Bootloader (fast 1.1s, skippable via click/Esc) -->
-  <div id="milBootloader" class="mil-bootloader" aria-label="GARUDA v6 System Boot">
+  <!-- Tactical Bootloader (fast 1.1s, clean minimal card) -->
+  <div id="milBootloader" class="mil-bootloader" aria-label="GARUDA System Boot">
     <div class="mil-boot-card">
       <div class="mil-boot-emblem" aria-hidden="true">
-        <svg viewBox="0 0 48 48" width="42" height="42" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M24 4l16 6v11c0 11-6.5 18.5-16 23-9.5-4.5-16-12-16-23V10l16-6z"/>
-          <circle cx="24" cy="22" r="5"/>
-          <path d="M24 12v4M24 28v4M14 22h4M30 22h4" opacity="0.65"/>
+        <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6l7-3z"/>
+          <circle cx="12" cy="11" r="2.2"/>
         </svg>
       </div>
-      <div class="mil-boot-kicker mono">GARUDA // TACTICAL NETWORK GUARDIAN v6.0</div>
+      <div class="mil-boot-kicker mono">GARUDA // TACTICAL NETWORK GUARDIAN</div>
       <div class="mil-boot-bar"><div class="mil-boot-fill" id="milBootFill"></div></div>
-      <div class="mil-boot-log mono" id="milBootLog">INIT: CAPABILITY PROBE &amp; IDS KERNEL…</div>
-      <button class="btn btn-sm" id="btnSkipBoot" style="margin-top:12px;">Skip Intro (Esc)</button>
+      <div class="mil-boot-log mono" id="milBootLog">INIT: PROBING NETWORK SENSORS &amp; IDS KERNEL…</div>
+      <button class="btn btn-sm btn-ghost" id="btnSkipBoot" style="margin-top:12px;">Skip (Esc)</button>
     </div>
   </div>
+
   <header class="topbar">
     <div class="brand" id="brandHome" role="button" tabindex="0" aria-label="Go to Overview">
       <div class="brand-mark" aria-hidden="true">
@@ -32,8 +32,8 @@
         </svg>
       </div>
       <div>
-        <div class="brand-title">GARUDA <span class="brand-ver">v6</span></div>
-        <span class="brand-sub">Network, AI &amp; Forensic Guardian</span>
+        <div class="brand-title">GARUDA</div>
+        <span class="brand-sub">Tactical Network Guardian</span>
       </div>
     </div>
 
@@ -44,18 +44,24 @@
       <button class="nav-btn" data-view="threats">Threats <span class="badge-count zero" id="navAlertsBadge">0</span></button>
       <button class="nav-btn" data-view="ai-ledger">AI &amp; Ledger</button>
       <button class="nav-btn" data-view="shield">Virus &amp; Firewall</button>
+      <button class="nav-btn" data-view="doctor">Network Doctor</button>
+      <button class="nav-btn" data-view="admin" id="navAdminBtn">Admin Control</button>
       <button class="nav-btn" data-view="guide">Secure Guide</button>
     </nav>
 
     <div class="top-actions">
-      <span class="pill pill-accent" id="connectionModePill"><span class="dot"></span> Connecting…</span>
-      <button class="btn btn-sm btn-auth" id="btnOperatorAuth" title="Operator Authentication"><span class="auth-dot guest"></span> Operator Login</button>
-      <button class="btn btn-sm" id="btnScanNow">Scan Now</button>
-      <button class="btn btn-sm" id="btnThemeToggle" title="Switch Daylight / Night Ops">Night Ops</button>
+      <span class="pill pill-safe" id="connectionModePill"><span class="dot"></span> Live Shield</span>
+      <button class="btn btn-sm btn-ghost" id="btnThemeToggle" title="Switch Daylight / Night Ops">Night Ops</button>
+      <button class="btn btn-sm btn-primary" id="btnAuthModal">Sign In</button>
     </div>
   </header>
 
   <main class="container">
+    <!-- Degraded Mode Warning Banner (non-admin / ARP fallback) -->
+    <div class="v10-degraded-banner" id="degradedModeBanner" style="display:none;" role="status">
+      <strong>Limited Capture Mode:</strong> Running without Administrator/Root privileges — L4 deep packet inspection is using OS ARP fallback. Run as Admin/sudo for full Scapy packet capture.
+    </div>
+
     <!-- Global Urgent Alert Banner -->
     <div class="urgent-banner" id="urgentBanner" role="alert">
       <div class="urgent-left">
@@ -77,9 +83,9 @@
           <span class="eyebrow">Live IDS · IsolationForest AI · Ed25519 Merkle Ledger · OS Firewall</span>
           <h1 class="hero-h1">See everyone on your Wi-Fi. Catch anomalies before they touch your data.</h1>
           <p class="hero-lead">
-            GARUDA v6 identifies your exact network and every connected device by its real name, learns your baseline with an
+            GARUDA identifies your exact network and every connected device by its real physical hardware manufacturer, learns your baseline with an
             <strong>IsolationForest AI engine</strong>, seals critical forensic alerts into a tamper-proof <strong>Ed25519 Merkle &amp; Web3 ledger</strong>,
-            scans for malware, and enforces real OS firewall rules—all translated into clear plain English.
+            scans for malware, and enforces real OS firewall rules—all translated into clear plain English with zero simulated data.
           </p>
           <div class="hero-cta">
             <button class="btn btn-primary btn-lg" id="btnLaunchGuardian">Open 3D Network Map →</button>
@@ -99,7 +105,10 @@
               <div class="stage-kicker">LIVE GUARDIAN RADAR</div>
               <strong class="stage-ssid" id="heroLiveSsid">Detecting your network…</strong>
             </div>
-            <span class="pill pill-safe" id="heroSafetyPill"><span class="dot"></span> Checking</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button class="btn btn-sm btn-primary" id="btnScanNow">Scan Now</button>
+              <span class="pill pill-safe" id="heroSafetyPill"><span class="dot"></span> Checking</span>
+            </div>
           </div>
           <div class="hero-canvas-wrap">
             <canvas id="heroRadarCanvas"></canvas>
@@ -116,7 +125,7 @@
       </div>
 
       <div class="section-head">
-        <span class="kicker">GARUDA v6 DEFENSE PIPELINE</span>
+        <span class="kicker">GARUDA v4 DEFENSE PIPELINE</span>
         <h2>Full-spectrum local protection without confusing jargon</h2>
       </div>
       <div class="workflow-strip">
@@ -170,7 +179,7 @@
         </div>
 
         <div class="card">
-          <div class="kicker">GARUDA v6 LIVE ENGINE CAPABILITIES</div>
+          <div class="kicker">GARUDA v4 LIVE ENGINE CAPABILITIES</div>
           <h3 style="margin:6px 0 14px; font-size:20px;">Zero-black-box local audit</h3>
           <div class="cap-list">
             <div class="cap-row"><span>OS &amp; Privilege Level</span><strong class="mono" id="capOs">Checking…</strong></div>
@@ -322,15 +331,6 @@
             <button class="seg-btn" data-filter="safe">Marked Safe</button>
           </div>
         </div>
-
-        <div class="filter-bar" id="deviceCategoryFilter">
-          <button class="filter-pill active" data-cat="all">All Devices</button>
-          <button class="filter-pill" data-cat="amazon">Amazon &amp; Smart IoT</button>
-          <button class="filter-pill" data-cat="computers">Laptops &amp; PCs</button>
-          <button class="filter-pill" data-cat="mobile">Phones &amp; Tablets</button>
-          <button class="filter-pill" data-cat="unverified">Unverified Only</button>
-          <button class="filter-pill" data-cat="alerts">Flagged / High Risk</button>
-        </div>
       </div>
 
       <div class="device-list" id="deviceList"></div>
@@ -366,16 +366,14 @@
             <h2 class="card-title" style="margin:4px 0 6px;">Test Active, Passive, AI &amp; Malware Alerts</h2>
             <p class="muted" style="margin:0 0 12px;">Safely trigger realistic attacks to verify live alerts, AI anomaly scoring, and cryptographic ledger sealing.</p>
             <div class="sim-grid">
-              <button class="btn btn-sm" data-sim="amazon_devices">📡 Test: Amazon Alexa &amp; Fire TV Stick Discovery</button>
-              <button class="btn btn-sm" data-sim="adaptive_mitm">⚡ Test: Adaptive MAC Hopping MITM</button>
-              <button class="btn btn-sm" data-sim="ml_beacon">🤖 AI: Robotic C2 Beaconing &amp; DGA Anomaly</button>
+              <button class="btn btn-sm" data-sim="ml_beacon">AI: Robotic C2 Beaconing &amp; DGA Anomaly</button>
               <button class="btn btn-sm" data-sim="new_unknown_device">+ Unknown Device Joins Wi-Fi</button>
-              <button class="btn btn-sm" data-sim="arp_spoof">⚡ Active: Fake Router (MITM ARP Spoof)</button>
-              <button class="btn btn-sm" data-sim="rogue_dhcp">⚡ Active: Rogue DHCP Server</button>
-              <button class="btn btn-sm" data-sim="dns_hijack">⚡ Active: DNS Hijacking</button>
-              <button class="btn btn-sm" data-sim="port_sweep">⚡ Active: Rapid Device Probing</button>
-              <button class="btn btn-sm" data-sim="open_wifi">👁 Passive: Open Unencrypted Wi-Fi</button>
-              <button class="btn btn-sm" data-sim="malware_eicar">🦠 Malware: EICAR Virus Signature Test</button>
+              <button class="btn btn-sm" data-sim="arp_spoof">Active: Fake Router (MITM ARP Spoof)</button>
+              <button class="btn btn-sm" data-sim="rogue_dhcp">Active: Rogue DHCP Server</button>
+              <button class="btn btn-sm" data-sim="dns_hijack">Active: DNS Hijacking</button>
+              <button class="btn btn-sm" data-sim="port_sweep">Active: Rapid Device Probing</button>
+              <button class="btn btn-sm" data-sim="open_wifi">Passive: Open Unencrypted Wi-Fi</button>
+              <button class="btn btn-sm" data-sim="malware_eicar">Malware: EICAR Virus Signature Test</button>
               <button class="btn btn-safe btn-sm" data-sim="reset">✓ Reset to Clean Safe State</button>
             </div>
           </div>
@@ -478,7 +476,7 @@
       <div class="card" style="margin-top:18px;">
         <div class="card-header">
           <div>
-            <div class="kicker">GARUDA v6 · AUTO-ADAPTING ENGINE, CAMPAIGN CORRELATOR &amp; AWS BRIDGE</div>
+            <div class="kicker">GARUDA v10 · AUTO-ADAPTING ENGINE, CAMPAIGN CORRELATOR &amp; AWS BRIDGE</div>
             <h2 class="card-title" style="margin-top:4px;">Campus / VPN Guardrails &amp; AWS Security Hub Telemetry</h2>
             <div class="muted" id="v5EnvSummary">Automatically detects Home LAN, Campus Wi-Fi (/24 cap + Proxy-ARP shield), or VPN tunnels, and exports AWS ASFF findings.</div>
           </div>
@@ -608,7 +606,187 @@
         </div>
       </div>
     </section>
+  
+    <!-- ==================== VIEW: NETWORK DOCTOR (v7) ==================== -->
+    <section class="view" id="view-doctor">
+      <div class="v7-header-row">
+        <div>
+          <h2>Network Doctor</h2>
+          <p class="muted">Real-time host &amp; LAN health diagnostics: DNS latency, outbound TLS, ARP spoofing check, risky ports, and system vitals.</p>
+        </div>
+        <div class="v7-btn-group">
+          <button class="btn btn-primary" id="btnRunDoctor">Run Diagnostics</button>
+          <button class="btn" id="btnDoctorHeal">Auto-Heal &amp; Log</button>
+        </div>
+      </div>
+
+      <div class="v7-doctor-summary card" id="doctorSummaryCard">
+        <div class="v7-score-circle" id="doctorScoreCircle">--</div>
+        <div>
+          <div class="v7-grade-row">
+            <strong>Network Health Grade: <span id="doctorGrade">Not Run</span></strong>
+            <span class="pill" id="doctorIssuesPill">Ready</span>
+          </div>
+          <p class="muted" id="doctorIssuesText">Click "Run Diagnostics" to inspect DNS, ARP integrity, open risky ports, and system load.</p>
+        </div>
+      </div>
+
+      <div class="v7-grid-cards" id="doctorChecksGrid"></div>
+
+      <!-- Automated Tactical Remediation & Hardening Container -->
+      <div class="doctor-remedy-box" id="doctorRemedyBox" style="display:none;">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="pill pill-safe">Automated Remediation Ready</span>
+            <strong>Recommended Network Hardening Actions</strong>
+          </div>
+          <ul class="doctor-remedy-list" id="doctorRemedyList"></ul>
+        </div>
+        <div>
+          <button class="btn btn-primary" id="btnApproveDoctorRemedy">Approve &amp; Execute Automated Remediation</button>
+        </div>
+      </div>
+      <div id="doctorRemedyProgress" class="card" style="display:none;margin-top:14px;background:var(--surface);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span class="dot pulse-live" style="background:var(--accent);"></span>
+          <strong>Remediation Log Execution Progress</strong>
+        </div>
+        <div id="doctorRemedyLog" class="mono" style="font-size:0.82rem;line-height:1.6;color:var(--ink-muted);"></div>
+      </div>
+
+      <div class="card v7-section-gap">
+        <h3>Recent Diagnostic History</h3>
+        <div class="v7-table-wrap">
+          <table class="v7-table">
+            <thead>
+              <tr><th>ID</th><th>Triggered By</th><th>Score</th><th>Grade</th><th>Issues</th><th>Timestamp</th></tr>
+            </thead>
+            <tbody id="doctorHistoryBody">
+              <tr><td colspan="6" class="muted">No diagnostic runs recorded yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW: ADMIN CONTROL PLANE (v7) ==================== -->
+    <section class="view" id="view-admin">
+      <div class="v7-header-row">
+        <div>
+          <h2>Admin Control Plane</h2>
+          <p class="muted">Role-Based Access Control (RBAC), user management, emergency firewall enforcement, and immutable admin audit logs.</p>
+        </div>
+        <button class="btn" id="btnRefreshAdmin">Refresh Control Plane</button>
+      </div>
+
+      <div class="v7-grid-cards" id="adminStatsGrid"></div>
+
+      <!-- Emergency Device Quarantine & Firewall Controls -->
+      <div class="card v7-section-gap">
+        <div class="card-header">
+          <div>
+            <h3>Emergency Device Quarantine &amp; Firewall Controls</h3>
+            <p class="muted">Instant host isolation: enforce kernel Netsh firewall rules, block abusive IPs, or enact total network lockdown.</p>
+          </div>
+          <span class="pill pill-safe" id="adminLockdownBadge">Normal Mode</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px;">
+          <input type="text" id="adminQuickBlockInput" placeholder="Enter IP e.g. 192.168.1.100" style="padding:8px 12px;border:1px solid var(--hairline);border-radius:var(--r-inner);background:var(--surface-2);color:var(--ink);font-family:monospace;min-width:240px;" />
+          <button class="btn btn-danger btn-sm" id="btnAdminDoBlock">Block IP in Firewall</button>
+          <button class="btn btn-sm" id="btnAdminDoLockdown">Toggle Lockdown Mode</button>
+        </div>
+        <div id="adminBlockedListWrap" style="margin-top:12px;"></div>
+      </div>
+
+      <div class="card v7-section-gap">
+        <h3>Registered Users &amp; Roles</h3>
+        <div class="v7-table-wrap">
+          <table class="v7-table">
+            <thead>
+              <tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="adminUsersBody">
+              <tr><td colspan="6" class="muted">Sign in as an administrator to manage users.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card v7-section-gap">
+        <h3>Admin Audit Trail</h3>
+        <div class="v7-table-wrap">
+          <table class="v7-table">
+            <thead>
+              <tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th><th>Detail</th></tr>
+            </thead>
+            <tbody id="adminAuditBody">
+              <tr><td colspan="5" class="muted">No audit events recorded yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </main>
+
+  <!-- ==================== AUTH MODAL (v7) ==================== -->
+  <div class="v7-modal-backdrop" id="v7AuthModal" style="display:none;">
+    <div class="v7-modal card">
+      <div class="v7-modal-head">
+        <h3 id="v7AuthTitle">Sign In to GARUDA v10 Ultimate</h3>
+        <button class="btn btn-sm" id="btnCloseAuthModal" aria-label="Close">✕</button>
+      </div>
+      <p class="muted" style="margin-bottom:12px;">First registered account automatically receives <strong>Admin</strong> privileges. Subsequent accounts start as <strong>Viewer</strong>.</p>
+      <div class="v7-tabs">
+        <button class="btn btn-sm btn-primary" id="tabLogin">Login</button>
+        <button class="btn btn-sm" id="tabRegister">Register</button>
+      </div>
+      <form id="v7AuthForm" class="v7-form">
+        <label>Username<input type="text" id="authUsername" required minlength="3" placeholder="e.g. dhruva_admin" /></label>
+        <label id="authEmailWrap" style="display:none;">Email<input type="email" id="authEmail" placeholder="you@example.com" /></label>
+        <label>Password<input type="password" id="authPassword" required minlength="6" placeholder="••••••••" /></label>
+        <div id="authErrorMsg" class="v7-error"></div>
+        <button type="submit" class="btn btn-primary" id="btnAuthSubmit">Sign In</button>
+      </form>
+      <div id="v7LoggedInBox" style="display:none; margin-top:12px;">
+        <p>Signed in as <strong id="authCurrentUser"></strong> (<span id="authCurrentRole"></span>)</p>
+        <button class="btn btn-danger btn-sm" id="btnLogout" style="margin-top:8px;">Sign Out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role Switcher Modal (Viewer vs Admin Mode) -->
+  <div class="v7-auth-modal" id="roleModal" style="display:none;" role="dialog" aria-modal="true">
+    <div class="v7-auth-card" style="max-width:520px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h3 style="margin:0;">Tactical Role &amp; Access Control</h3>
+        <button class="btn btn-sm" id="btnCloseRoleModal">✕</button>
+      </div>
+      <p class="muted" style="font-size:13px;line-height:1.5;">
+        GARUDA enforces zero-privilege monitoring: A viewer does not need admin access to inspect 3D topology, 2D radar, Network Doctor diagnostics, AI anomaly scores, or device telemetry.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;">
+        <div class="card" id="cardRoleViewer" style="padding:14px;border:2px solid var(--accent);background:var(--accent-soft);border-radius:10px;cursor:pointer;">
+          <div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:4px;">Viewer Mode</div>
+          <strong style="font-size:12px;color:var(--ink);">Active / Default</strong>
+          <p class="muted" style="font-size:11.5px;margin-top:6px;line-height:1.4;">
+            Safe read-only network inspection. Blocks destructive accidents while presenting 100% of telemetry.
+          </p>
+        </div>
+        <div class="card" id="cardRoleAdmin" style="padding:14px;border:1px solid var(--hairline);border-radius:10px;cursor:pointer;">
+          <div style="font-size:14px;font-weight:700;color:var(--ink);margin-bottom:4px;">Tactical Admin</div>
+          <strong style="font-size:12px;color:var(--ink-muted);">Elevated Enforcement</strong>
+          <p class="muted" style="font-size:11.5px;margin-top:6px;line-height:1.4;">
+            Enforces OS IP blocking, emergency device quarantine, kernel ARP pinning, and automated system remediation.
+          </p>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;">
+        <button class="btn btn-sm" id="btnSwitchToViewer">Use Viewer Mode</button>
+        <button class="btn btn-primary btn-sm" id="btnSwitchToAdmin">Unlock Root Admin Mode</button>
+      </div>
+    </div>
+  </div>
+
 
   <!-- Slide-Over Device Inspector Drawer -->
   <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
@@ -628,58 +806,6 @@
       <button class="btn btn-danger btn-sm" id="drawerBlockBtn">Block IP</button>
     </div>
   </aside>
-
-  <!-- Operator Authentication Modal -->
-  <div class="modal-backdrop" id="authModalBackdrop" hidden></div>
-  <div class="auth-modal" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle" hidden>
-    <div class="modal-head">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div class="auth-shield-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
-        </div>
-        <div>
-          <div class="kicker">SECURITY ACCESS GATEWAY</div>
-          <h3 id="authModalTitle" style="margin:2px 0 0; font-size:18px;">Operator Authentication</h3>
-        </div>
-      </div>
-      <button class="btn btn-sm" id="btnCloseAuthModal" aria-label="Close dialog">✕</button>
-    </div>
-
-    <form class="auth-modal-body" id="authLoginForm" autocomplete="on">
-      <p class="muted" style="margin:0 0 16px; font-size:13px; line-height:1.45;">
-        Authenticate as an authorized operator to execute OS firewall rules, calibrate AI baselines, and seal cryptographic ledger attestations.
-      </p>
-
-      <div class="auth-field-group">
-        <label for="authUsernameInput" class="auth-label">Operator Username</label>
-        <div class="auth-input-wrap">
-          <input type="text" id="authUsernameInput" class="auth-input mono" placeholder="admin" required autocomplete="username" />
-        </div>
-      </div>
-
-      <div class="auth-field-group" style="margin-top:12px;">
-        <label for="authPasswordInput" class="auth-label">Security Key / Password</label>
-        <div class="auth-input-wrap">
-          <input type="password" id="authPasswordInput" class="auth-input mono" placeholder="••••••••••••••••" required autocomplete="current-password" />
-          <button type="button" class="btn-toggle-pw" id="btnTogglePassword" title="Show/Hide password">👁</button>
-        </div>
-      </div>
-
-      <div class="auth-error-msg" id="authErrorMsg" hidden></div>
-
-      <div class="auth-seed-hint mono muted" style="margin-top:12px; font-size:11px;">
-        Default deployment seed: <code>admin</code> / <code>garuda-admin-secure</code>
-      </div>
-
-      <div class="modal-foot" style="margin-top:20px; display:flex; justify-content:flex-end; gap:8px;">
-        <button type="button" class="btn btn-sm" id="btnCancelAuth">Cancel</button>
-        <button type="submit" class="btn btn-primary btn-sm" id="btnSubmitAuth">Authenticate Operator</button>
-      </div>
-    </form>
-  </div>
 
   <div class="toast-stack" id="toastStack" aria-live="polite"></div>
   <script src="/static/layoutEngine.js"></script>

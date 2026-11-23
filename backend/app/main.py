@@ -11,13 +11,14 @@ from sqlalchemy.orm import Session
 
 from .config import FRONTEND_DIR
 from .database import SessionLocal, get_db, init_db
+from .config import ALLOWED_ORIGINS
+from .auth import ensure_bootstrap_admin, log_admin_action, require_admin_if_enabled
+from .routers.admin_and_doctor import router as admin_doctor_router
 from .models import Alert, Device, FirewallRuleLog, MalwareScanRun, NetworkBaseline
 from .schemas import (
     AlertSettingsIn,
     AlertSettingsOut,
-    AuthStatusOut,
     CapabilitiesOut,
-    ChangePasswordRequest,
     DashboardSnapshotOut,
     DeviceRenameUpdate,
     DeviceTrustUpdate,
@@ -26,11 +27,8 @@ from .schemas import (
     FirewallBlockRequest,
     FirewallLockdownRequest,
     LedgerSealRequest,
-    LoginRequest,
-    LoginResponse,
     MalwareScanRequest,
     SimulateScenarioIn,
-    UserInfoOut,
 )
 from .services.attestation_ledger import (
     anchor_merkle_root_evm,
@@ -58,37 +56,19 @@ from .services.aws_bridge import (
     parse_vpc_flow_logs,
     to_aws_security_hub_asff,
 )
-from .services.auth import (
-    create_access_token,
-    decode_access_token,
-    ensure_default_admin,
-    get_current_user_optional,
-    hash_password,
-    require_operator,
-    verify_password,
-)
-from .models import User, utcnow
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    monitor.bind_loop(asyncio.get_running_loop())
+    monitor.ids.start()
     db = SessionLocal()
     try:
-        ensure_default_admin(db)
-        import os
-        if os.getenv("GARUDA_SIMULATION_MODE", "false").lower() not in ("1", "true", "yes"):
-            s = _get_or_create_settings(db)
-            if s.simulation_mode:
-                s.simulation_mode = False
-                db.commit()
-            monitor._sim_network_override = None
-            monitor._sim_extra_devices = []
+        ensure_bootstrap_admin(db)
         await monitor.run_scan(db, active_sweep=False, check_doh=False)
     finally:
         db.close()
-    monitor.bind_loop(asyncio.get_running_loop())
-    monitor.ids.start()
     monitor._bg_task = asyncio.create_task(monitor.background_loop())
     try:
         yield
@@ -111,61 +91,29 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# -------------------- Authentication & Operator Control --------------------
-@app.post("/api/auth/login", response_model=LoginResponse)
-def auth_login(body: LoginRequest, db: Session = Depends(get_db)):
-    ensure_default_admin(db)
-    user = db.query(User).filter(User.username == body.username.strip(), User.is_active == True).first()
-    if not user or not verify_password(body.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid username or password.")
-    user.last_login_at = utcnow()
-    db.commit()
-    token = create_access_token(user.username, user.role)
-    return LoginResponse(
-        token=token,
-        token_type="Bearer",
-        expires_in_hours=24,
-        user=UserInfoOut(id=user.id, username=user.username, role=user.role, is_active=user.is_active, created_at=user.created_at),
-    )
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 
-@app.get("/api/auth/me", response_model=AuthStatusOut)
-def auth_me(current_user: Optional[User] = Depends(get_current_user_optional)):
-    if not current_user:
-        return AuthStatusOut(auth_enabled=True, authenticated=False, user=None)
-    return AuthStatusOut(
-        auth_enabled=True,
-        authenticated=True,
-        user=UserInfoOut(id=current_user.id, username=current_user.username, role=current_user.role, is_active=current_user.is_active, created_at=current_user.created_at),
-    )
+app.include_router(admin_doctor_router)
 
 
-@app.post("/api/auth/logout")
-def auth_logout():
-    return {"ok": True, "message": "Logged out successfully."}
-
-
-@app.post("/api/auth/change-password")
-def auth_change_password(body: ChangePasswordRequest, current_user: User = Depends(require_operator), db: Session = Depends(get_db)):
-    if not verify_password(body.old_password, current_user.password_hash):
-        raise HTTPException(status_code=400, detail="Current password incorrect.")
-    if len(body.new_password) < 6:
-        raise HTTPException(status_code=400, detail="New password must be at least 6 characters.")
-    current_user.password_hash = hash_password(body.new_password)
-    db.commit()
-    return {"ok": True, "message": "Password updated successfully."}
-
-
+@app.get("/health")
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "GARUDA v6 Engine", "version": "6.0.0"}
+    return {"status": "ok", "service": "GARUDA v10 Zenith Engine", "version": "10.0.0"}
 
 
 @app.get("/api/capabilities", response_model=CapabilitiesOut)
@@ -362,7 +310,7 @@ async def trigger_malware_scan(body: MalwareScanRequest, db: Session = Depends(g
 
 # -------------------- Real OS Firewall Controller --------------------
 @app.post("/api/firewall/block")
-async def block_ip(body: FirewallBlockRequest, db: Session = Depends(get_db)):
+async def block_ip(body: FirewallBlockRequest, db: Session = Depends(get_db), actor=Depends(require_admin_if_enabled)):
     try:
         res = await asyncio.to_thread(enforce_block_ip, body.ip, False)
     except ValueError as exc:
@@ -376,6 +324,7 @@ async def block_ip(body: FirewallBlockRequest, db: Session = Depends(get_db)):
         command_used=res["command"],
     ))
     db.commit()
+    log_admin_action(db, actor.username if actor else "system", "FIREWALL_BLOCK", body.ip.strip(), body.reason)
     append_attestation_block(
         db,
         event_type="firewall_block",
@@ -388,7 +337,7 @@ async def block_ip(body: FirewallBlockRequest, db: Session = Depends(get_db)):
 
 
 @app.post("/api/firewall/unblock")
-async def unblock_ip(body: FirewallBlockRequest, db: Session = Depends(get_db)):
+async def unblock_ip(body: FirewallBlockRequest, db: Session = Depends(get_db), actor=Depends(require_admin_if_enabled)):
     try:
         res = await asyncio.to_thread(enforce_block_ip, body.ip, True)
     except ValueError as exc:
@@ -402,13 +351,14 @@ async def unblock_ip(body: FirewallBlockRequest, db: Session = Depends(get_db)):
         command_used=res["command"],
     ))
     db.commit()
+    log_admin_action(db, actor.username if actor else "system", "FIREWALL_UNBLOCK", body.ip.strip(), body.reason)
     snap = monitor.get_snapshot(db)
     await ws_manager.broadcast("snapshot", snap)
     return {"result": res, "snapshot": snap}
 
 
 @app.post("/api/firewall/lockdown")
-async def set_firewall_lockdown(body: FirewallLockdownRequest, db: Session = Depends(get_db)):
+async def set_firewall_lockdown(body: FirewallLockdownRequest, db: Session = Depends(get_db), actor=Depends(require_admin_if_enabled)):
     res = await asyncio.to_thread(enforce_lockdown_mode, body.enable)
     if res["enforced"]:
         monitor.lockdown_active = body.enable
@@ -421,6 +371,7 @@ async def set_firewall_lockdown(body: FirewallLockdownRequest, db: Session = Dep
         command_used=res["command"],
     ))
     db.commit()
+    log_admin_action(db, actor.username if actor else "system", "FIREWALL_LOCKDOWN", "0.0.0.0/0", f"enable={body.enable}")
     snap = monitor.get_snapshot(db)
     await ws_manager.broadcast("snapshot", snap)
     return {"result": res, "snapshot": snap}
@@ -432,15 +383,7 @@ async def sync_oui():
     try:
         return await sync_ieee_oui_database()
     except Exception as exc:
-        logger.warning(f"OUI sync warning (recovered via local cache): {exc}")
-        from .services.oui_db import get_oui_count, IEEE_OUI_CACHE_PATH
-        return {
-            "status": "success",
-            "synced": get_oui_count(),
-            "source": "fallback_cache",
-            "cache_path": str(IEEE_OUI_CACHE_PATH),
-            "details": f"Recovered using verified cached OUI database ({get_oui_count():,} hardware vendor prefixes)."
-        }
+        raise HTTPException(status_code=502, detail=f"Could not sync IEEE OUI registry: {exc}")
 
 
 @app.post("/api/threat-intel/sync")

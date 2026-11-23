@@ -1,13 +1,8 @@
 [build]
-  publish = "."
-  command = "echo Netlify build complete"
+  publish = "frontend"
 
 [[redirects]]
   from = "/api/*"
-  to = "http://10.10.51.102:5000/api/:splat"
+  to = "https://YOUR_GARUDA_BACKEND_HOST/api/:splat"
   status = 200
-
-[[headers]]
-  for = "/*"
-  [headers.values]
-    Access-Control-Allow-Origin = "*"
+  force = true

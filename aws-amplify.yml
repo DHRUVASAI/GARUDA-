@@ -3,14 +3,8 @@ frontend:
   phases:
     build:
       commands:
-        - echo "Building GARUDA-X Application..."
+        - echo "Deploying GARUDA v10 Ultimate Frontend"
   artifacts:
-    baseDirectory: /
+    baseDirectory: frontend
     files:
-      - 'index.html'
-      - 'styles.css'
-      - 'app.js'
-      - 'manifest.json'
-      - 'sw.js'
-  cache:
-    paths: []
+      - '**/*'

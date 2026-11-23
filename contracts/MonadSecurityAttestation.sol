@@ -1,64 +1,48 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 /**
  * @title MonadSecurityAttestation
- * @dev Cryptographic Security Report Attestation Contract for GARUDA-X on Monad Testnet (Chain ID 10143).
- * Records SHA-256 security report hashes, risk scores, device counts, and timestamps on-chain.
+ * @notice High-throughput, sub-second Merkle root attestation contract for GARUDA v8 on Monad EVM.
  */
 contract MonadSecurityAttestation {
-    struct Attestation {
-        bytes32 reportHash;
-        uint256 riskScore;
-        uint256 deviceCount;
-        uint256 timestamp;
-        address submitter;
+    struct AttestationBatch {
+        bytes32 merkleRoot;
+        uint64 blockHeight;
+        uint32 eventCount;
+        uint64 anchoredAt;
+        address reporter;
     }
 
-    Attestation[] public attestations;
-    mapping(bytes32 => bool) public isReportAttested;
+    mapping(bytes32 => AttestationBatch) public batches;
+    bytes32[] public rootHistory;
 
-    event SecurityAttestationMinted(
-        uint256 indexed attestationId,
-        bytes32 indexed reportHash,
-        uint256 riskScore,
-        uint256 deviceCount,
-        uint256 timestamp,
-        address submitter
+    event SecurityBatchAnchored(
+        bytes32 indexed merkleRoot,
+        uint64 indexed blockHeight,
+        uint32 eventCount,
+        address indexed reporter,
+        uint64 anchoredAt
     );
 
-    function mintAttestation(bytes32 reportHash, uint256 riskScore, uint256 deviceCount) external returns (uint256) {
-        require(reportHash != bytes32(0), "Invalid report hash");
-        require(!isReportAttested[reportHash], "Report hash already attested");
+    function anchorBatch(bytes32 merkleRoot, uint64 blockHeight, uint32 eventCount) external {
+        require(merkleRoot != bytes32(0), "Invalid merkleRoot");
+        require(batches[merkleRoot].anchoredAt == 0, "Root already anchored");
 
-        attestations.push(Attestation({
-            reportHash: reportHash,
-            riskScore: riskScore,
-            deviceCount: deviceCount,
-            timestamp: block.timestamp,
-            submitter: msg.sender
-        }));
+        uint64 ts = uint64(block.timestamp);
+        batches[merkleRoot] = AttestationBatch({
+            merkleRoot: merkleRoot,
+            blockHeight: blockHeight,
+            eventCount: eventCount,
+            anchoredAt: ts,
+            reporter: msg.sender
+        });
+        rootHistory.push(merkleRoot);
 
-        isReportAttested[reportHash] = true;
-        uint256 attestationId = attestations.length - 1;
-
-        emit SecurityAttestationMinted(attestationId, reportHash, riskScore, deviceCount, block.timestamp, msg.sender);
-        return attestationId;
+        emit SecurityBatchAnchored(merkleRoot, blockHeight, eventCount, msg.sender, ts);
     }
 
-    function getAttestationCount() external view returns (uint256) {
-        return attestations.length;
-    }
-
-    function getAttestation(uint256 index) external view returns (
-        bytes32 reportHash,
-        uint256 riskScore,
-        uint256 deviceCount,
-        uint256 timestamp,
-        address submitter
-    ) {
-        require(index < attestations.length, "Index out of bounds");
-        Attestation memory att = attestations[index];
-        return (att.reportHash, att.riskScore, att.deviceCount, att.timestamp, att.submitter);
+    function totalAnchoredBatches() external view returns (uint256) {
+        return rootHistory.length;
     }
 }

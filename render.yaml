@@ -1,15 +1,12 @@
 services:
   - type: web
-    name: garuda-v4-guardian
+    name: garuda-v10-zenith
     env: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT"
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
-      - key: GARUDA_WEB3_RPC_URL
-        value: "https://testnet-rpc.monad.xyz/"
-      - key: GARUDA_WEB3_CHAIN_NAME
-        value: "Monad Testnet"
-      - key: GARUDA_WEB3_CONTRACT
-        value: "0x1014300000000000000000000000000000000001"
+      - key: GARUDA_REQUIRE_AUTH
+        value: "true"
+      - key: GARUDA_JWT_SECRET
+        generateValue: true
