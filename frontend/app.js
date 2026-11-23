@@ -24,6 +24,7 @@
     radarDragging: false,
     radarDragStart: { x: 0, y: 0 },
   };
+  window.GarudaState = state;
 
   const DEVICE_SVGS = {
     router: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 13V8"/><path d="M18 13V8"/><line x1="10" y1="17" x2="10" y2="17.01"/><line x1="14" y1="17" x2="14" y2="17.01"/></svg>',
@@ -145,7 +146,11 @@
     const target = $(`view-${viewName}`);
     if (target) target.classList.add("active");
     document.querySelectorAll(".nav-btn").forEach((b) => {
-      b.classList.toggle("active", b.dataset.view === viewName);
+      const isActive = b.dataset.view === viewName;
+      b.classList.toggle("active", isActive);
+      if (isActive && typeof b.scrollIntoView === "function") {
+        b.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      }
     });
     if (viewName === "network" && state.topologyMode === "3d") {
       ensureTopology3D();
@@ -185,18 +190,31 @@
 
   function updateConnectionPill() {
     const pill = $("connectionModePill");
+    if (!pill) return;
     if (state.offlineMode) {
       pill.className = "pill pill-warn";
       pill.innerHTML = `<span class="dot"></span> Offline Preview`;
       return;
     }
     if (!state.snapshot) return;
+    const isCloudHost = Boolean(
+      location.hostname.includes("onrender.com") ||
+      location.hostname.includes("render") ||
+      (state.snapshot.capabilities?.os_name && state.snapshot.capabilities.os_name.includes("aws"))
+    );
     if (state.snapshot.mode === "simulation") {
       pill.className = "pill pill-warn";
       pill.innerHTML = `<span class="dot"></span> Safe Simulation Mode`;
+    } else if (isCloudHost) {
+      pill.className = "pill pill-safe";
+      pill.style.cursor = "pointer";
+      pill.title = "Cloud Sentinel Hub (Monitoring baseline). Tap to learn how live scanning works.";
+      pill.innerHTML = `<span class="dot"></span> Cloud Sentinel`;
     } else {
       pill.className = "pill pill-safe";
-      pill.innerHTML = `<span class="dot"></span> Live v10 Hardware Shield`;
+      pill.style.cursor = "pointer";
+      pill.title = "Live Physical Hardware Scanner active on your local Wi-Fi.";
+      pill.innerHTML = `<span class="dot"></span> Live Local Scanner`;
     }
   }
 
@@ -1122,7 +1140,7 @@
     const tick = () => {
       state.animPhase += 0.012;
       if (state.view === "landing") drawRadar("heroRadarCanvas", true);
-      if (state.view === "network" && state.topologyMode === "2d") drawRadar("networkRadar", false);
+      if (state.view === "network" && state.topologyMode === "2d") drawRadar("networkRadar", window.innerWidth < 640);
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -1627,6 +1645,7 @@
 // === UNIFIED GARUDA v9 AUTH, DOCTOR & ADMIN MODULE ===
 // GARUDA v7 — Auth JWT Interceptor, Network Doctor & Admin Control Plane
 (() => {
+  const state = window.GarudaState || {};
   const escapeHtml = window.escapeHtml || ((str) => String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"));
   const TOKEN_KEY = "garuda_v7_token";
   const USER_KEY = "garuda_v7_user";
@@ -1711,7 +1730,7 @@
     authMode = mode;
     $("authEmailWrap").style.display = mode === "register" ? "" : "none";
     $("authEmail").required = mode === "register";
-    $("v7AuthTitle").textContent = mode === "register" ? "Create GARUDA Account" : "Sign In to GARUDA v10 Ultimate";
+    $("v7AuthTitle").textContent = mode === "register" ? "Create GARUDA Account" : "Sign In to GARUDA";
     $("btnAuthSubmit").textContent = mode === "register" ? "Create Account" : "Sign In";
     $("tabLogin").classList.toggle("btn-primary", mode === "login");
     $("tabRegister").classList.toggle("btn-primary", mode === "register");
@@ -2094,6 +2113,23 @@
       $("tabLogin")?.addEventListener("click", () => setAuthMode("login"));
       $("tabRegister")?.addEventListener("click", () => setAuthMode("register"));
       $("v7AuthForm")?.addEventListener("submit", handleAuthSubmit);
+
+      // Scanner Architecture Modal Wiring
+      function openScannerModal() {
+        const modal = $("scannerModeModal");
+        if (modal) modal.style.display = "flex";
+      }
+      function closeScannerModal() {
+        const modal = $("scannerModeModal");
+        if (modal) modal.style.display = "none";
+      }
+      $("connectionModePill")?.addEventListener("click", openScannerModal);
+      $("btnCloseScannerModal")?.addEventListener("click", closeScannerModal);
+      $("btnAcknowledgeScannerModal")?.addEventListener("click", closeScannerModal);
+      $("scannerModeModal")?.addEventListener("click", (e) => {
+        if (e.target === $("scannerModeModal")) closeScannerModal();
+      });
+
       $("btnLogout")?.addEventListener("click", () => {
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_KEY);

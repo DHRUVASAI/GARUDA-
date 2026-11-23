@@ -732,7 +732,7 @@
   <div class="v7-modal-backdrop" id="v7AuthModal" style="display:none;">
     <div class="v7-modal card">
       <div class="v7-modal-head">
-        <h3 id="v7AuthTitle">Sign In to GARUDA v10 Ultimate</h3>
+        <h3 id="v7AuthTitle">Sign In to GARUDA</h3>
         <button class="btn btn-sm" id="btnCloseAuthModal" aria-label="Close">✕</button>
       </div>
       <p class="muted" style="margin-bottom:12px;">First registered account automatically receives <strong>Admin</strong> privileges. Subsequent accounts start as <strong>Viewer</strong>.</p>
@@ -750,6 +750,31 @@
       <div id="v7LoggedInBox" style="display:none; margin-top:12px;">
         <p>Signed in as <strong id="authCurrentUser"></strong> (<span id="authCurrentRole"></span>)</p>
         <button class="btn btn-danger btn-sm" id="btnLogout" style="margin-top:8px;">Sign Out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SCANNER ARCHITECTURE MODAL ==================== -->
+  <div class="v7-modal-backdrop" id="scannerModeModal" style="display:none;" role="dialog" aria-modal="true">
+    <div class="v7-modal card">
+      <div class="v7-modal-head">
+        <h3 style="margin:0;">How GARUDA Scans Networks</h3>
+        <button class="btn btn-sm" id="btnCloseScannerModal" aria-label="Close">✕</button>
+      </div>
+      <div style="font-size:13.5px; line-height:1.55; margin-top:10px;">
+        <p style="margin-bottom:12px;">
+          <strong>Why does the cloud link show a registered baseline?</strong><br/>
+          Browsers (Safari, Chrome on phones and PCs) operate inside a strict security sandbox that prevents websites from sending raw ARP packets or scanning private local Wi-Fi networks for user privacy. The 24/7 cloud instance acts as your <strong>Cloud Sentinel Hub</strong>, monitoring your registered home baseline and cryptographic ledger.
+        </p>
+        <p style="margin-bottom:12px;">
+          <strong>How Real Local Hardware Scanning Works:</strong><br/>
+          When you run GARUDA locally on your computer connected to Wi-Fi (via <code>garuda.bat</code>), it utilizes direct OS network sockets, the Windows ARP cache, Scapy packet inspection, and ICMP sweeps to physically scan that real Wi-Fi network in real time.
+        </p>
+        <p style="margin-bottom:14px;">
+          <strong>To scan any specific Wi-Fi network:</strong><br/>
+          Run GARUDA on any PC or laptop connected to that network. Devices on the same Wi-Fi can then view the live scanner by visiting <code>http://[laptop-ip]:8000</code>.
+        </p>
+        <button class="btn btn-primary" style="width:100%;" id="btnAcknowledgeScannerModal">Understood</button>
       </div>
     </div>
   </div>
