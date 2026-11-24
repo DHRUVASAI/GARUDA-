@@ -313,8 +313,11 @@ def fingerprint_brand_and_model(
     Returns: (verified_display_name, verified_vendor, verified_device_type, verified_os_hint)
     """
     lower_comb = f"{initial_name} {vendor} {os_hint or ''} {ip}".lower()
+    octet = ip.split(".")[-1]
 
     if is_gateway:
+        if any(h in lower_comb for h in ["hewlett packard", "hpe", "aruba"]):
+            return "HPE / Aruba Enterprise Wi-Fi Gateway", "Hewlett Packard Enterprise (Aruba)", "router", "ArubaOS / Enterprise Gateway"
         gw_vendor = vendor if vendor != "Unknown Manufacturer" else "Wi-Fi Gateway"
         return f"{gw_vendor} Router / Gateway", gw_vendor, "router", "Router Firmware / Linux Gateway"
 
@@ -381,6 +384,45 @@ def fingerprint_brand_and_model(
         return "LAASYA (Foxconn Workstation / Laptop)", "Hon Hai / Foxconn", "computer", "Windows Workstation"
     if "macbook" in lower_comb or ("mac" in lower_comb and "apple" in lower_comb):
         return "Apple MacBook (macOS)", "Apple Inc.", "computer", "macOS"
+
+    # Spotify mDNS active computer
+    if "spotify" in lower_comb:
+        v_name = vendor if vendor != "Unknown Manufacturer" else "Windows / Mac PC"
+        return f"Workstation / PC (Spotify Active) ({octet})", v_name, "laptop", "Windows / macOS"
+
+    # Clean Hostnames (DESKTOP-xxx, LAPTOP-xxx, MAC-xxx)
+    if initial_name.lower().startswith("desktop-"):
+        v_name = vendor if vendor != "Unknown Manufacturer" else "Microsoft Windows PC"
+        return f"Windows Desktop ({initial_name})", v_name, "computer", "Windows 11 / 10"
+    if initial_name.lower().startswith("laptop-"):
+        v_name = vendor if vendor != "Unknown Manufacturer" else "Microsoft Windows PC"
+        return f"Windows Laptop ({initial_name})", v_name, "laptop", "Windows 11 / 10"
+    if initial_name.lower().startswith("mac-") or initial_name.lower().startswith("imac"):
+        return f"Apple Mac ({initial_name})", "Apple Inc.", "computer", "macOS"
+
+    # Human-named Workstations from NetBIOS / rDNS (e.g. NARSING, BHARGAVI, AMITH, DHANU, RENESH, VS)
+    clean_host = initial_name.strip()
+    if clean_host and clean_host.isupper() and 2 <= len(clean_host) <= 16 and not clean_host.startswith("DEVICE") and "." not in clean_host:
+        v_name = vendor if vendor != "Unknown Manufacturer" else "Windows Workstation"
+        return f"{clean_host}'s PC / Laptop", v_name, "laptop", "Windows / NetBIOS Host"
+
+    # Major Laptop Wi-Fi OEMs on Enterprise / Campus networks
+    if "cloud network" in lower_comb or "singapore pte" in lower_comb:
+        return f"Foxconn / ASUS / Acer Laptop ({octet})", "Foxconn / Cloud Network", "laptop", "Windows / PC Laptop"
+    if "azurewave" in lower_comb:
+        return f"ASUS / Acer Laptop ({octet})", "ASUS / AzureWave", "laptop", "Windows / ASUS PC"
+    if "intel corporate" in lower_comb or "intel wi-fi" in lower_comb or "intel" in vendor.lower():
+        return f"Windows Laptop (Intel Wi-Fi) ({octet})", "Intel Corporation", "laptop", "Windows 11 / 10 (Intel Wi-Fi 6)"
+    if "liteon" in lower_comb or "lite-on" in lower_comb:
+        return f"Dell / HP Laptop ({octet})", "Dell / Lite-On", "laptop", "Windows PC (Lite-On Wi-Fi)"
+    if "wnc" in lower_comb or "wistron" in lower_comb:
+        return f"HP / Lenovo Laptop ({octet})", "Wistron / WNC", "laptop", "Windows PC (WNC Wi-Fi)"
+    if "fulian" in lower_comb or "jiangsu" in lower_comb:
+        return f"Foxconn Industrial Workstation ({octet})", "Foxconn / FII", "computer", "PC Workstation"
+
+    # Clean randomized MAC display
+    if "private wi-fi" in initial_name.lower() or "randomized mac" in lower_comb:
+        return f"Personal Mobile / Laptop ({octet})", "Private Wi-Fi Address (Randomized MAC)", "phone", "iOS / Android / Win11 Private MAC"
 
     # 7. Smart Home Appliances (Bulb, Fan, AC, Fridge, Camera)
     if "bulb" in lower_comb or "hue" in lower_comb or "lifx" in lower_comb:
@@ -512,11 +554,25 @@ def resolve_device_identity(
             name = f"Private {ttl_os.split('/')[0].strip()} Device ({ip.split('.')[-1]})"
             os_hint = f"{ttl_os} (Randomized MAC)"
         else:
-            name = f"Phone/Laptop with Private Wi-Fi MAC ({ip.split('.')[-1]})"
+            name = f"Personal Mobile / Laptop ({ip.split('.')[-1]})"
             os_hint = "iOS / Android / Win11 Private MAC"
     elif vendor != "Unknown Manufacturer":
-        label_map = {"phone": "Phone", "laptop": "Computer", "tv": "Smart TV", "printer": "Printer", "iot": "Smart Device", "router": "Router"}
-        name = f"{vendor} {label_map.get(dev_type, 'Device')} ({ip.split('.')[-1]})"
+        clean_v = vendor
+        low_v = vendor.lower()
+        if "cloud network" in low_v or "singapore pte" in low_v:
+            clean_v = "Foxconn / Cloud Network"
+        elif "azurewave" in low_v:
+            clean_v = "ASUS / AzureWave"
+        elif "liteon" in low_v or "lite-on" in low_v:
+            clean_v = "Dell / Lite-On"
+        elif "wnc" in low_v or "wistron" in low_v:
+            clean_v = "Wistron / WNC"
+        elif "intel" in low_v:
+            clean_v = "Intel"
+        elif "fulian" in low_v or "jiangsu" in low_v:
+            clean_v = "Foxconn FII"
+        label_map = {"phone": "Phone", "laptop": "Laptop", "computer": "PC", "tv": "Smart TV", "printer": "Printer", "iot": "Smart Device", "router": "Router"}
+        name = f"{clean_v} {label_map.get(dev_type, 'Device')} ({ip.split('.')[-1]})"
         os_hint = fused_os
     else:
         name = f"{port_os} ({ip})" if port_os else (f"{ttl_os.split('/')[0].strip()} Host ({ip})" if ttl_os else f"Unidentified Device ({ip})")

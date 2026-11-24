@@ -1024,6 +1024,13 @@
         )
       : null;
 
+    const totalOthers = others.length;
+    const isDenseFleet = totalOthers > 20;
+    const baseNodeR = totalOthers > 100 ? (compact ? 4.5 : 6)
+                    : totalOthers > 50  ? (compact ? 6 : 7.5)
+                    : totalOthers > 20  ? (compact ? 8 : 10.5)
+                    : (compact ? 13 : 16);
+
     layoutPts.forEach((pt, idx) => {
       const d = pt.device;
       const x = pt.x;
@@ -1032,51 +1039,72 @@
       const ml = mlMap.get(d.mac.toUpperCase());
       const isAlert = state.snapshot.alerts.some((a) => !a.resolved && (a.related_mac === d.mac || a.related_ip === d.ip)) || (ml && ml.risk_level === "critical");
       const color = isAlert ? (dark ? "#E36050" : "#C53624") : d.is_safe ? (dark ? "#3EB488" : "#157F56") : (dark ? "#E2A343" : "#B96B08");
+      const hovered = !compact && state.hoveredMac === d.mac;
+      const nodeR = hovered ? Math.max(16, baseNodeR + 5) : baseNodeR;
 
-      // Signal Link Ray
+      // Signal Link Ray (tactical thin beam on dense fleets)
+      const rayAlpha = isAlert ? 0.45 : isDenseFleet ? 0.08 : d.is_safe ? 0.22 : 0.32;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(x, y);
-      ctx.strokeStyle = isAlert ? "rgba(197,54,36,0.48)" : d.is_safe ? "rgba(21,127,86,0.26)" : "rgba(185,107,8,0.38)";
-      ctx.lineWidth = isAlert ? 2.0 : 1.2;
+      ctx.strokeStyle = isAlert ? `rgba(197,54,36,${rayAlpha})` : d.is_safe ? `rgba(21,127,86,${rayAlpha})` : `rgba(185,107,8,${rayAlpha})`;
+      ctx.lineWidth = isAlert ? (isDenseFleet ? 1.2 : 2.0) : (isDenseFleet ? 0.6 : 1.2);
       ctx.stroke();
 
-      // Traveling Packet Dot
-      const t = (state.animPhase * 0.45 + idx * 0.23) % 1;
-      ctx.beginPath();
-      ctx.arc(cx + (x - cx) * t, cy + (y - cy) * t, 2.5, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
+      // Traveling Packet Dot (rate-limited on dense fleet)
+      if (!isDenseFleet || idx % 4 === 0 || hovered || isAlert) {
+        const t = (state.animPhase * 0.45 + idx * 0.23) % 1;
+        ctx.beginPath();
+        ctx.arc(cx + (x - cx) * t, cy + (y - cy) * t, isDenseFleet ? 1.8 : 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
 
       // Phosphor Sweep Hit Echo Wave
       const nodeAngle = Math.atan2(y - cy, x - cx);
       const normNodeAngle = nodeAngle < 0 ? nodeAngle + Math.PI * 2 : nodeAngle;
       let angleDelta = Math.abs(sweepAngle - normNodeAngle);
       if (angleDelta > Math.PI) angleDelta = Math.PI * 2 - angleDelta;
-      if (angleDelta < 0.26) {
-        const pingGlow = 1 - (angleDelta / 0.26);
+      if (angleDelta < 0.24) {
+        const pingGlow = 1 - (angleDelta / 0.24);
         ctx.beginPath();
-        ctx.arc(x, y, (compact ? 18 : 22) + pingGlow * 10, 0, Math.PI * 2);
+        ctx.arc(x, y, nodeR + pingGlow * (isDenseFleet ? 5 : 10), 0, Math.PI * 2);
         ctx.strokeStyle = `rgba(0, 229, 255, ${0.45 * pingGlow})`;
-        ctx.lineWidth = 1.8;
+        ctx.lineWidth = isDenseFleet ? 1.2 : 1.8;
         ctx.stroke();
       }
 
       // Device Tactical Node Badge
-      const hovered = !compact && state.hoveredMac === d.mac;
-      const nodeR = (compact ? 13 : 16) + (hovered ? 3 : 0);
-
-      // Node background & rim
       ctx.beginPath();
       ctx.arc(x, y, nodeR, 0, Math.PI * 2);
       ctx.fillStyle = dark ? "#161b22" : "#ffffff";
       ctx.fill();
       ctx.strokeStyle = color;
-      ctx.lineWidth = hovered ? 2.5 : 1.6;
+      ctx.lineWidth = hovered ? 2.5 : (isDenseFleet ? 1.2 : 1.6);
       ctx.stroke();
 
-      // Render Dedicated 2D Vector Symbol
-      drawDevice2DSymbol(ctx, devCategory, x, y, compact ? 8 : 10, color, dark, state.animPhase);
+      // Render 2D Symbol or Tactical Pip based on density
+      if (baseNodeR >= 9 || hovered) {
+        const symSize = hovered ? 10 : Math.max(5, baseNodeR * 0.62);
+        drawDevice2DSymbol(ctx, devCategory, x, y, symSize, color, dark, state.animPhase);
+      } else {
+        // High-density tactical phosphor pip
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(2, baseNodeR * 0.42), 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+
+      // Hover Reticle
+      if (hovered) {
+        ctx.beginPath();
+        ctx.arc(x, y, nodeR + 5, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(0, 229, 255, 0.75)";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
 
       // Zero-Overlap Anti-Glare Label Pill
       const lblInfo = zeroLabelsMap ? zeroLabelsMap.get(d.mac) : null;
@@ -1086,9 +1114,9 @@
         const bx = lblInfo.boxX;
         const by = lblInfo.boxY;
 
-        ctx.fillStyle = dark ? "rgba(13, 17, 23, 0.90)" : "rgba(255, 255, 255, 0.92)";
-        ctx.strokeStyle = isAlert ? "rgba(239, 68, 68, 0.5)" : d.is_safe ? "rgba(16, 185, 129, 0.4)" : "rgba(245, 158, 11, 0.4)";
-        ctx.lineWidth = 1;
+        ctx.fillStyle = dark ? "rgba(13, 17, 23, 0.94)" : "rgba(255, 255, 255, 0.96)";
+        ctx.strokeStyle = isAlert ? "rgba(239, 68, 68, 0.6)" : d.is_safe ? "rgba(16, 185, 129, 0.5)" : "rgba(245, 158, 11, 0.5)";
+        ctx.lineWidth = hovered ? 1.5 : 1;
         ctx.beginPath();
         if (ctx.roundRect) {
           ctx.roundRect(bx, by, bw, bh, 4);
